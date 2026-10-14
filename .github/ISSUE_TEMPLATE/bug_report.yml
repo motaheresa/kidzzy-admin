@@ -1,0 +1,37 @@
+name: Bug report
+description: Something in the system does not work as the SRS says
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Log in as an instructor
+        2. Open today's session
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: requirement
+    attributes:
+      label: Related requirement
+      description: SRS id if known, e.g. BR-03 or FR-12
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Blocker (academy cannot work)
+        - Major (wrong data or payments)
+        - Minor (workaround exists)
+        - Cosmetic
+    validations:
+      required: true

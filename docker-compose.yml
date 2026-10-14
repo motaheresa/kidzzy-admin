@@ -1,0 +1,23 @@
+# Local development only. Production uses the server's PostgreSQL service (ADR-009).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kidzzy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kidzzy
+      POSTGRES_PASSWORD: kidzzy
+      POSTGRES_DB: kidzzy_admin
+      TZ: UTC
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U kidzzy -d kidzzy_admin']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

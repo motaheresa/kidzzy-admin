@@ -1,0 +1,12 @@
+// Prisma schema for the Academy Management System.
+// Models are added story by story, starting with TS-01 (see the ERD document).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

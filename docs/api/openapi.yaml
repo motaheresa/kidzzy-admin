@@ -1,0 +1,3516 @@
+openapi: 3.1.0
+info:
+  title: Academy Management System API
+  version: 1.0.0
+  description:
+    'V1 API of the KidzzyCoders academy management system. Design rules: see the API Design V1 document. Every
+    operation carries x-permission (the permission key it requires; scope own or any is resolved per role) and x-story (the
+    backlog story it implements).'
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://app.kidzzy-coders.com/api/v1
+    description: Production
+  - url: http://localhost:3000/api/v1
+    description: Local
+security:
+  - cookieAuth: []
+tags:
+  - name: Auth
+    description: Login, cookies and the current user (E1)
+  - name: System
+    description: Operational endpoints
+  - name: Instructors
+    description: Instructor accounts (E2)
+  - name: Students
+    description: Student records, enrollments and transfers (E2, E3)
+  - name: Groups
+    description: Groups, weekly schedules and enrollment (E3)
+  - name: Sessions
+    description: 'Session lifecycle: generation, Held, cancel, reschedule, make-up, undo (E4)'
+  - name: Attendance
+    description: Attendance and performance and homework ratings (E5)
+  - name: Payments
+    description: Plans, starting point, cycles and payments (E6)
+  - name: Notifications
+    description: Notification center and web push (E7)
+  - name: Reminder rules
+    description: Configurable reminder timing (E7)
+  - name: Announcements
+    description: Messages from the admin (E8)
+  - name: Materials
+    description: Course material links (E8)
+  - name: Admin
+    description: Dashboard and audit log (E8)
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Log in and set the auth cookies
+      operationId: login
+      x-permission: public
+      x-story: US-01
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Rotate the access and refresh cookies
+      operationId: refresh
+      x-permission: refresh cookie
+      x-story: US-01
+      security: []
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Revoke the session and clear cookies
+      operationId: logout
+      x-permission: signed in
+      x-story: US-01
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Current user, roles and permissions
+      operationId: getMe
+      x-permission: signed in
+      x-story: US-03
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/change-password:
+    post:
+      tags:
+        - Auth
+      summary: Change own password
+      operationId: changePassword
+      x-permission: signed in
+      x-story: US-02
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /health:
+    get:
+      tags:
+        - System
+      summary: Liveness check
+      operationId: health
+      x-permission: public
+      x-story: '-'
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /instructors:
+    get:
+      tags:
+        - Instructors
+      summary: List instructors
+      operationId: listInstructors
+      x-permission: instructors.read
+      x-story: US-04
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Instructor'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Instructors
+      summary: Create an instructor account
+      operationId: createInstructor
+      x-permission: instructors.manage
+      x-story: US-04
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstructorCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instructor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /instructors/{id}:
+    get:
+      tags:
+        - Instructors
+      summary: Get an instructor with groups
+      operationId: getInstructor
+      x-permission: instructors.read
+      x-story: US-04
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstructorDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Instructors
+      summary: Edit an instructor
+      operationId: updateInstructor
+      x-permission: instructors.manage
+      x-story: US-04
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstructorUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instructor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /instructors/{id}/deactivate:
+    post:
+      tags:
+        - Instructors
+      summary: Deactivate an instructor
+      operationId: deactivateInstructor
+      x-permission: instructors.manage
+      x-story: US-04
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instructor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /instructors/{id}/reactivate:
+    post:
+      tags:
+        - Instructors
+      summary: Reactivate an instructor
+      operationId: reactivateInstructor
+      x-permission: instructors.manage
+      x-story: US-04
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instructor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /instructors/{id}/reset-password:
+    post:
+      tags:
+        - Instructors
+      summary: Set a temporary password
+      operationId: resetInstructorPassword
+      x-permission: instructors.manage
+      x-story: US-02
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /students:
+    get:
+      tags:
+        - Students
+      summary: List and search students
+      operationId: listStudents
+      x-permission: students.read
+      x-story: US-06
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Name or code
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Student'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Students
+      summary: Create a student record
+      operationId: createStudent
+      x-permission: students.manage
+      x-story: US-05
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /students/{id}:
+    get:
+      tags:
+        - Students
+      summary: Get a student
+      operationId: getStudent
+      x-permission: students.read
+      x-story: US-05
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Students
+      summary: Edit a student
+      operationId: updateStudent
+      x-permission: students.manage
+      x-story: US-05
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /students/{id}/deactivate:
+    post:
+      tags:
+        - Students
+      summary: Deactivate a student and end the enrollment
+      operationId: deactivateStudent
+      x-permission: students.manage
+      x-story: US-05
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /students/{id}/enrollments:
+    get:
+      tags:
+        - Students
+      summary: Group history of a student
+      operationId: listStudentEnrollments
+      x-permission: students.read
+      x-story: US-09
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Enrollment'
+                additionalProperties: false
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /students/{id}/transfer:
+    post:
+      tags:
+        - Students
+      summary: Transfer a student to another group
+      operationId: transferStudent
+      x-permission: enrollments.manage
+      x-story: US-09
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /students/{id}/attendance:
+    get:
+      tags:
+        - Attendance
+      summary: Attendance and ratings of a student
+      operationId: getStudentAttendance
+      x-permission: attendance.read
+      x-story: US-19
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentAttendanceItem'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /groups:
+    get:
+      tags:
+        - Groups
+      summary: List groups
+      operationId: listGroups
+      x-permission: groups.read
+      x-story: US-07
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: instructorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Groups
+      summary: Create a group with a weekly schedule
+      operationId: createGroup
+      x-permission: groups.create
+      x-story: US-07
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /groups/{id}:
+    get:
+      tags:
+        - Groups
+      summary: Get a group
+      operationId: getGroup
+      x-permission: groups.read
+      x-story: US-07
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Groups
+      summary: Edit group details
+      operationId: updateGroup
+      x-permission: groups.update
+      x-story: US-10
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /groups/{id}/schedule:
+    put:
+      tags:
+        - Groups
+      summary: Replace the weekly schedule; regenerates future Scheduled sessions
+      operationId: replaceGroupSchedule
+      x-permission: groups.update
+      x-story: US-10
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleReplace'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /groups/{id}/enrollments:
+    get:
+      tags:
+        - Groups
+      summary: Current students of a group
+      operationId: listGroupEnrollments
+      x-permission: groups.read
+      x-story: US-08
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Enrollment'
+                additionalProperties: false
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Groups
+      summary: Enroll a student with a plan and starting point
+      operationId: enrollStudent
+      x-permission: enrollments.manage
+      x-story: US-08, US-36
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /groups/{id}/attendance:
+    get:
+      tags:
+        - Attendance
+      summary: Attendance and ratings grid of a group
+      operationId: getGroupAttendance
+      x-permission: attendance.read
+      x-story: US-19
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupAttendance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /sessions:
+    get:
+      tags:
+        - Sessions
+      summary: List sessions
+      operationId: listSessions
+      x-permission: sessions.read
+      x-story: US-12
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            description: ISO 8601, UTC
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            description: ISO 8601, UTC
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: instructorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - scheduled
+              - held
+              - cancelled
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: scheduledAt
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Session'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /sessions/{id}:
+    get:
+      tags:
+        - Sessions
+      summary: Get a session
+      operationId: getSession
+      x-permission: sessions.read
+      x-story: US-13
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /groups/{id}/sessions:
+    post:
+      tags:
+        - Sessions
+      summary: Add a make-up or extra session
+      operationId: createSession
+      x-permission: sessions.update
+      x-story: US-16
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /sessions/{id}/held:
+    post:
+      tags:
+        - Sessions
+      summary: Mark a session Held, number it and count cycles
+      operationId: markSessionHeld
+      x-permission: sessions.update
+      x-story: US-13, US-22
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeldResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /sessions/{id}/cancel:
+    post:
+      tags:
+        - Sessions
+      summary: Cancel a session with a reason
+      operationId: cancelSession
+      x-permission: sessions.update
+      x-story: US-14
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /sessions/{id}/reschedule:
+    post:
+      tags:
+        - Sessions
+      summary: Move a session to a new time
+      operationId: rescheduleSession
+      x-permission: sessions.update
+      x-story: US-15
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RescheduleRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /sessions/{id}/undo-held:
+    post:
+      tags:
+        - Sessions
+      summary: Return a Held session to Scheduled
+      operationId: undoSessionHeld
+      x-permission: sessions.undo_held
+      x-story: US-17
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /sessions/{id}/attendance:
+    get:
+      tags:
+        - Attendance
+      summary: Attendance and ratings of a session
+      operationId: getSessionAttendance
+      x-permission: attendance.read
+      x-story: US-19
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionAttendance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Attendance
+      summary: Save attendance and ratings for the session
+      operationId: saveSessionAttendance
+      x-permission: attendance.record
+      x-story: US-18, US-37
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceSave'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionAttendance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /payment-cycles:
+    get:
+      tags:
+        - Payments
+      summary: List payment cycles
+      operationId: listPaymentCycles
+      x-permission: payments.read
+      x-story: US-24, US-25
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - in_progress
+              - approaching
+              - due
+              - paid
+          description: approaching = one or two sessions before the end
+        - name: payeeType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - student
+              - instructor
+        - name: studentId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: instructorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentCycle'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /payment-cycles/{id}:
+    get:
+      tags:
+        - Payments
+      summary: Get a cycle with its counted sessions
+      operationId: getPaymentCycle
+      x-permission: payments.read
+      x-story: US-24
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCycleDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /payment-cycles/{id}/starting-point:
+    put:
+      tags:
+        - Payments
+      summary: Set the starting point of a first cycle
+      operationId: setCycleStartingPoint
+      x-permission: payments.manage
+      x-story: US-36
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartingPointRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCycle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payment-cycles/{id}/payments:
+    post:
+      tags:
+        - Payments
+      summary: Record the payment of a Due cycle
+      operationId: recordPayment
+      x-permission: payments.manage
+      x-story: US-23
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payments:
+    get:
+      tags:
+        - Payments
+      summary: Payment history
+      operationId: listPayments
+      x-permission: payments.read
+      x-story: US-24, US-25
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: payeeType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - student
+              - instructor
+        - name: studentId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: instructorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /payment-plans:
+    get:
+      tags:
+        - Payments
+      summary: Plan versions of a student or instructor
+      operationId: listPaymentPlans
+      x-permission: payments.read
+      x-story: US-20
+      parameters:
+        - name: studentId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: instructorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentPlan'
+                additionalProperties: false
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /students/{id}/payment-plans:
+    post:
+      tags:
+        - Payments
+      summary: New plan version for a student, from the next cycle
+      operationId: createStudentPlan
+      x-permission: payments.manage
+      x-story: US-20
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /instructors/{id}/payment-plans:
+    post:
+      tags:
+        - Payments
+      summary: Set or change an instructor's plan
+      operationId: createInstructorPlan
+      x-permission: payments.manage
+      x-story: US-21
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstructorPlanCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /notifications:
+    get:
+      tags:
+        - Notifications
+      summary: Own notifications, newest first
+      operationId: listNotifications
+      x-permission: signed in
+      x-story: TS-02
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: unread
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/unread-count:
+    get:
+      tags:
+        - Notifications
+      summary: Unread badge count
+      operationId: getUnreadCount
+      x-permission: signed in
+      x-story: TS-02
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/{id}/read:
+    post:
+      tags:
+        - Notifications
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      x-permission: signed in
+      x-story: TS-02
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /notifications/read-all:
+    post:
+      tags:
+        - Notifications
+      summary: Mark all as read
+      operationId: markAllNotificationsRead
+      x-permission: signed in
+      x-story: TS-02
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /push/public-key:
+    get:
+      tags:
+        - Notifications
+      summary: VAPID public key
+      operationId: getPushPublicKey
+      x-permission: signed in
+      x-story: TS-02
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicKey'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /push-subscriptions:
+    post:
+      tags:
+        - Notifications
+      summary: Register this device for web push
+      operationId: createPushSubscription
+      x-permission: signed in
+      x-story: TS-02
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushSubscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /push-subscriptions/{id}:
+    delete:
+      tags:
+        - Notifications
+      summary: Stop web push on a device
+      operationId: deletePushSubscription
+      x-permission: signed in
+      x-story: TS-02
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reminder-rules:
+    get:
+      tags:
+        - Reminder rules
+      summary: List reminder rules
+      operationId: listReminderRules
+      x-permission: reminders.manage
+      x-story: US-30
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReminderRule'
+                additionalProperties: false
+                required:
+                  - data
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Reminder rules
+      summary: Add a reminder rule
+      operationId: createReminderRule
+      x-permission: reminders.manage
+      x-story: US-30
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReminderRuleCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /reminder-rules/{id}:
+    patch:
+      tags:
+        - Reminder rules
+      summary: Change a reminder rule
+      operationId: updateReminderRule
+      x-permission: reminders.manage
+      x-story: US-30
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReminderRuleUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags:
+        - Reminder rules
+      summary: Remove a reminder rule
+      operationId: deleteReminderRule
+      x-permission: reminders.manage
+      x-story: US-30
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /announcements:
+    get:
+      tags:
+        - Announcements
+      summary: Announcements sent
+      operationId: listAnnouncements
+      x-permission: announcements.send
+      x-story: US-31
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Announcement'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Announcements
+      summary: Send an announcement
+      operationId: createAnnouncement
+      x-permission: announcements.send
+      x-story: US-31
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /material-links:
+    get:
+      tags:
+        - Materials
+      summary: List material links in display order
+      operationId: listMaterialLinks
+      x-permission: materials.read
+      x-story: US-33
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MaterialLink'
+                additionalProperties: false
+                required:
+                  - data
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Materials
+      summary: Add a material link
+      operationId: createMaterialLink
+      x-permission: materials.manage
+      x-story: US-32
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialLinkCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialLink'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /material-links/{id}:
+    patch:
+      tags:
+        - Materials
+      summary: Edit a material link
+      operationId: updateMaterialLink
+      x-permission: materials.manage
+      x-story: US-32
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialLinkUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialLink'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Materials
+      summary: Remove a material link
+      operationId: deleteMaterialLink
+      x-permission: materials.manage
+      x-story: US-32
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /material-links/order:
+    put:
+      tags:
+        - Materials
+      summary: Save the display order
+      operationId: reorderMaterialLinks
+      x-permission: materials.manage
+      x-story: US-32
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialOrder'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MaterialLink'
+                additionalProperties: false
+                required:
+                  - data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /dashboard:
+    get:
+      tags:
+        - Admin
+      summary: Admin dashboard data
+      operationId: getDashboard
+      x-permission: dashboard.read
+      x-story: US-34
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /audit-logs:
+    get:
+      tags:
+        - Admin
+      summary: Audit log
+      operationId: listAuditLogs
+      x-permission: audit.read
+      x-story: US-35
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: actorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            description: ISO 8601, UTC
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            description: ISO 8601, UTC
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: httpOnly JWT access cookie set by /auth/login
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    pageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    BadRequest:
+      description: Validation failed (VALIDATION_FAILED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Not signed in or token expired (UNAUTHENTICATED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Missing permission or not the user's own record (FORBIDDEN)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: No such record in this academy (NOT_FOUND)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Breaks a business rule in the current state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Values contradict each other
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit reached (RATE_LIMITED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details with a stable code
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          example: SESSION_NOT_SCHEDULED
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+            additionalProperties: false
+            required:
+              - field
+              - message
+    PageMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+        total:
+          type: integer
+      additionalProperties: false
+      required:
+        - page
+        - pageSize
+        - total
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+      additionalProperties: false
+      required:
+        - status
+    LoginRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          description: Email or phone
+        password:
+          type: string
+          minLength: 8
+      additionalProperties: false
+      required:
+        - login
+        - password
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+      additionalProperties: false
+      required:
+        - currentPassword
+        - newPassword
+    Me:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          anyOf:
+            - type: string
+              format: email
+            - type: 'null'
+        phone:
+          anyOf:
+            - type: string
+            - type: 'null'
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+            example: sessions.update:own
+        mustChangePassword:
+          type: boolean
+        academy:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            timezone:
+              type: string
+              example: Africa/Cairo
+          additionalProperties: false
+          required:
+            - id
+            - name
+            - timezone
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - roles
+        - permissions
+        - mustChangePassword
+        - academy
+    Instructor:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          anyOf:
+            - type: string
+              format: email
+            - type: 'null'
+        phone:
+          anyOf:
+            - type: string
+            - type: 'null'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - isActive
+        - createdAt
+    InstructorDetail:
+      allOf:
+        - $ref: '#/components/schemas/Instructor'
+        - type: object
+          properties:
+            groups:
+              type: array
+              items:
+                $ref: '#/components/schemas/GroupRef'
+          additionalProperties: false
+          required:
+            - groups
+    InstructorCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        temporaryPassword:
+          type: string
+          minLength: 8
+      additionalProperties: false
+      required:
+        - name
+        - temporaryPassword
+      description: At least one of email or phone is required
+    InstructorUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+      additionalProperties: false
+    ResetPasswordRequest:
+      type: object
+      properties:
+        temporaryPassword:
+          type: string
+          minLength: 8
+      additionalProperties: false
+      required:
+        - temporaryPassword
+    GroupRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      additionalProperties: false
+      required:
+        - id
+        - name
+      description: Id and display name of a related record
+    Student:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        age:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        parentName:
+          type: string
+        parentPhone:
+          type: string
+        notes:
+          anyOf:
+            - type: string
+            - type: 'null'
+        isActive:
+          type: boolean
+        currentGroup:
+          anyOf:
+            - $ref: '#/components/schemas/GroupRef'
+            - type: 'null'
+        currentCycle:
+          anyOf:
+            - $ref: '#/components/schemas/PaymentCycle'
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - id
+        - code
+        - name
+        - parentName
+        - parentPhone
+        - isActive
+    StudentCreate:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+          minimum: 3
+          maximum: 25
+        parentName:
+          type: string
+        parentPhone:
+          type: string
+        notes:
+          type: string
+      additionalProperties: false
+      required:
+        - code
+        - name
+        - parentName
+        - parentPhone
+    StudentUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+        parentName:
+          type: string
+        parentPhone:
+          type: string
+        notes:
+          type: string
+      additionalProperties: false
+    Enrollment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        studentId:
+          type: string
+          format: uuid
+        studentName:
+          type: string
+        group:
+          $ref: '#/components/schemas/GroupRef'
+        startDate:
+          type: string
+          format: date
+          description: Academy-local date
+        endDate:
+          anyOf:
+            - type: string
+              format: date
+              description: Academy-local date
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - id
+        - studentId
+        - group
+        - startDate
+    TransferRequest:
+      type: object
+      properties:
+        toGroupId:
+          type: string
+          format: uuid
+        effectiveDate:
+          type: string
+          format: date
+          description: Academy-local date
+      additionalProperties: false
+      required:
+        - toGroupId
+        - effectiveDate
+    ScheduleSlot:
+      type: object
+      properties:
+        weekday:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = Sunday
+        startTime:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+          example: '16:00'
+        durationMin:
+          type: integer
+          minimum: 15
+      additionalProperties: false
+      required:
+        - weekday
+        - startTime
+        - durationMin
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        level:
+          type: string
+        instructor:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+          additionalProperties: false
+          required:
+            - id
+            - name
+        startDate:
+          type: string
+          format: date
+          description: Academy-local date
+        isActive:
+          type: boolean
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleSlot'
+        studentCount:
+          type: integer
+        heldCount:
+          type: integer
+        nextSessionAt:
+          anyOf:
+            - type: string
+              format: date-time
+              description: ISO 8601, UTC
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - level
+        - instructor
+        - startDate
+        - isActive
+        - schedule
+        - studentCount
+        - heldCount
+    GroupCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        level:
+          type: string
+        instructorId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+          description: Academy-local date
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleSlot'
+          minItems: 1
+      additionalProperties: false
+      required:
+        - name
+        - level
+        - instructorId
+        - startDate
+        - schedule
+    GroupUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        level:
+          type: string
+        instructorId:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+      additionalProperties: false
+    ScheduleReplace:
+      type: object
+      properties:
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleSlot'
+          minItems: 1
+      additionalProperties: false
+      required:
+        - schedule
+    PlanInput:
+      type: object
+      properties:
+        sessionsPerCycle:
+          type: integer
+          minimum: 1
+        amount:
+          type: string
+          pattern: ^\d+\.\d{2}$
+          example: '1500.00'
+          description: Decimal amount in EGP
+      additionalProperties: false
+      required:
+        - sessionsPerCycle
+        - amount
+    EnrollRequest:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+          description: Academy-local date
+        plan:
+          $ref: '#/components/schemas/PlanInput'
+        openingCount:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 'Starting point: sessions of the current cycle taken before the system (BR-14)'
+      additionalProperties: false
+      required:
+        - studentId
+        - startDate
+        - plan
+    GroupAttendance:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        students:
+          type: array
+          items:
+            type: object
+            properties:
+              student:
+                $ref: '#/components/schemas/StudentRef'
+              records:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceRecord'
+            additionalProperties: false
+            required:
+              - student
+              - records
+      additionalProperties: false
+      required:
+        - sessions
+        - students
+    StudentRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+      additionalProperties: false
+      required:
+        - id
+        - code
+        - name
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        group:
+          $ref: '#/components/schemas/GroupRef'
+        instructorId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+        durationMin:
+          type: integer
+        status:
+          type: string
+          enum:
+            - scheduled
+            - held
+            - cancelled
+        sessionNumber:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        isMakeup:
+          type: boolean
+        compensatesSessionId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        cancelReason:
+          anyOf:
+            - type: string
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - id
+        - group
+        - instructorId
+        - scheduledAt
+        - durationMin
+        - status
+        - isMakeup
+    SessionCreate:
+      type: object
+      properties:
+        scheduledAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+        durationMin:
+          type: integer
+          minimum: 15
+        compensatesSessionId:
+          type: string
+          format: uuid
+      additionalProperties: false
+      required:
+        - scheduledAt
+        - durationMin
+    CancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+      additionalProperties: false
+      required:
+        - reason
+    RescheduleRequest:
+      type: object
+      properties:
+        scheduledAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - scheduledAt
+    CycleChange:
+      type: object
+      properties:
+        cycleId:
+          type: string
+          format: uuid
+        payeeType:
+          type: string
+          enum:
+            - student
+            - instructor
+        studentId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        instructorId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        sessionsCounted:
+          type: integer
+        sessionsPerCycle:
+          type: integer
+        status:
+          type: string
+          enum:
+            - in_progress
+            - due
+            - paid
+      additionalProperties: false
+      required:
+        - cycleId
+        - payeeType
+        - sessionsCounted
+        - sessionsPerCycle
+        - status
+    HeldResult:
+      allOf:
+        - $ref: '#/components/schemas/Session'
+        - type: object
+          properties:
+            cyclesUpdated:
+              type: array
+              items:
+                $ref: '#/components/schemas/CycleChange'
+          additionalProperties: false
+          required:
+            - cyclesUpdated
+    AttendanceRecord:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - present
+            - absent
+        performanceRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+        homeworkRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+          description: null = No homework
+      additionalProperties: false
+      required:
+        - studentId
+        - status
+    AttendanceSave:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceRecord'
+          minItems: 1
+      additionalProperties: false
+      required:
+        - records
+    SessionAttendance:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        records:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/AttendanceRecord'
+              - type: object
+                properties:
+                  studentName:
+                    type: string
+                additionalProperties: false
+      additionalProperties: false
+      required:
+        - sessionId
+        - records
+    StudentAttendanceItem:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+        sessionNumber:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        group:
+          $ref: '#/components/schemas/GroupRef'
+        status:
+          type: string
+          enum:
+            - present
+            - absent
+        performanceRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+        homeworkRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - sessionId
+        - scheduledAt
+        - group
+        - status
+    PaymentCycle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payeeType:
+          type: string
+          enum:
+            - student
+            - instructor
+        payeeId:
+          type: string
+          format: uuid
+        payeeName:
+          type: string
+        cycleNumber:
+          type: integer
+        sessionsPerCycle:
+          type: integer
+        amount:
+          type: string
+          pattern: ^\d+\.\d{2}$
+          example: '1500.00'
+          description: Decimal amount in EGP
+        openingCount:
+          type: integer
+        sessionsCounted:
+          type: integer
+        status:
+          type: string
+          enum:
+            - in_progress
+            - due
+            - paid
+        dueAt:
+          anyOf:
+            - type: string
+              format: date-time
+              description: ISO 8601, UTC
+            - type: 'null'
+        paidAt:
+          anyOf:
+            - type: string
+              format: date-time
+              description: ISO 8601, UTC
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - id
+        - payeeType
+        - payeeId
+        - payeeName
+        - cycleNumber
+        - sessionsPerCycle
+        - amount
+        - openingCount
+        - sessionsCounted
+        - status
+    PaymentCycleDetail:
+      allOf:
+        - $ref: '#/components/schemas/PaymentCycle'
+        - type: object
+          properties:
+            sessions:
+              type: array
+              items:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                    format: uuid
+                  scheduledAt:
+                    type: string
+                    format: date-time
+                    description: ISO 8601, UTC
+                  sessionNumber:
+                    type: integer
+                  group:
+                    $ref: '#/components/schemas/GroupRef'
+                additionalProperties: false
+                required:
+                  - sessionId
+                  - scheduledAt
+                  - sessionNumber
+                  - group
+            payment:
+              anyOf:
+                - $ref: '#/components/schemas/Payment'
+                - type: 'null'
+          additionalProperties: false
+          required:
+            - sessions
+    StartingPointRequest:
+      type: object
+      properties:
+        openingCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+      required:
+        - openingCount
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        cycleId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: ^\d+\.\d{2}$
+          example: '1500.00'
+          description: Decimal amount in EGP
+        paidOn:
+          type: string
+          format: date
+          description: Academy-local date
+        method:
+          type: string
+          enum:
+            - cash
+            - transfer
+            - wallet
+        note:
+          anyOf:
+            - type: string
+            - type: 'null'
+        recordedBy:
+          $ref: '#/components/schemas/GroupRef'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - cycleId
+        - amount
+        - paidOn
+        - method
+        - recordedBy
+        - createdAt
+    PaymentCreate:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^\d+\.\d{2}$
+          example: '1500.00'
+          description: Decimal amount in EGP
+        paidOn:
+          type: string
+          format: date
+          description: Academy-local date
+        method:
+          type: string
+          enum:
+            - cash
+            - transfer
+            - wallet
+        note:
+          type: string
+      additionalProperties: false
+      required:
+        - amount
+        - paidOn
+        - method
+    PaymentPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payeeType:
+          type: string
+          enum:
+            - student
+            - instructor
+        payeeId:
+          type: string
+          format: uuid
+        sessionsPerCycle:
+          type: integer
+        amount:
+          type: string
+          pattern: ^\d+\.\d{2}$
+          example: '1500.00'
+          description: Decimal amount in EGP
+        effectiveFromCycle:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - payeeType
+        - payeeId
+        - sessionsPerCycle
+        - amount
+        - effectiveFromCycle
+        - createdAt
+    InstructorPlanCreate:
+      type: object
+      properties:
+        sessionsPerCycle:
+          type: integer
+          minimum: 1
+        amount:
+          type: string
+          pattern: ^\d+\.\d{2}$
+          example: '1500.00'
+          description: Decimal amount in EGP
+        openingCount:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Used only for the instructor's first plan (BR-14)
+      additionalProperties: false
+      required:
+        - sessionsPerCycle
+        - amount
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - session_reminder
+            - student_payment
+            - instructor_payment
+            - payment_recorded
+            - session_report
+            - announcement
+        title:
+          type: string
+        body:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        readAt:
+          anyOf:
+            - type: string
+              format: date-time
+              description: ISO 8601, UTC
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - title
+        - body
+        - createdAt
+    UnreadCount:
+      type: object
+      properties:
+        count:
+          type: integer
+      additionalProperties: false
+      required:
+        - count
+    PublicKey:
+      type: object
+      properties:
+        publicKey:
+          type: string
+          description: VAPID public key, base64url
+      additionalProperties: false
+      required:
+        - publicKey
+    PushSubscriptionCreate:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          additionalProperties: false
+          required:
+            - p256dh
+            - auth
+        userAgent:
+          type: string
+      additionalProperties: false
+      required:
+        - endpoint
+        - keys
+    PushSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userAgent:
+          anyOf:
+            - type: string
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - createdAt
+    ReminderRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - session_reminder
+            - student_payment
+            - instructor_payment
+        leadMinutes:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        sessionsBeforeEnd:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        isActive:
+          type: boolean
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - isActive
+    ReminderRuleCreate:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - session_reminder
+            - student_payment
+            - instructor_payment
+        leadMinutes:
+          type: integer
+          minimum: 1
+          description: Session rules only
+        sessionsBeforeEnd:
+          type: integer
+          minimum: 1
+          description: Payment rules only
+      additionalProperties: false
+      required:
+        - type
+    ReminderRuleUpdate:
+      type: object
+      properties:
+        leadMinutes:
+          type: integer
+          minimum: 1
+        sessionsBeforeEnd:
+          type: integer
+          minimum: 1
+        isActive:
+          type: boolean
+      additionalProperties: false
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        audience:
+          type: string
+          enum:
+            - all
+            - role
+            - users
+        roleId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        recipientCount:
+          type: integer
+        sender:
+          $ref: '#/components/schemas/GroupRef'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - body
+        - audience
+        - recipientCount
+        - sender
+        - createdAt
+    AnnouncementCreate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          minLength: 1
+        audience:
+          type: string
+          enum:
+            - all
+            - role
+            - users
+        roleId:
+          type: string
+          format: uuid
+        userIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+      additionalProperties: false
+      required:
+        - title
+        - body
+        - audience
+    MaterialLink:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        sortOrder:
+          type: integer
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - url
+        - sortOrder
+    MaterialLinkCreate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+      additionalProperties: false
+      required:
+        - title
+        - url
+    MaterialLinkUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+      additionalProperties: false
+    MaterialOrder:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      additionalProperties: false
+      required:
+        - ids
+    Dashboard:
+      type: object
+      properties:
+        counts:
+          type: object
+          properties:
+            sessionsToday:
+              type: integer
+            dueCycles:
+              type: integer
+            cancelledThisWeek:
+              type: integer
+          additionalProperties: false
+          required:
+            - sessionsToday
+            - dueCycles
+            - cancelledThisWeek
+        todaySessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        recentReports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        dueCycles:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentCycle'
+      additionalProperties: false
+      required:
+        - counts
+        - todaySessions
+        - recentReports
+        - dueCycles
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor:
+          $ref: '#/components/schemas/GroupRef'
+        action:
+          type: string
+          example: session.cancelled
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        before:
+          anyOf:
+            - type: object
+            - type: 'null'
+        after:
+          anyOf:
+            - type: object
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601, UTC
+      additionalProperties: false
+      required:
+        - id
+        - actor
+        - action
+        - entityType
+        - entityId
+        - createdAt

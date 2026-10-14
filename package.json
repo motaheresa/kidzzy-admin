@@ -1,0 +1,35 @@
+{
+  "name": "kidzzy-admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Academy Management System for KidzzyCoders: NestJS API and React PWA in one pnpm monorepo",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare": "husky && pnpm --filter @kidzzy/shared build",
+    "dev": "pnpm --parallel --filter @kidzzy/api --filter @kidzzy/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @kidzzy/api test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:api-spec": "redocly lint docs/api/openapi.yaml",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@redocly/cli": "1.34.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.6.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,json,md,yml,yaml,css}": "prettier --write"
+  }
+}

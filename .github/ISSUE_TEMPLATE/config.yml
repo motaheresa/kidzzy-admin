@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: New feature or story
+    url: https://dbbsbsbnsnn.atlassian.net/jira/software/projects/SCRUM/boards/1
+    about: Stories and features live in the Jira backlog, not in GitHub issues.
