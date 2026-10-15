@@ -1,12 +1,118 @@
 // Prisma schema for the Academy Management System.
-// Models are added story by story, starting with TS-01 (see the ERD document).
+// Models are added story by story; this file follows the ERD V1 document.
+//
+// Conventions (ERD "Conventions"):
+// - UUID primary keys, except join tables, which use composite keys.
+// - Every academy-owned table has academy_id. The PrismaService extension adds it to every
+//   query, so code never filters by academy by hand (NFR-01, ADR-0006).
+// - Fields are camelCase in TypeScript and snake_case in the database (@map / @@map).
+// - Timestamps are timestamptz in UTC.
 
 generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
   moduleFormat = "cjs"
+  // Extensionless imports inside the generated client, so Jest (CommonJS) resolves them.
+  importFileExtension = ""
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ── Identity and access ────────────────────────────────────────────────
+
+/// The tenant itself; the only table without academy_id.
+model Academy {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  /// IANA name, e.g. Africa/Cairo; drives schedules and reminders.
+  timezone  String   @default("Africa/Cairo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users User[]
+  roles Role[]
+
+  @@map("academies")
+}
+
+/// Everyone who logs in: admins and instructors.
+/// At least one of email or phone is required (check constraint in the migration).
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  academyId    String   @map("academy_id") @db.Uuid
+  name         String
+  email        String?
+  phone        String?
+  passwordHash String   @map("password_hash")
+  /// Deactivated users cannot log in; users are never deleted.
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy Academy    @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  roles   UserRole[]
+
+  @@unique([academyId, email])
+  @@unique([academyId, phone])
+  @@map("users")
+}
+
+/// Admin and Instructor are seeded as system roles; V2 can add roles as data (NFR-02).
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  academyId String   @map("academy_id") @db.Uuid
+  name      String
+  /// True for the seeded Admin and Instructor roles, which cannot be deleted.
+  isSystem  Boolean  @default(false) @map("is_system")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy     Academy          @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@unique([academyId, name])
+  @@map("roles")
+}
+
+/// Global catalog shared by all academies (no academy_id).
+/// A key is resource.action:scope, e.g. sessions.update:own (API Design V1, Permission keys).
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  description String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Which permissions a role grants.
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// Which roles a user holds.
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
 }

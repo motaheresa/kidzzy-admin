@@ -73,6 +73,10 @@ jobs:
       - name: Apply migrations to the test database
         run: pnpm --filter @kidzzy/api prisma:deploy
 
+      # Fails when schema.prisma changed without a matching migration
+      - name: Check migrations match the schema
+        run: pnpm --filter @kidzzy/api prisma:check-drift
+
       - name: e2e tests
         run: pnpm test:e2e
 
