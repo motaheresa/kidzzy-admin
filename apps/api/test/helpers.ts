@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
@@ -62,6 +63,21 @@ export async function removeAcademy(prisma: PrismaService, academyId: string): P
   await prisma.unscoped.user.deleteMany({ where });
   await prisma.unscoped.role.deleteMany({ where });
   await prisma.unscoped.academy.deleteMany({ where: { id: academyId } });
+}
+
+/**
+ * Builds a JWT by hand, so tests can forge tokens the app must refuse: signed with another
+ * secret, expired, or with alg "none" (no signature at all).
+ */
+export function signTestJwt(
+  payload: Record<string, unknown>,
+  secret: string,
+  alg: 'HS256' | 'none' = 'HS256',
+): string {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${encode({ alg, typ: 'JWT' })}.${encode(payload)}`;
+  if (alg === 'none') return `${unsigned}.`;
+  return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
 }
 
 /** Parses Set-Cookie headers into { name: { value, attributes } }. */

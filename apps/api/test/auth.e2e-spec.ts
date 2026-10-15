@@ -1,9 +1,18 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SYSTEM_ROLE_PERMISSIONS, SystemRole } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  readCookies,
+  removeAcademy,
+  signTestJwt,
+} from './helpers';
 
 // US-01: staff login with email or phone. Runs against PostgreSQL (DATABASE_URL).
 
@@ -148,6 +157,37 @@ describe('Auth (e2e)', () => {
         .post('/api/v1/auth/logout')
         .set('Cookie', 'access_token=not-a-jwt')
         .expect(401);
+    });
+
+    describe('forged or expired access tokens', () => {
+      let claims: Record<string, unknown>;
+      let secret: string;
+      const now = () => Math.floor(Date.now() / 1000);
+      const logoutWith = (token: string) =>
+        request(app.getHttpServer())
+          .post('/api/v1/auth/logout')
+          .set('Cookie', `access_token=${token}`);
+
+      beforeAll(async () => {
+        const admin = await prisma.unscoped.user.findFirstOrThrow({ where: { email } });
+        claims = { sub: admin.id, aid: academyId, sid: randomUUID() };
+        secret = app.get(ConfigService).getOrThrow<string>('JWT_ACCESS_SECRET');
+      });
+
+      // Control: the hand-made token is valid when signed correctly, so the refusals below
+      // come from the forgery and not from a broken helper.
+      it('accepts a correctly signed token', async () => {
+        await logoutWith(signTestJwt({ ...claims, exp: now() + 60 }, secret)).expect(204);
+      });
+
+      it.each([
+        ['signed with another secret', () => signTestJwt({ ...claims }, 'x'.repeat(48))],
+        ['with alg none and no signature', () => signTestJwt({ ...claims }, '', 'none')],
+        ['expired', () => signTestJwt({ ...claims, exp: now() - 60 }, secret)],
+      ])('rejects a token %s', async (_label, forge) => {
+        const res = await logoutWith(forge()).expect(401);
+        expect(res.body).toMatchObject({ code: 'UNAUTHENTICATED' });
+      });
     });
   });
 

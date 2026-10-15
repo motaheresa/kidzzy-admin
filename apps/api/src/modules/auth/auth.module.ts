@@ -15,7 +15,10 @@ import { PasswordService } from './password.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+        // Pinned here so every sign and every verify in the app uses HS256 only: a token that
+        // names another algorithm (for example "none", which has no signature) is rejected.
+        signOptions: { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+        verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
     // Counts login attempts per client IP in memory; one API instance in V1 (ADR-0007).
