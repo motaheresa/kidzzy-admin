@@ -13,7 +13,23 @@ Production: <https://app.kidzzy-coders.com> · API: `/api/v1`
 
 ## Run it locally (Windows, macOS or Linux)
 
-Prerequisites: [Node.js 22](https://nodejs.org), [Docker Desktop](https://www.docker.com/products/docker-desktop/) and Git.
+Prerequisites: [Node.js 22](https://nodejs.org), [PostgreSQL 16](https://www.postgresql.org/download/) and Git. No Docker needed.
+
+### One-time PostgreSQL setup (Windows)
+
+1. Download the PostgreSQL **16** installer from <https://www.postgresql.org/download/windows/>.
+2. In the components step, keep **PostgreSQL Server** and **Command Line Tools**; pgAdmin and Stack Builder are optional and can be unticked to save space.
+3. Set a password for the `postgres` superuser and keep port `5432`. PostgreSQL then runs as a Windows service and starts with the machine.
+4. Create the app's user and database (enter the `postgres` password when asked):
+
+```powershell
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -c "CREATE USER kidzzy WITH PASSWORD 'kidzzy' CREATEDB;"
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -c "CREATE DATABASE kidzzy_admin OWNER kidzzy;"
+```
+
+`CREATEDB` is needed because `prisma migrate dev` creates a temporary shadow database to check each migration.
+
+### Run the project
 
 ```powershell
 # 1. Enable pnpm (ships with Node through Corepack)
@@ -22,13 +38,10 @@ corepack enable
 # 2. Install dependencies (also builds packages/shared and sets up git hooks)
 pnpm install
 
-# 3. Start PostgreSQL in Docker
-pnpm db:up
-
-# 4. Create the API environment file
+# 3. Create the API environment file (its DATABASE_URL matches the user created above)
 copy apps\api\.env.example apps\api\.env     # macOS/Linux: cp apps/api/.env.example apps/api/.env
 
-# 5. Run API and web app together
+# 4. Run API and web app together
 pnpm dev
 ```
 
@@ -45,7 +58,6 @@ pnpm dev
 | `pnpm build`                               | Production builds                        |
 | `pnpm lint:api-spec`                       | Validate `docs/api/openapi.yaml`         |
 | `pnpm --filter @kidzzy/api prisma:migrate` | Create and apply a migration             |
-| `pnpm db:up` / `pnpm db:down`              | Start / stop local PostgreSQL            |
 
 ## Project documents
 

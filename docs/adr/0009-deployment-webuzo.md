@@ -1,6 +1,6 @@
 # ADR-0009: Deployment on the existing InterServer server with Webuzo
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR-0010](0010-local-development-without-docker.md)
 - Date: 2026-10-14
 
 ## Context
