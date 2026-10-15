@@ -17,9 +17,7 @@
     "test:e2e": "pnpm --filter @kidzzy/api test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint:api-spec": "redocly lint docs/api/openapi.yaml",
-    "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down"
+    "lint:api-spec": "redocly lint docs/api/openapi.yaml"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
