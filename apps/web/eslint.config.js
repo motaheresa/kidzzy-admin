@@ -20,6 +20,9 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Anything logged in the browser console is visible to extensions and to anyone at the
+      // device, so app code never logs (it once printed the login password).
+      'no-console': 'error',
     },
   },
 );
