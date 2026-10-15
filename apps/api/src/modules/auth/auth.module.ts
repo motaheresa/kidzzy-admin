@@ -25,7 +25,8 @@ import { PasswordService } from './password.service';
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
-        { name: 'login', ttl: 60_000, limit: Number(config.get('LOGIN_RATE_LIMIT') ?? 5) },
+        // A positive integer, default 5, checked at startup by validateEnv.
+        { name: 'login', ttl: 60_000, limit: config.getOrThrow<number>('LOGIN_RATE_LIMIT') },
       ],
     }),
   ],
