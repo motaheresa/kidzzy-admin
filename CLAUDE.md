@@ -45,12 +45,15 @@ Run lint, typecheck and the tests before saying a change is done.
 - Raw SQL is never scoped automatically; filter by `academy_id` yourself.
 - Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`.
 - Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
+- Every email or phone that is written or looked up goes through `normalizeEmail` / `normalizePhone` (`src/common/normalize`); the database rejects any other form. Never match them with `mode: 'insensitive'`: Prisma sends it as `ILIKE`, where `%` and `_` are wildcards.
 
 ## Auth and errors
 
 - Every route requires a login through the global `JwtAuthGuard`; mark the exceptions with `@Public()`. The guard fills `TenantContext` from the access token, which is what scopes `prisma.db`.
 - Signed-in handlers read the caller from `req.auth` (`AuthenticatedRequest`): `userId`, `academyId`, `sessionId`.
 - Throw `AppException(ErrorCode.X, HttpStatus.Y, detail)` for errors the client acts on; `ProblemDetailsFilter` turns every error into RFC 9457 with a stable `code`. Never leak internal messages in `detail`.
+- Environment variables are validated at startup in `src/common/config/env.validation.ts`; add a new variable there first and read it with `ConfigService`, which returns the typed value. Tests never change `process.env` at runtime; `createTestApp` takes overrides instead.
+- App code logs through Nest's `Logger`, never `console` (ESLint `no-console`).
 - Tokens only travel as httpOnly cookies; no endpoint returns a token in a body.
 
 ## API conventions
