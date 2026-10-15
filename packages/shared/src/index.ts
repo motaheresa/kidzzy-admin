@@ -84,3 +84,5 @@ export interface Page<T> {
 }
 
 export const API_PREFIX = 'api/v1';
+
+export * from './permissions';
