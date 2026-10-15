@@ -33,8 +33,18 @@ Windows 10 with PowerShell, Node 22, pnpm 10 and a native PostgreSQL 16 install.
 | `pnpm format:check`                        | Prettier check, same as CI               |
 | `pnpm lint:api-spec`                       | Validate `docs/api/openapi.yaml`         |
 | `pnpm --filter @kidzzy/api prisma:migrate` | Create and apply a migration             |
+| `pnpm --filter @kidzzy/api prisma:seed`    | Seed permissions, academy and roles      |
 
 Run lint, typecheck and the tests before saying a change is done.
+
+## Data access
+
+- Inject `PrismaService` and use `prisma.db`: queries on every model with `academyId` are limited to the academy in `TenantContext`, and throw `MissingTenantContextError` when there is none.
+- `prisma.unscoped` crosses academies; use it only for the seed, background jobs and the login lookup, and say why in the pull request.
+- On create, still pass `academyId: tenant.requireAcademyId()`: the generated types require it, and the extension rejects any other academy.
+- Raw SQL is never scoped automatically; filter by `academy_id` yourself.
+- Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`.
+- Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
 
 ## API conventions
 

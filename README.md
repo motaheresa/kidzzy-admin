@@ -41,9 +41,15 @@ pnpm install
 # 3. Create the API environment file (its DATABASE_URL matches the user created above)
 copy apps\api\.env.example apps\api\.env     # macOS/Linux: cp apps/api/.env.example apps/api/.env
 
-# 4. Run API and web app together
+# 4. Create the tables, then add the permission catalog, the academy and its roles
+pnpm --filter @kidzzy/api prisma:migrate
+pnpm --filter @kidzzy/api prisma:seed
+
+# 5. Run API and web app together
 pnpm dev
 ```
+
+After pulling changes that add a migration, run step 4 again: `prisma:migrate` applies new migrations, and the seed is safe to repeat.
 
 - Web app: <http://localhost:5173> (calls the API through the Vite proxy, same as production)
 - API health: <http://localhost:3000/api/v1/health>
@@ -58,6 +64,7 @@ pnpm dev
 | `pnpm build`                               | Production builds                        |
 | `pnpm lint:api-spec`                       | Validate `docs/api/openapi.yaml`         |
 | `pnpm --filter @kidzzy/api prisma:migrate` | Create and apply a migration             |
+| `pnpm --filter @kidzzy/api prisma:seed`    | Seed permissions, academy and roles      |
 
 ## Project documents
 
