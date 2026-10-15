@@ -6,6 +6,7 @@ import { SystemRole } from '@kidzzy/shared';
 import { seedAccess } from '../prisma/seed/access.seed';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
+import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /** Starts the whole API exactly as main.ts does (same global setup). */
@@ -43,8 +44,9 @@ export async function createUser(
     data: {
       academyId,
       name: user.name,
-      email: user.email ?? null,
-      phone: user.phone ?? null,
+      // Stored the way the app stores them, exactly like a real write
+      email: user.email === undefined ? null : normalizeEmail(user.email),
+      phone: user.phone === undefined ? null : normalizePhone(user.phone),
       passwordHash: await hash(user.password),
       isActive: user.isActive ?? true,
       roles: { create: { roleId: role.id } },

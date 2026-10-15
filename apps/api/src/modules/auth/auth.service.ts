@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ErrorCode, type Me } from '@kidzzy/shared';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AppException } from '../../common/errors/app.exception';
+import { normalizePhone } from '../../common/normalize/login-identifiers';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { REFRESH_TOKEN_TTL_SECONDS, type AccessTokenPayload } from './auth.config';
@@ -11,11 +12,6 @@ import { PasswordService } from './password.service';
 export interface IssuedTokens {
   accessToken: string;
   refreshToken: string;
-}
-
-/** Phones are compared without spaces, dashes or brackets ("010 1234-5678" = "01012345678"). */
-export function normalizePhone(phone: string): string {
-  return phone.replace(/[\s\-()]/g, '');
 }
 
 function sha256(value: string): string {
