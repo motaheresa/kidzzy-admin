@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
+import { getOptionsToken } from '@nestjs/throttler';
 import { hash } from '@node-rs/argon2';
 import type { App } from 'supertest/types';
 import { SystemRole } from '@kidzzy/shared';
@@ -10,9 +11,23 @@ import { configureApp } from '../src/app.setup';
 import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
-/** Starts the whole API exactly as main.ts does (same global setup). */
-export async function createTestApp(): Promise<INestApplication<App>> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+/**
+ * Starts the whole API exactly as main.ts does (same global setup).
+ *
+ * `loginRateLimit` replaces the login throttler's limit for this app only. Tests never change
+ * process.env at runtime: the config is validated and cached when AppModule is imported, so a
+ * later change would be ignored, and it would leak into other tests in the same process.
+ */
+export async function createTestApp(
+  options: { loginRateLimit?: number } = {},
+): Promise<INestApplication<App>> {
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  if (options.loginRateLimit !== undefined) {
+    builder
+      .overrideProvider(getOptionsToken())
+      .useValue([{ name: 'login', ttl: 60_000, limit: options.loginRateLimit }]);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   configureApp(app);
   await app.init();

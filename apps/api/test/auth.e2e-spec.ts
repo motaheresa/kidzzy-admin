@@ -23,7 +23,6 @@ describe('Auth (e2e)', () => {
   const password = 'correct-horse-1';
   const email = `admin-${Date.now()}@test.local`;
   const phone = `0100${Date.now().toString().slice(-7)}`;
-  const previousLimit = process.env.LOGIN_RATE_LIMIT;
 
   const login = (body: object) =>
     request(app.getHttpServer()).post('/api/v1/auth/login').send(body);
@@ -33,8 +32,8 @@ describe('Auth (e2e)', () => {
       .set('Cookie', `refresh_token=${token}`);
 
   beforeAll(async () => {
-    process.env.LOGIN_RATE_LIMIT = '1000'; // this file logs in many times; the limit has its own test
-    app = await createTestApp();
+    // This file logs in many times; the limit itself has its own test file.
+    app = await createTestApp({ loginRateLimit: 1000 });
     prisma = app.get(PrismaService);
     academyId = await createAcademy(prisma, 'auth');
     await createUser(prisma, academyId, {
@@ -56,7 +55,6 @@ describe('Auth (e2e)', () => {
   afterAll(async () => {
     await removeAcademy(prisma, academyId);
     await app.close();
-    process.env.LOGIN_RATE_LIMIT = previousLimit;
   });
 
   describe('POST /auth/login', () => {
