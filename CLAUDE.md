@@ -46,6 +46,13 @@ Run lint, typecheck and the tests before saying a change is done.
 - Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`.
 - Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
 
+## Auth and errors
+
+- Every route requires a login through the global `JwtAuthGuard`; mark the exceptions with `@Public()`. The guard fills `TenantContext` from the access token, which is what scopes `prisma.db`.
+- Signed-in handlers read the caller from `req.auth` (`AuthenticatedRequest`): `userId`, `academyId`, `sessionId`.
+- Throw `AppException(ErrorCode.X, HttpStatus.Y, detail)` for errors the client acts on; `ProblemDetailsFilter` turns every error into RFC 9457 with a stable `code`. Never leak internal messages in `detail`.
+- Tokens only travel as httpOnly cookies; no endpoint returns a token in a body.
+
 ## API conventions
 
 - Base path `/api/v1`, JSON in camelCase, UUID ids, UTC ISO 8601 timestamps, money as decimal strings in EGP.
