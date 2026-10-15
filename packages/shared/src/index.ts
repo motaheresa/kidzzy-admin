@@ -86,3 +86,15 @@ export interface Page<T> {
 export const API_PREFIX = 'api/v1';
 
 export * from './permissions';
+
+/** The signed-in user (openapi.yaml: Me), returned by POST /auth/login and GET /auth/me. */
+export interface Me {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  roles: string[];
+  permissions: string[];
+  mustChangePassword: boolean;
+  academy: { id: string; name: string; timezone: string };
+}
