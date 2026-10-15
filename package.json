@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "prepare": "husky && pnpm --filter @kidzzy/shared build",
+    "prepare": "husky && pnpm --filter @kidzzy/shared build && pnpm --filter @kidzzy/api prisma:generate",
     "dev": "pnpm --parallel --filter @kidzzy/api --filter @kidzzy/web dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
