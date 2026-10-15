@@ -40,25 +40,28 @@ function toBoolean(value: unknown): unknown {
  * the API at startup with a clear message instead of failing later, request by request.
  * After validation, ConfigService.get returns these typed values (number, boolean).
  * A new variable is added here first.
+ *
+ * Decorators run bottom-up, and only the first broken rule is reported, so each property lists
+ * its basic check (present, right type) last and the finer rules above it.
  */
 export class EnvironmentVariables {
   @IsIn(NODE_ENVS, { message: `NODE_ENV must be one of: ${NODE_ENVS.join(', ')}` })
   NODE_ENV!: NodeEnv;
 
-  @IsString({ message: 'DATABASE_URL is required' })
   @Matches(/^postgres(ql)?:\/\//, { message: 'DATABASE_URL must be a postgresql:// URL' })
+  @IsString({ message: 'DATABASE_URL is required' })
   DATABASE_URL!: string;
 
-  @IsString({ message: 'JWT_ACCESS_SECRET is required' })
-  @MinLength(32, { message: 'JWT_ACCESS_SECRET must be at least 32 characters long' })
   @NotEquals(EXAMPLE_JWT_SECRET, {
     message: 'JWT_ACCESS_SECRET still has the example value from .env.example; set a random one',
   })
+  @MinLength(32, { message: 'JWT_ACCESS_SECRET must be at least 32 characters long' })
+  @IsString({ message: 'JWT_ACCESS_SECRET is required' })
   JWT_ACCESS_SECRET!: string;
 
   @Transform(({ value }) => toInteger(value))
-  @IsInt({ message: 'LOGIN_RATE_LIMIT must be a whole number' })
   @Min(1, { message: 'LOGIN_RATE_LIMIT must be at least 1' })
+  @IsInt({ message: 'LOGIN_RATE_LIMIT must be a whole number' })
   LOGIN_RATE_LIMIT!: number;
 
   @Transform(({ value }) => toBoolean(value))
@@ -78,7 +81,11 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     if (withDefaults[key] === undefined) withDefaults[key] = value;
   }
   const env = plainToInstance(EnvironmentVariables, withDefaults);
-  const problems = validateSync(env).flatMap((error) => Object.values(error.constraints ?? {}));
+  // One message per variable: the first rule it breaks ("abc" is "not a whole number", and
+  // nothing more is useful to say about it).
+  const problems = validateSync(env, { stopAtFirstError: true }).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
 
   // Rules that span two variables.
   if (env.NODE_ENV === 'production' && env.COOKIE_SECURE === false) {
