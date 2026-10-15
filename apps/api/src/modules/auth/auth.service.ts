@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ErrorCode, type Me } from '@kidzzy/shared';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AppException } from '../../common/errors/app.exception';
-import { normalizePhone } from '../../common/normalize/login-identifiers';
+import { normalizeEmail, normalizePhone } from '../../common/normalize/login-identifiers';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { REFRESH_TOKEN_TTL_SECONDS, type AccessTokenPayload } from './auth.config';
@@ -36,11 +36,15 @@ export class AuthService {
     // No tenant is known before login, so this lookup crosses academies on purpose (unscoped).
     // Emails and phones are unique per academy only; in V1 there is one academy, and if a login
     // ever matches users in several academies, the password picks the account.
+    //
+    // The match is exact on the normalized value. Never use `mode: 'insensitive'` here: Prisma
+    // sends it as ILIKE, where % and _ are wildcards, so "%@%" would match every user.
+    // Deactivated users are left out, so they cannot hide an active account with the same login.
     const candidates = await this.prisma.unscoped.user.findMany({
       where: login.includes('@')
-        ? { email: { equals: login, mode: 'insensitive' } }
-        : { phone: normalizePhone(login) },
-      select: { id: true, academyId: true, passwordHash: true, isActive: true },
+        ? { email: normalizeEmail(login), isActive: true }
+        : { phone: normalizePhone(login), isActive: true },
+      select: { id: true, academyId: true, passwordHash: true },
     });
 
     let user: (typeof candidates)[number] | undefined;
@@ -50,8 +54,9 @@ export class AuthService {
         break;
       }
     }
+    // Same time spent with or without a matching account (see PasswordService.verifyNothing).
     if (candidates.length === 0) await this.passwords.verifyNothing(password);
-    if (!user || !user.isActive) throw invalidCredentials();
+    if (!user) throw invalidCredentials();
 
     const sessionId = randomUUID();
     const tokens = await this.issueTokens(user.id, user.academyId, sessionId);

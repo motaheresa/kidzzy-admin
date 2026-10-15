@@ -65,9 +65,45 @@ describe('Auth (e2e)', () => {
       );
     });
 
-    it('logs in with phone, ignoring spaces and dashes', async () => {
-      const spaced = `${phone.slice(0, 3)} ${phone.slice(3, 7)}-${phone.slice(7)}`;
+    it('logs in with phone, ignoring spaces, dashes and brackets', async () => {
+      const spaced = ` (${phone.slice(0, 3)}) ${phone.slice(3, 7)}-${phone.slice(7)} `;
       await login({ login: spaced, password }).expect(200);
+    });
+
+    it('treats % and _ as plain characters, never as wildcards', async () => {
+      const wrong = await login({ login: email, password: 'wrong-password' }).expect(401);
+      // With the real password: a wildcard match would log in as the admin.
+      for (const pattern of ['%@%', '_%@%', 'admin-%@test.local', email.replace('a', '_')]) {
+        const res = await login({ login: pattern, password }).expect(401);
+        expect(res.body).toEqual(wrong.body);
+        expect(res.headers['set-cookie']).toBeUndefined();
+      }
+    });
+
+    it('is not blocked by a deactivated account with the same login in another academy', async () => {
+      const twin = `twin-${email}`;
+      const otherAcademy = await createAcademy(prisma, 'auth-other');
+      try {
+        // The deactivated twin is created first, so it would come first in an unfiltered lookup.
+        await createUser(prisma, otherAcademy, {
+          name: 'Old twin',
+          email: twin,
+          password,
+          role: SystemRole.Instructor,
+          isActive: false,
+        });
+        await createUser(prisma, academyId, {
+          name: 'Twin',
+          email: twin,
+          password,
+          role: SystemRole.Instructor,
+        });
+
+        const res = await login({ login: twin, password }).expect(200);
+        expect(res.body).toMatchObject({ name: 'Twin', academy: { id: academyId } });
+      } finally {
+        await removeAcademy(prisma, otherAcademy);
+      }
     });
 
     it('sets httpOnly, SameSite=Strict cookies, the refresh one only for /auth/refresh', async () => {
