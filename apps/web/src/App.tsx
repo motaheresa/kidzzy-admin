@@ -1,31 +1,32 @@
-import { useEffect, useState } from 'react';
-import { API_PREFIX } from '@kidzzy/shared';
+import { useState } from 'react';
+import type { Me } from '@kidzzy/shared';
+import { LoginPage } from './features/auth/LoginPage';
+import { api } from './lib/api';
 
-type ApiState = 'checking' | 'up' | 'down';
-
-const LABELS: Record<ApiState, string> = {
-  checking: 'بنتاكد من السيرفر…',
-  up: 'السيرفر شغال',
-  down: 'السيرفر مش متاح',
-};
-
-/** Placeholder shell until Sprint 1 adds login and the real screens. */
+/**
+ * App shell. After login it shows who is signed in until the real screens arrive.
+ * The session lives in httpOnly cookies; reopening the page shows the login form again
+ * until GET /auth/me (US-03) lets the app ask who is signed in.
+ */
 export default function App() {
-  const [api, setApi] = useState<ApiState>('checking');
+  const [me, setMe] = useState<Me | null>(null);
 
-  useEffect(() => {
-    fetch(`/${API_PREFIX}/health`)
-      .then((res) => setApi(res.ok ? 'up' : 'down'))
-      .catch(() => setApi('down'));
-  }, []);
+  if (!me) return <LoginPage onLoggedIn={setMe} />;
+
+  async function logout() {
+    await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
+    setMe(null);
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-4 p-6 text-center">
-      <h1 className="text-2xl font-semibold">كيدزي كودرز</h1>
-      <p className="text-neutral-600">نظام ادارة الاكاديمية</p>
-      <p role="status" className="rounded-full border px-4 py-1 text-sm">
-        {LABELS[api]}
+      <h1 className="text-2xl font-semibold">اهلا {me.name}</h1>
+      <p className="text-neutral-600">
+        {me.academy.name} · {me.roles.join('، ')}
       </p>
+      <button onClick={logout} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm">
+        تسجيل الخروج
+      </button>
     </main>
   );
 }

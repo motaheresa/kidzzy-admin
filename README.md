@@ -41,13 +41,15 @@ pnpm install
 # 3. Create the API environment file (its DATABASE_URL matches the user created above)
 copy apps\api\.env.example apps\api\.env     # macOS/Linux: cp apps/api/.env.example apps/api/.env
 
-# 4. Create the tables, then add the permission catalog, the academy and its roles
+# 4. Create the tables, then add the permission catalog, the academy, its roles and the first admin
 pnpm --filter @kidzzy/api prisma:migrate
 pnpm --filter @kidzzy/api prisma:seed
 
 # 5. Run API and web app together
 pnpm dev
 ```
+
+In `apps/api/.env`, set `JWT_ACCESS_SECRET` to a long random value, and set `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` before step 4 so the seed creates an admin you can log in with.
 
 After pulling changes that add a migration, run step 4 again: `prisma:migrate` applies new migrations, and the seed is safe to repeat.
 

@@ -9,9 +9,9 @@
 // - Timestamps are timestamptz in UTC.
 
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "cjs"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
   // Extensionless imports inside the generated client, so Jest (CommonJS) resolves them.
   importFileExtension = ""
 }
@@ -31,8 +31,9 @@ model Academy {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  users User[]
-  roles Role[]
+  users         User[]
+  roles         Role[]
+  refreshTokens RefreshToken[]
 
   @@map("academies")
 }
@@ -40,19 +41,22 @@ model Academy {
 /// Everyone who logs in: admins and instructors.
 /// At least one of email or phone is required (check constraint in the migration).
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  academyId    String   @map("academy_id") @db.Uuid
-  name         String
-  email        String?
-  phone        String?
-  passwordHash String   @map("password_hash")
+  id                 String   @id @default(uuid()) @db.Uuid
+  academyId          String   @map("academy_id") @db.Uuid
+  name               String
+  email              String?
+  phone              String?
+  passwordHash       String   @map("password_hash")
   /// Deactivated users cannot log in; users are never deleted.
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  isActive           Boolean  @default(true) @map("is_active")
+  /// Set by an admin password reset; the user must choose a new password (US-02).
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy Academy    @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  roles   UserRole[]
+  academy       Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
 
   @@unique([academyId, email])
   @@unique([academyId, phone])
@@ -115,4 +119,29 @@ model UserRole {
   @@id([userId, roleId])
   @@index([roleId])
   @@map("user_roles")
+}
+
+/// One row per issued refresh token, stored as a SHA-256 hash (ADR-0005).
+/// Every login starts a family; each refresh marks the old token used and adds a new one to the
+/// family. Presenting a used token means it was stolen and replayed, so the whole family is revoked.
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  academyId String    @map("academy_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// Shared by every token since the login; it is the session id (sid) in the access token.
+  familyId  String    @map("family_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  /// Set when the token is exchanged for a new one.
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  /// Set on logout, on reuse detection, or when the user is deactivated.
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId])
+  @@map("refresh_tokens")
 }

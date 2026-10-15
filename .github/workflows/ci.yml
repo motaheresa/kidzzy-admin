@@ -36,6 +36,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://kidzzy:kidzzy@localhost:5432/kidzzy_test?schema=public
+      JWT_ACCESS_SECRET: ci-only-secret-not-used-anywhere-else
       HUSKY: 0
 
     steps:
