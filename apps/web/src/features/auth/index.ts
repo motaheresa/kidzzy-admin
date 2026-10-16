@@ -1,6 +1,7 @@
 // Public API of the auth feature. Pages, layouts and other features import from here only,
 // never from its folders (enforced by ESLint boundaries, ADR-0011).
 export { authKeys } from './api/auth.keys';
+export { ChangePasswordForm } from './components/ChangePasswordForm';
 export { CurrentUserCard } from './components/CurrentUserCard';
 export { LoginForm } from './components/LoginForm';
 export { LogoutButton } from './components/LogoutButton';

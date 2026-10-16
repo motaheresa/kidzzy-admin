@@ -44,6 +44,11 @@ export function updateInstructor(id: string, input: InstructorUpdate): Promise<I
   return http.patch<Instructor>(path(id), input);
 }
 
+/** POST /instructors/{id}/reset-password: a temporary password the instructor must change. */
+export function resetInstructorPassword(id: string, temporaryPassword: string): Promise<void> {
+  return http.post<void>(`${path(id)}/reset-password`, { temporaryPassword });
+}
+
 /** POST /instructors/{id}/deactivate or /reactivate. */
 export function setInstructorActive(id: string, active: boolean): Promise<Instructor> {
   return http.post<Instructor>(`${path(id)}/${active ? 'reactivate' : 'deactivate'}`);
