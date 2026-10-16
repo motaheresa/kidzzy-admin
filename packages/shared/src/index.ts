@@ -51,6 +51,8 @@ export const ErrorCode = {
   PasswordChangeRequired: 'PASSWORD_CHANGE_REQUIRED',
   Forbidden: 'FORBIDDEN',
   NotFound: 'NOT_FOUND',
+  EmailTaken: 'EMAIL_TAKEN',
+  PhoneTaken: 'PHONE_TAKEN',
   SessionNotScheduled: 'SESSION_NOT_SCHEDULED',
   SessionNotHeld: 'SESSION_NOT_HELD',
   StudentAlreadyEnrolled: 'STUDENT_ALREADY_ENROLLED',
@@ -97,4 +99,41 @@ export interface Me {
   permissions: string[];
   mustChangePassword: boolean;
   academy: { id: string; name: string; timezone: string };
+}
+
+/** Id and display name of a related record (openapi.yaml: GroupRef). */
+export interface GroupRef {
+  id: string;
+  name: string;
+}
+
+/** An instructor account (openapi.yaml: Instructor). */
+export interface Instructor {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  isActive: boolean;
+  /** ISO 8601, UTC */
+  createdAt: string;
+}
+
+/** An instructor with the groups they teach (openapi.yaml: InstructorDetail). */
+export interface InstructorDetail extends Instructor {
+  groups: GroupRef[];
+}
+
+/** POST /instructors body (openapi.yaml: InstructorCreate). At least one of email or phone. */
+export interface InstructorCreate {
+  name: string;
+  email?: string;
+  phone?: string;
+  temporaryPassword: string;
+}
+
+/** PATCH /instructors/{id} body (openapi.yaml: InstructorUpdate); null removes email or phone. */
+export interface InstructorUpdate {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
 }

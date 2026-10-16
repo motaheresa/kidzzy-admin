@@ -1,6 +1,12 @@
 import { ErrorCode } from '@kidzzy/shared';
 import { AppError, isAppError, type ErrorKind } from './app-error';
-import { ERROR_MESSAGES, FIELD_FALLBACK, FIELD_MESSAGES, KIND_MESSAGES } from './messages';
+import {
+  CODE_FIELDS,
+  ERROR_MESSAGES,
+  FIELD_FALLBACK,
+  FIELD_MESSAGES,
+  KIND_MESSAGES,
+} from './messages';
 
 const KNOWN_CODES = new Set<string>(Object.values(ErrorCode));
 
@@ -69,12 +75,15 @@ function toFieldErrors(errors: unknown): Record<string, string> {
 export function fromResponse(status: number, body: unknown): AppError {
   const code = isRecord(body) && isErrorCode(body.code) ? body.code : undefined;
   const kind = kindFor(status, code);
+  const fieldErrors = kind === 'validation' && isRecord(body) ? toFieldErrors(body.errors) : {};
+  const codeField = code ? CODE_FIELDS[code] : undefined;
+  if (code && codeField) fieldErrors[codeField] = ERROR_MESSAGES[code];
   return new AppError({
     kind,
     status,
     code,
     message: code ? ERROR_MESSAGES[code] : KIND_MESSAGES[kind],
-    fieldErrors: kind === 'validation' && isRecord(body) ? toFieldErrors(body.errors) : {},
+    fieldErrors,
     cause: body,
   });
 }
