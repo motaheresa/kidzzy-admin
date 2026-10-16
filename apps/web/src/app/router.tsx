@@ -7,6 +7,10 @@ import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
+import { EditStudentPage } from '@/pages/students/EditStudentPage';
+import { NewStudentPage } from '@/pages/students/NewStudentPage';
+import { StudentPage } from '@/pages/students/StudentPage';
+import { StudentsPage } from '@/pages/students/StudentsPage';
 import { ProtectedLayout } from './layouts/ProtectedLayout';
 import { PublicLayout } from './layouts/PublicLayout';
 import { RootLayout } from './layouts/RootLayout';
@@ -17,6 +21,8 @@ import { RequirePermission } from './RequirePermission';
  *   RootLayout (toaster, error boundary)
  *     PublicLayout     /login        signed-in users are sent home
  *     ProtectedLayout  /             signed-out users are sent to /login?returnTo=…
+ *       RequirePermission students.read        /students, /students/:id
+ *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission instructors.read     /instructors, /instructors/:id
  *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
  *     NotFoundPage     *
@@ -51,6 +57,20 @@ export const routes: RouteObject[] = [
         element: <ProtectedLayout />,
         children: [
           { path: '/', element: <HomePage /> },
+          {
+            element: <RequirePermission permission="students.read" />,
+            children: [
+              { path: '/students', element: <StudentsPage /> },
+              { path: '/students/:id', element: <StudentPage /> },
+            ],
+          },
+          {
+            element: <RequirePermission permission="students.manage" />,
+            children: [
+              { path: '/students/new', element: <NewStudentPage /> },
+              { path: '/students/:id/edit', element: <EditStudentPage /> },
+            ],
+          },
           {
             element: <RequirePermission permission="instructors.read" />,
             children: [

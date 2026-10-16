@@ -34,6 +34,7 @@ model Academy {
   users         User[]
   roles         Role[]
   refreshTokens RefreshToken[]
+  students      Student[]
 
   @@map("academies")
 }
@@ -144,4 +145,32 @@ model RefreshToken {
   @@index([familyId])
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// ── Teaching ───────────────────────────────────────────────────────────
+
+/// A student record (US-05). Students never log in in V1; they are deactivated, never deleted.
+/// Check constraints in the migration: the code is stored trimmed and uppercase, the parent's
+/// phone in the normalized form (like users), the age 3 to 25, the name not blank.
+model Student {
+  id          String   @id @default(uuid()) @db.Uuid
+  academyId   String   @map("academy_id") @db.Uuid
+  /// Entered by the admin (e.g. KC-001), unique per academy (FR-04).
+  code        String
+  name        String
+  age         Int?     @db.SmallInt
+  parentName  String   @map("parent_name")
+  parentPhone String   @map("parent_phone")
+  notes       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+
+  @@unique([academyId, code])
+  /// Composite key for tenant-safe foreign keys: a later table (enrollments, attendance)
+  /// references (student_id, academy_id), so it can never point at another academy's student.
+  @@unique([id, academyId])
+  @@map("students")
 }

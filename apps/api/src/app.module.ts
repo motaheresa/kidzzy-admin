@@ -4,6 +4,7 @@ import { validateEnv } from './common/config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { InstructorsModule } from './modules/instructors/instructors.module';
+import { StudentsModule } from './modules/students/students.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { TenancyModule } from './modules/tenancy/tenancy.module';
 
@@ -16,6 +17,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     AuthModule,
     HealthModule,
     InstructorsModule,
+    StudentsModule,
   ],
 })
 export class AppModule {}

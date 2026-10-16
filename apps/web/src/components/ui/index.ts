@@ -46,4 +46,5 @@ export { FullScreenMessage } from './molecules/FullScreenMessage';
 export { PageHeader } from './molecules/PageHeader';
 export { Pagination } from './molecules/Pagination';
 export { SEARCH_DEBOUNCE_MS, SearchInput } from './molecules/SearchInput';
+export { TextareaField } from './molecules/TextareaField';
 export { Toaster } from './molecules/Toaster';

@@ -60,6 +60,11 @@ export const FIELD_MESSAGES: Record<string, string> = {
   phone: 'اكتب رقم موبايل صحيح',
   name: 'اكتب الاسم',
   temporaryPassword: 'كلمة السر المؤقتة لازم تكون 8 حروف على الاقل',
+  code: 'الكود حروف وارقام بس (ومسموح . _ / -)، 20 على الاكتر',
+  age: 'السن من 3 لـ 25 سنة',
+  parentName: 'اكتب اسم ولي الامر',
+  parentPhone: 'اكتب رقم موبايل صحيح لولي الامر',
+  notes: 'الملاحظات 1000 حرف على الاكتر',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';

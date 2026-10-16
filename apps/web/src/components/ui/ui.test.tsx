@@ -13,6 +13,7 @@ import {
   SEARCH_DEBOUNCE_MS,
   SearchInput,
   Spinner,
+  TextareaField,
   ToggleGroup,
   ToggleGroupItem,
 } from '.';
@@ -111,6 +112,16 @@ describe('FormField', () => {
   it('keeps an id given by the caller', () => {
     render(<FormField label="كود الطالب" id="student-code" />);
     expect(screen.getByLabelText('كود الطالب')).toHaveAttribute('id', 'student-code');
+  });
+});
+
+describe('TextareaField', () => {
+  it('connects the label, the hint and the error to a textarea', () => {
+    render(<TextareaField label="ملاحظات" hint="اختياري" error="الملاحظات 1000 حرف على الاكتر" />);
+    const textarea = screen.getByLabelText('ملاحظات');
+    expect(textarea.tagName).toBe('TEXTAREA');
+    expect(textarea).toHaveAttribute('aria-invalid', 'true');
+    expect(textarea).toHaveAccessibleDescription('اختياري الملاحظات 1000 حرف على الاكتر');
   });
 });
 
