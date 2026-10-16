@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@kidzzy/shared": "workspace:*",
+    "@nestjs-cls/transactional": "4.0.1",
+    "@nestjs-cls/transactional-adapter-prisma": "2.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",

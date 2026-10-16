@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Transactional } from '@nestjs-cls/transactional';
 import { ErrorCode, type Me } from '@kidzzy/shared';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AppException } from '../../common/errors/app.exception';
@@ -79,13 +80,28 @@ export class AuthService {
       throw unauthenticated();
     }
 
-    // Claim the token atomically: if two requests race with the same token, only one wins,
-    // and the loser is treated as reuse.
-    if (!(await this.refreshTokens.claim(token.id, now))) {
+    const rotated = await this.rotate(token, now);
+    if (!rotated) {
+      // Another request claimed this token first: treated as reuse.
       await this.refreshTokens.revokeSession(token.familyId);
       throw unauthenticated();
     }
+    return rotated;
+  }
 
+  /**
+   * Marks the old token used and stores the new one in ONE transaction, so a failure between
+   * the two writes cannot leave the session without a valid token.
+   * Returns null when the claim fails. Revocation and the 401 stay outside, in refresh(): a throw
+   * in here would roll the revocation back.
+   */
+  @Transactional()
+  private async rotate(
+    token: { id: string; userId: string; academyId: string; familyId: string },
+    now: Date,
+  ): Promise<IssuedTokens | null> {
+    // Atomic claim: if two requests race with the same token, only one wins.
+    if (!(await this.refreshTokens.claim(token.id, now))) return null;
     return this.issueTokens(token.userId, token.academyId, token.familyId);
   }
 

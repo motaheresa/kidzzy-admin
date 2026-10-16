@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { TransactionHost } from '@nestjs-cls/transactional';
 import { normalizeEmail, normalizePhone } from '../../common/normalize/login-identifiers';
 import { PrismaService } from '../prisma/prisma.service';
+import type { TenantTransactionalAdapter } from '../prisma/transaction';
 
 /** An active user whose password may match a login attempt. */
 export interface LoginCandidate {
@@ -25,10 +27,16 @@ export interface UserWithAccess {
  * The only class that queries the users table; services call these intent-named methods.
  * Email and phone are normalized here, so every lookup and write matches the stored form
  * (check constraints in the normalize_login_fields migration).
+ *
+ * Scoped queries go through `txHost.tx`: the current transaction inside @Transactional(),
+ * otherwise `prisma.db`. Both are limited to the academy in TenantContext.
  */
 @Injectable()
 export class UserRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly txHost: TransactionHost<TenantTransactionalAdapter>,
+  ) {}
 
   /**
    * LOGIN LOOKUP, UNSCOPED ON PURPOSE: before login no academy is known, so this is the one
@@ -52,7 +60,7 @@ export class UserRepository {
 
   /** The user with academy, roles and permissions, in the current academy; throws if absent. */
   findWithAccess(userId: string): Promise<UserWithAccess> {
-    return this.prisma.db.user.findUniqueOrThrow({
+    return this.txHost.tx.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
         id: true,
