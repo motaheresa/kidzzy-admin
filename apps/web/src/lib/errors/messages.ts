@@ -17,6 +17,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   PASSWORD_CHANGE_REQUIRED: 'لازم تغير كلمة السر الأول',
   FORBIDDEN: 'مش مسموح لك تعمل ده',
   NOT_FOUND: 'الحاجة دي مش موجودة',
+  EMAIL_TAKEN: 'الايميل ده مستخدم لحساب تاني',
+  PHONE_TAKEN: 'رقم الموبايل ده مستخدم لحساب تاني',
   SESSION_NOT_SCHEDULED: 'الحصة دي مش في حالة مجدولة',
   SESSION_NOT_HELD: 'الحصة دي لسه ما اتعملتش',
   STUDENT_ALREADY_ENROLLED: 'الطالب ده مسجل في جروب بالفعل',
@@ -57,6 +59,17 @@ export const FIELD_MESSAGES: Record<string, string> = {
   email: 'اكتب ايميل صحيح',
   phone: 'اكتب رقم موبايل صحيح',
   name: 'اكتب الاسم',
+  temporaryPassword: 'كلمة السر المؤقتة لازم تكون 8 حروف على الاقل',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';
+
+/**
+ * Codes that are about one field of the form (a 409 "already used"): the error layer also puts
+ * the code's message under that field, so the form shows it where the user has to fix it.
+ */
+export const CODE_FIELDS: Partial<Record<ErrorCode, string>> = {
+  EMAIL_TAKEN: 'email',
+  PHONE_TAKEN: 'phone',
+  STUDENT_CODE_TAKEN: 'code',
+};

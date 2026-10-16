@@ -115,6 +115,15 @@ export class AuthService {
   }
 
   /**
+   * Signs the user out everywhere (deactivation, password reset): no refresh works any more, so
+   * each device is signed out when its access token expires, within 15 minutes (ADR-0013).
+   * Joins the caller's transaction when there is one.
+   */
+  async revokeAllSessions(userId: string): Promise<void> {
+    await this.refreshTokens.revokeAllForUser(userId);
+  }
+
+  /**
    * The signed-in user with roles and permission keys; runs in the user's tenant context.
    * A user deactivated after logging in gets 401 UNAUTHENTICATED, never a stale Me.
    */

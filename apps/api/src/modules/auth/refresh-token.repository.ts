@@ -81,4 +81,12 @@ export class RefreshTokenRepository {
       data: { revokedAt: at },
     });
   }
+
+  /** Ends every session of the user, on every device: no refresh token of theirs works again. */
+  async revokeAllForUser(userId: string, at = new Date()): Promise<void> {
+    await this.txHost.tx.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: at },
+    });
+  }
 }

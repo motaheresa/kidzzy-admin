@@ -173,6 +173,8 @@ paths:
           required: false
           schema:
             type: string
+            maxLength: 100
+          description: Part of the name, email or phone; % and _ match themselves
         - name: isActive
           in: query
           required: false
@@ -229,7 +231,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/LoginTaken'
   /instructors/{id}:
     get:
       tags:
@@ -286,12 +288,15 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/LoginTaken'
   /instructors/{id}/deactivate:
     post:
       tags:
         - Instructors
       summary: Deactivate an instructor
+      description:
+        The instructor can no longer log in, and every session ends at its next refresh (within 15 minutes). Nothing is
+        deleted. Idempotent.
       operationId: deactivateInstructor
       x-permission: instructors.manage
       x-story: US-04
@@ -304,6 +309,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Instructor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -315,6 +322,7 @@ paths:
       tags:
         - Instructors
       summary: Reactivate an instructor
+      description: The instructor can log in again with their password. Idempotent.
       operationId: reactivateInstructor
       x-permission: instructors.manage
       x-story: US-04
@@ -327,6 +335,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Instructor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2142,6 +2152,12 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    LoginTaken:
+      description: The email (EMAIL_TAKEN) or the phone (PHONE_TAKEN) is already used by another account of the academy
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Unprocessable:
       description: Values contradict each other
       content:
@@ -2320,6 +2336,8 @@ components:
       required:
         - id
         - name
+        - email
+        - phone
         - isActive
         - createdAt
     InstructorDetail:
@@ -2339,14 +2357,21 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 100
+          description: Trimmed
         email:
           type: string
           format: email
+          maxLength: 200
+          description: Stored trimmed and lowercase
         phone:
           type: string
+          description: Digits, with optional spaces, dashes, dots or brackets and a leading +; 6 to 20 digits, stored as digits only
         temporaryPassword:
           type: string
           minLength: 8
+          maxLength: 128
       additionalProperties: false
       required:
         - name
@@ -2357,12 +2382,20 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 100
         email:
-          type: string
-          format: email
+          anyOf:
+            - type: string
+              format: email
+              maxLength: 200
+            - type: 'null'
         phone:
-          type: string
+          anyOf:
+            - type: string
+            - type: 'null'
       additionalProperties: false
+      description: Only the fields sent change. null removes the email or the phone, but one of them must remain (400 otherwise).
     ResetPasswordRequest:
       type: object
       properties:

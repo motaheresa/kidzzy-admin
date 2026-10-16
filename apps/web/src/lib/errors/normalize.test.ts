@@ -83,6 +83,16 @@ describe('fromResponse: Problem Details -> AppError', () => {
     });
     expect(fromResponse(409, body).fieldErrors).toEqual({});
   });
+
+  it.each([
+    [ErrorCode.EmailTaken, 'email'],
+    [ErrorCode.PhoneTaken, 'phone'],
+    [ErrorCode.StudentCodeTaken, 'code'],
+  ] as const)('puts the 409 %s message under the %s field', (code, field) => {
+    const error = fromResponse(409, problem(409, code));
+    expect(error).toMatchObject({ kind: 'conflict', code, message: ERROR_MESSAGES[code] });
+    expect(error.fieldErrors).toEqual({ [field]: ERROR_MESSAGES[code] });
+  });
 });
 
 describe('normalizeError: anything thrown -> AppError', () => {

@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { UserRepository } from './user.repository';
 
 /**
- * Users (staff who log in). For now it only owns UserRepository, which AuthModule imports;
- * the instructor endpoints (US-04) will add their controller and service here.
+ * Users (staff who log in). It owns UserRepository, which AuthModule imports for login and the
+ * session. The instructor accounts (US-04) live in InstructorsModule.
  */
 @Module({
   providers: [UserRepository],

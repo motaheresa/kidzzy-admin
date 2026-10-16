@@ -1,0 +1,86 @@
+import type { ComponentProps } from 'react';
+import { cn } from '@/lib/utils';
+
+/**
+ * A data table (shadcn/ui radix-nova, on our tokens). The wrapper scrolls sideways on a narrow
+ * screen, so a wide table never widens the page. Cells start at the start edge (RTL-safe).
+ */
+function Table({ className, ...props }: ComponentProps<'table'>) {
+  return (
+    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+      <table
+        data-slot="table"
+        className={cn('w-full caption-bottom text-sm', className)}
+        {...props}
+      />
+    </div>
+  );
+}
+
+function TableHeader({ className, ...props }: ComponentProps<'thead'>) {
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn('[&_tr]:border-b [&_tr]:border-border', className)}
+      {...props}
+    />
+  );
+}
+
+function TableBody({ className, ...props }: ComponentProps<'tbody'>) {
+  return (
+    <tbody
+      data-slot="table-body"
+      className={cn('[&_tr:last-child]:border-0', className)}
+      {...props}
+    />
+  );
+}
+
+function TableRow({ className, ...props }: ComponentProps<'tr'>) {
+  return (
+    <tr
+      data-slot="table-row"
+      className={cn(
+        'border-b border-border transition-colors duration-fast ease-out hover:bg-muted/60',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TableHead({ className, ...props }: ComponentProps<'th'>) {
+  return (
+    <th
+      data-slot="table-head"
+      className={cn(
+        'h-11 px-3 text-start align-middle text-xs font-semibold whitespace-nowrap text-muted-foreground',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TableCell({ className, ...props }: ComponentProps<'td'>) {
+  return (
+    <td
+      data-slot="table-cell"
+      className={cn('px-3 py-3 align-middle whitespace-nowrap', className)}
+      {...props}
+    />
+  );
+}
+
+function TableCaption({ className, ...props }: ComponentProps<'caption'>) {
+  return (
+    <caption
+      data-slot="table-caption"
+      className={cn('mt-4 text-sm text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}
+
+export { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow };
