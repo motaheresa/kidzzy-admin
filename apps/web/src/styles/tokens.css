@@ -93,13 +93,17 @@
   --ease-in-out: cubic-bezier(0.455, 0.03, 0.515, 0.955); /* GSAP power2.inOut */
 }
 
-/* transition-duration from the motion tokens: duration-fast, duration-base, duration-slow. */
+/* transition-duration from the motion tokens: duration-fast, duration-base, duration-slow.
+   --tw-duration too, so a transition-* utility in the same class list keeps the token. */
 @utility duration-fast {
+  --tw-duration: var(--duration-fast);
   transition-duration: var(--duration-fast);
 }
 @utility duration-base {
+  --tw-duration: var(--duration-base);
   transition-duration: var(--duration-base);
 }
 @utility duration-slow {
+  --tw-duration: var(--duration-slow);
   transition-duration: var(--duration-slow);
 }

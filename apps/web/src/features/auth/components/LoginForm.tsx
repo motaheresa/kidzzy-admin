@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Alert, Button, TextField } from '@/components/ui';
+import { Alert, Button, FormField } from '@/components/ui';
 import { useLogin } from '../hooks/useLogin';
 
 /**
@@ -20,7 +20,7 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <TextField
+      <FormField
         label="الايميل او رقم الموبايل"
         name="login"
         dir="ltr"
@@ -29,10 +29,10 @@ export function LoginForm() {
         value={login}
         onChange={(e) => setLogin(e.target.value)}
         error={error?.fieldErrors.login}
-        className="text-left"
+        className="text-start"
       />
 
-      <TextField
+      <FormField
         label="كلمة السر"
         name="password"
         type="password"
@@ -42,10 +42,10 @@ export function LoginForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         error={error?.fieldErrors.password}
-        className="text-left"
+        className="text-start"
       />
 
-      {error && <Alert>{error.message}</Alert>}
+      {error && <Alert variant="danger">{error.message}</Alert>}
 
       <Button type="submit" disabled={loginMutation.isPending}>
         {loginMutation.isPending ? 'جاري الدخول…' : 'دخول'}

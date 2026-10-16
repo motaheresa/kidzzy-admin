@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Spinner } from '../atoms/Spinner';
+import { Spinner } from '../atoms/spinner';
 
 /**
  * A screen-filling state: loading (`busy`), not found, or an error with an action below it.
@@ -7,16 +7,23 @@ import { Spinner } from '../atoms/Spinner';
  */
 export function FullScreenMessage({
   title,
+  description,
   busy = false,
   children,
 }: {
   title: string;
+  description?: string;
   busy?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-4 p-6 text-center">
-      {busy ? <Spinner label={title} /> : <h1 className="text-xl font-semibold">{title}</h1>}
+    <main className="mx-auto flex min-h-dvh max-w-sm flex-col items-center justify-center gap-4 p-6 text-center">
+      {busy ? (
+        <Spinner label={title} className="size-8" />
+      ) : (
+        <h1 className="font-display text-2xl font-bold text-foreground">{title}</h1>
+      )}
+      {description && <p className="text-sm text-muted-foreground">{description}</p>}
       {children}
     </main>
   );

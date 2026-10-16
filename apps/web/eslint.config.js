@@ -59,6 +59,12 @@ const FETCH_MESSAGE =
 const QUERY_MESSAGE =
   'Use useApiQuery / useApiMutation / useQueryClient from src/lib/query, not @tanstack/react-query (ADR-0012).';
 
+/** A Tailwind class with a physical direction: ml-, pr-, left-, rounded-l-, text-right, … */
+const PHYSICAL_CLASS =
+  '/(^|\\s)(\\w+:)*-?(ml|mr|pl|pr|left|right|rounded-l|rounded-r|border-l|border-r)-|(^|\\s)(\\w+:)*(text|float)-(left|right)(\\s|$)/';
+const PHYSICAL_MESSAGE =
+  'Use logical classes (ms-/me-, ps-/pe-, start-/end-, text-start/text-end, rounded-s/e) so RTL is correct.';
+
 export default tseslint.config(
   // private_evidence is local reference material (CLAUDE.md), never linted
   { ignores: ['dist', '**/private_evidence/**'] },
@@ -79,6 +85,20 @@ export default tseslint.config(
       // Anything logged in the browser console is visible to extensions and to anyone at the
       // device, so app code never logs (it once printed the login password).
       'no-console': 'error',
+    },
+  },
+  {
+    // RTL: logical properties only (ps/pe, ms/me, start/end, text-start), never physical left
+    // and right, which point the wrong way in Arabic (docs/design-system.md, RTL rules).
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...['Literal', 'TemplateElement'].map((node) => ({
+          selector: `${node}[${node === 'Literal' ? 'value' : 'value.raw'}=${PHYSICAL_CLASS}]`,
+          message: PHYSICAL_MESSAGE,
+        })),
+      ],
     },
   },
   {
