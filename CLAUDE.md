@@ -53,6 +53,7 @@ Run lint, typecheck and the tests before saying a change is done.
 - Raw SQL is never scoped automatically; filter by `academy_id` yourself.
 - Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`.
 - Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
+- A new tenant table also gets `@@unique([id, academyId])`. A table that points at it uses a composite foreign key, `(x_id, academy_id)` referencing `x(id, academy_id)`, so a row can never reference another academy's record (SCRUM-57). `students` is the first table built this way.
 - Every email or phone that is written or looked up goes through `normalizeEmail` / `normalizePhone` (`src/common/normalize`); the database rejects any other form. Never match them with `mode: 'insensitive'`: Prisma sends it as `ILIKE`, where `%` and `_` are wildcards.
 
 ## Code structure
@@ -83,7 +84,7 @@ features/<feature>/components/ the feature's components
 features/<feature>/types/      its types
 features/<feature>/index.ts    its public API: the only file other folders import
 components/ui/atoms/        shadcn/ui primitives on our tokens (button, input, textarea, label, alert, alert-dialog, card, badge, table, toggle-group, spinner, skeleton)
-components/ui/molecules/    our combinations (FormField, PageHeader, EmptyState, ConfirmDialog, SearchInput, Pagination, DetailList, FullScreenMessage, Toaster)
+components/ui/molecules/    our combinations (FormField, TextareaField, PageHeader, EmptyState, ConfirmDialog, SearchInput, Pagination, DetailList, FullScreenMessage, Toaster)
 lib/                        http (client), query, errors, routing helpers, hooks (useListParams)
 ```
 

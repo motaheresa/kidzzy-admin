@@ -449,7 +449,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/StudentCodeTaken'
   /students/{id}:
     get:
       tags:
@@ -506,12 +506,13 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/StudentCodeTaken'
   /students/{id}/deactivate:
     post:
       tags:
         - Students
       summary: Deactivate a student and end the enrollment
+      description: Nothing is deleted; the student's history and payments stay. Idempotent.
       operationId: deactivateStudent
       x-permission: students.manage
       x-story: US-05
@@ -524,6 +525,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Student'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2152,6 +2155,12 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    StudentCodeTaken:
+      description: The code is already used by another student of the academy (STUDENT_CODE_TAKEN)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     LoginTaken:
       description: The email (EMAIL_TAKEN) or the phone (PHONE_TAKEN) is already used by another account of the academy
       content:
@@ -2455,26 +2464,43 @@ components:
         - id
         - code
         - name
+        - age
         - parentName
         - parentPhone
+        - notes
         - isActive
+        - currentGroup
+        - currentCycle
     StudentCreate:
       type: object
       properties:
         code:
           type: string
+          minLength: 1
+          maxLength: 20
+          pattern: ^\s*[A-Za-z0-9ء-ي٠-٩۰-۹][A-Za-z0-9ء-ي٠-٩۰-۹._/-]*\s*$
+          description:
+            Letters, digits and . _ / -. Stored trimmed and uppercase, with Arabic-Indic digits as 0-9 ("kc-٠٠١" is
+            "KC-001"); unique per academy
         name:
           type: string
+          minLength: 1
+          maxLength: 100
         age:
           type: integer
           minimum: 3
           maximum: 25
         parentName:
           type: string
+          minLength: 1
+          maxLength: 100
         parentPhone:
           type: string
+          description: Digits, with optional spaces, dashes, dots or brackets and a leading +; 6 to 20 digits, stored as digits only
         notes:
           type: string
+          maxLength: 1000
+          description: Empty after trimming means no notes (null)
       additionalProperties: false
       required:
         - code
@@ -2486,17 +2512,32 @@ components:
       properties:
         code:
           type: string
+          minLength: 1
+          maxLength: 20
+          pattern: ^\s*[A-Za-z0-9ء-ي٠-٩۰-۹][A-Za-z0-9ء-ي٠-٩۰-۹._/-]*\s*$
         name:
           type: string
+          minLength: 1
+          maxLength: 100
         age:
-          type: integer
+          anyOf:
+            - type: integer
+              minimum: 3
+              maximum: 25
+            - type: 'null'
         parentName:
           type: string
+          minLength: 1
+          maxLength: 100
         parentPhone:
           type: string
         notes:
-          type: string
+          anyOf:
+            - type: string
+              maxLength: 1000
+            - type: 'null'
       additionalProperties: false
+      description: Only the fields sent change. null clears age or notes.
     Enrollment:
       type: object
       properties:
