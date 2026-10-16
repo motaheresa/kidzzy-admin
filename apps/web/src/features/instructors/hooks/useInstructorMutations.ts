@@ -1,7 +1,12 @@
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useApiMutation, useQueryClient, type QueryClient } from '@/lib/query';
-import { createInstructor, setInstructorActive, updateInstructor } from '../api/instructors.api';
+import {
+  createInstructor,
+  resetInstructorPassword,
+  setInstructorActive,
+  updateInstructor,
+} from '../api/instructors.api';
 import { instructorKeys } from '../api/instructors.keys';
 import type { Instructor, InstructorCreate, InstructorDetail, InstructorUpdate } from '../types';
 
@@ -40,6 +45,17 @@ export function useUpdateInstructor(id: string) {
       toast.success('اتحفظت البيانات');
       await navigate(`/instructors/${id}`, { replace: true });
     },
+  });
+}
+
+/**
+ * Setting a temporary password (US-02). Nothing to update in the cache: the instructor's data
+ * does not change. The dialog shows the errors itself.
+ */
+export function useResetInstructorPassword(id: string) {
+  return useApiMutation<void, string>({
+    mutationFn: (temporaryPassword) => resetInstructorPassword(id, temporaryPassword),
+    meta: { errorHandling: 'local' },
   });
 }
 

@@ -31,12 +31,15 @@ import { RefreshTokenRepository } from './refresh-token.repository';
         verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
-    // Counts login attempts per client IP in memory; one API instance in V1 (ADR-0007).
+    // Counts attempts in memory; one API instance in V1 (ADR-0007). Two named throttlers, each
+    // route skipping the other's: 'login' per client IP, 'password' (change-password) per user.
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
         // A positive integer, default 5, checked at startup by validateEnv.
         { name: 'login', ttl: 60_000, limit: config.getOrThrow<number>('LOGIN_RATE_LIMIT') },
+        // Guessing the current password is the same attack as guessing at login: same limit.
+        { name: 'password', ttl: 60_000, limit: config.getOrThrow<number>('LOGIN_RATE_LIMIT') },
       ],
     }),
   ],

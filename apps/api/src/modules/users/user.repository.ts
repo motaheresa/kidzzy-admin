@@ -58,6 +58,30 @@ export class UserRepository {
     });
   }
 
+  /** The active user's password hash in the current academy, or null (gone or deactivated). */
+  async findActivePasswordHash(userId: string): Promise<string | null> {
+    const user = await this.txHost.tx.user.findFirst({
+      where: { id: userId, isActive: true },
+      select: { passwordHash: true },
+    });
+    return user?.passwordHash ?? null;
+  }
+
+  /**
+   * Stores a new password hash. `mustChangePassword` is true for a temporary password set by an
+   * admin, false once the user chose their own (US-02).
+   */
+  async setPassword(
+    userId: string,
+    passwordHash: string,
+    mustChangePassword: boolean,
+  ): Promise<void> {
+    await this.txHost.tx.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword },
+    });
+  }
+
   /**
    * The ACTIVE user with academy, roles and permissions, in the current academy, or null when
    * the user does not exist here or was deactivated (their access token may still be valid for

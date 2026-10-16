@@ -58,7 +58,7 @@ export class AuthService {
     // From here on this request belongs to the user's academy, so every query below is scoped.
     this.tenant.set(user.academyId, user.id);
     const me = await this.loadMe(user.id);
-    const tokens = await this.issueTokens(user.id, user.academyId, randomUUID(), me.permissions);
+    const tokens = await this.issueTokens(user.id, user.academyId, randomUUID(), me);
     return { me, tokens };
   }
 
@@ -103,10 +103,55 @@ export class AuthService {
   ): Promise<IssuedTokens | null> {
     // Atomic claim: if two requests race with the same token, only one wins.
     if (!(await this.refreshTokens.claim(token.id, now))) return null;
-    // The CURRENT permission keys go into the new access token: a role changed since the last
-    // token applies from now on (ADR-0013). loadMe also refuses a user deactivated meanwhile.
-    const { permissions } = await this.loadMe(token.userId);
-    return this.issueTokens(token.userId, token.academyId, token.familyId, permissions);
+    // The CURRENT permission keys and mustChangePassword go into the new access token: a role
+    // changed since the last token applies from now on (ADR-0013). loadMe also refuses a user
+    // deactivated meanwhile.
+    const me = await this.loadMe(token.userId);
+    return this.issueTokens(token.userId, token.academyId, token.familyId, me);
+  }
+
+  /**
+   * POST /auth/change-password (US-02): the signed-in user replaces their password.
+   * - A wrong current password: 422 CURRENT_PASSWORD_INCORRECT (not 401: the caller IS signed
+   *   in, and a 401 would make the web client refresh and retry).
+   * - The same password again: 422 PASSWORD_UNCHANGED.
+   * Then, in one transaction: the new hash with mustChangePassword false, every session of the
+   * user revoked (other devices are signed out at their next refresh), and a new session for
+   * this device, whose cookies the controller sets.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<IssuedTokens> {
+    const passwordHash = await this.users.findActivePasswordHash(userId);
+    // Deactivated since the token was issued; nothing has changed yet, so 401 is safe here.
+    if (!passwordHash) throw unauthenticated();
+    if (!(await this.passwords.verify(passwordHash, currentPassword))) {
+      throw new AppException(
+        ErrorCode.CurrentPasswordIncorrect,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'The current password is incorrect',
+      );
+    }
+    if (newPassword === currentPassword) {
+      throw new AppException(
+        ErrorCode.PasswordUnchanged,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'The new password must differ from the current one',
+      );
+    }
+    // Hashed before the transaction: argon2 is slow on purpose.
+    const newHash = await this.passwords.hash(newPassword);
+    return this.replacePassword(userId, newHash);
+  }
+
+  @Transactional()
+  private async replacePassword(userId: string, passwordHash: string): Promise<IssuedTokens> {
+    await this.users.setPassword(userId, passwordHash, false);
+    await this.refreshTokens.revokeAllForUser(userId);
+    const me = await this.loadMe(userId);
+    return this.issueTokens(userId, this.tenant.requireAcademyId(), randomUUID(), me);
   }
 
   /** Ends the session: every refresh token since this login stops working. */
@@ -137,13 +182,14 @@ export class AuthService {
     userId: string,
     academyId: string,
     sessionId: string,
-    permissions: string[],
+    access: Pick<Me, 'permissions' | 'mustChangePassword'>,
   ): Promise<IssuedTokens> {
     const payload: AccessTokenPayload = {
       sub: userId,
       aid: academyId,
       sid: sessionId,
-      perms: permissions,
+      perms: access.permissions,
+      mustChangePassword: access.mustChangePassword,
     };
     const accessToken = await this.jwt.signAsync(payload);
 

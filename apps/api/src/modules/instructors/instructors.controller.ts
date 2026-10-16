@@ -14,6 +14,7 @@ import type { Instructor, InstructorDetail, Page } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
 import { CreateInstructorDto } from './dto/create-instructor.dto';
 import { ListInstructorsQueryDto } from './dto/list-instructors.query';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateInstructorDto } from './dto/update-instructor.dto';
 import { InstructorsService } from './instructors.service';
 
@@ -58,6 +59,16 @@ export class InstructorsController {
   @HttpCode(HttpStatus.OK)
   deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<Instructor> {
     return this.instructors.deactivate(id);
+  }
+
+  @RequirePermission('instructors.manage')
+  @Post(':id/reset-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  resetPassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResetPasswordDto,
+  ): Promise<void> {
+    return this.instructors.resetPassword(id, dto.temporaryPassword);
   }
 
   @RequirePermission('instructors.manage')

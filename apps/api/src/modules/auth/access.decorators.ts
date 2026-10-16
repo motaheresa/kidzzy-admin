@@ -24,6 +24,23 @@ export const SignedIn = () => SetMetadata(SIGNED_IN_KEY, true);
  */
 export const RequirePermission = (action: PermissionAction) => SetMetadata(PERMISSION_KEY, action);
 
+export const ALLOWED_DURING_PASSWORD_CHANGE_KEY = 'access:allowedDuringPasswordChange';
+
+/**
+ * A signed-in route that still works while the user must replace a temporary password (US-02):
+ * only /auth/me, /auth/logout and /auth/change-password. Every other non-public route answers
+ * 403 PASSWORD_CHANGE_REQUIRED until the password is changed. It is not an access rule: the
+ * route still declares exactly one of the three above. test/route-declarations.e2e-spec.ts pins
+ * the list, so adding it to another route fails CI by name.
+ */
+export const AllowedDuringPasswordChange = () =>
+  SetMetadata(ALLOWED_DURING_PASSWORD_CHANGE_KEY, true);
+
+/** True when the handler is marked @AllowedDuringPasswordChange() (never the class). */
+export function isAllowedDuringPasswordChange(handler: DecoratedTarget): boolean {
+  return Reflect.getMetadata(ALLOWED_DURING_PASSWORD_CHANGE_KEY, handler) === true;
+}
+
 export type AccessDeclaration =
   { kind: 'public' } | { kind: 'signedIn' } | { kind: 'permission'; action: PermissionAction };
 

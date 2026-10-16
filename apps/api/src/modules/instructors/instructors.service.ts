@@ -88,6 +88,24 @@ export class InstructorsService {
     return toInstructor(instructor);
   }
 
+  /**
+   * POST /instructors/{id}/reset-password (US-02). AC: the admin sets a temporary password, and
+   * the instructor must change it at the next login. Every session ends, so no device keeps
+   * working with the old password beyond its access token (15 minutes, ADR-0013).
+   * The hash is computed before the transaction (argon2 is slow on purpose).
+   */
+  async resetPassword(id: string, temporaryPassword: string): Promise<void> {
+    await this.findOrThrow(id);
+    const passwordHash = await this.passwords.hash(temporaryPassword);
+    await this.replacePassword(id, passwordHash);
+  }
+
+  @Transactional()
+  private async replacePassword(id: string, passwordHash: string): Promise<void> {
+    await this.instructors.setTemporaryPassword(id, passwordHash);
+    await this.auth.revokeAllSessions(id);
+  }
+
   /** The instructor can log in again with their password. Idempotent. */
   async reactivate(id: string): Promise<Instructor> {
     await this.findOrThrow(id);

@@ -1,4 +1,7 @@
-import type { Me } from '@kidzzy/shared';
+import type { ChangePasswordRequest, Me } from '@kidzzy/shared';
+
+/** POST /auth/change-password body (openapi.yaml: ChangePasswordRequest). */
+export type { ChangePasswordRequest };
 
 /** POST /auth/login body (openapi.yaml: LoginRequest). */
 export interface LoginInput {

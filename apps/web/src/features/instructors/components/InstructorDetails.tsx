@@ -17,6 +17,7 @@ import { formatDate } from '@/lib/format';
 import { useInstructor } from '../hooks/useInstructor';
 import { InstructorActiveToggle } from './InstructorActiveToggle';
 import { InstructorStatusBadge } from './InstructorStatusBadge';
+import { ResetPasswordButton } from './ResetPasswordButton';
 
 /** One instructor's screen: header with actions, their data, and their groups. */
 export function InstructorDetails({ id }: { id: string }) {
@@ -63,6 +64,7 @@ export function InstructorDetails({ id }: { id: string }) {
                   تعديل البيانات
                 </Link>
               </Button>
+              <ResetPasswordButton instructor={data} />
               <InstructorActiveToggle instructor={data} />
             </>
           )

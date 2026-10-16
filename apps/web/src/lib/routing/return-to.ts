@@ -1,5 +1,7 @@
 export const LOGIN_PATH = '/login';
 export const HOME_PATH = '/';
+/** Where a user with a temporary password must go first (US-02). */
+export const CHANGE_PASSWORD_PATH = '/change-password';
 
 // Control characters (C0, DEL, C1) and whitespace. Browsers silently drop tabs and newlines from
 // URLs, so "/\t/evil.com" would turn into "//evil.com", another site.
@@ -35,4 +37,10 @@ export function safeReturnTo(
 export function loginPathFor(location: { pathname: string; search: string }): string {
   const returnTo = `${location.pathname}${location.search}`;
   return `${LOGIN_PATH}?${new URLSearchParams({ returnTo }).toString()}`;
+}
+
+/** "/change-password?returnTo=<the current path and query>", for a temporary password. */
+export function changePasswordPathFor(location: { pathname: string; search: string }): string {
+  const returnTo = `${location.pathname}${location.search}`;
+  return `${CHANGE_PASSWORD_PATH}?${new URLSearchParams({ returnTo }).toString()}`;
 }

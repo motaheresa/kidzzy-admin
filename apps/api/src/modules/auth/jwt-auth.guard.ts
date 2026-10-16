@@ -11,7 +11,14 @@ import { IS_PUBLIC_KEY } from './access.decorators';
 
 /** The signed-in caller, attached to the request by JwtAuthGuard. */
 export interface AuthenticatedRequest extends Request {
-  auth: { userId: string; academyId: string; sessionId: string; permissions: string[] };
+  auth: {
+    userId: string;
+    academyId: string;
+    sessionId: string;
+    permissions: string[];
+    /** A temporary password must be replaced first (US-02); see PermissionsGuard. */
+    mustChangePassword: boolean;
+  };
 }
 
 /**
@@ -56,6 +63,7 @@ export class JwtAuthGuard implements CanActivate {
       academyId: payload.aid,
       sessionId: payload.sid,
       permissions: payload.perms,
+      mustChangePassword: payload.mustChangePassword,
     };
     return true;
   }

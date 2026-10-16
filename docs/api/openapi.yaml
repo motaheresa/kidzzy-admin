@@ -121,6 +121,10 @@ paths:
       tags:
         - Auth
       summary: Change own password
+      description:
+        Works while a temporary password must be changed (it is one of the three routes allowed then). On success the
+        password is replaced, mustChangePassword becomes false, every other session of the user ends, and this device
+        gets new auth cookies (a new session). At most 5 attempts a minute per user.
       operationId: changePassword
       x-permission: signed in
       x-story: US-02
@@ -138,7 +142,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/PasswordChangeRefused'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /health:
     get:
       tags:
@@ -348,6 +354,7 @@ paths:
       tags:
         - Instructors
       summary: Set a temporary password
+      description: The instructor must change it at the next login (mustChangePassword), and every session of theirs ends.
       operationId: resetInstructorPassword
       x-permission: instructors.manage
       x-story: US-02
@@ -1589,6 +1596,8 @@ paths:
                   - meta
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
   /notifications/unread-count:
     get:
       tags:
@@ -1606,6 +1615,8 @@ paths:
                 $ref: '#/components/schemas/UnreadCount'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
   /notifications/{id}/read:
     post:
       tags:
@@ -1621,6 +1632,8 @@ paths:
           description: No Content
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
         '404':
           $ref: '#/components/responses/NotFound'
   /notifications/read-all:
@@ -1636,6 +1649,8 @@ paths:
           description: No Content
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
   /push/public-key:
     get:
       tags:
@@ -1653,6 +1668,8 @@ paths:
                 $ref: '#/components/schemas/PublicKey'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
   /push-subscriptions:
     post:
       tags:
@@ -1678,6 +1695,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
   /push-subscriptions/{id}:
     delete:
       tags:
@@ -1693,6 +1712,8 @@ paths:
           description: No Content
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PasswordChangeRequired'
         '404':
           $ref: '#/components/responses/NotFound'
   /reminder-rules:
@@ -2138,7 +2159,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
-      description: Missing permission or not the user's own record (FORBIDDEN)
+      description:
+        Missing permission or not the user's own record (FORBIDDEN), or a temporary password must be changed first
+        (PASSWORD_CHANGE_REQUIRED)
       content:
         application/problem+json:
           schema:
@@ -2151,6 +2174,18 @@ components:
             $ref: '#/components/schemas/Problem'
     Conflict:
       description: Breaks a business rule in the current state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PasswordChangeRequired:
+      description: A temporary password must be changed first (PASSWORD_CHANGE_REQUIRED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PasswordChangeRefused:
+      description: The current password is wrong (CURRENT_PASSWORD_INCORRECT) or the new one equals it (PASSWORD_UNCHANGED)
       content:
         application/problem+json:
           schema:
@@ -2259,9 +2294,12 @@ components:
       properties:
         currentPassword:
           type: string
+          minLength: 1
+          maxLength: 200
         newPassword:
           type: string
           minLength: 8
+          maxLength: 128
       additionalProperties: false
       required:
         - currentPassword
@@ -2411,6 +2449,7 @@ components:
         temporaryPassword:
           type: string
           minLength: 8
+          maxLength: 128
       additionalProperties: false
       required:
         - temporaryPassword

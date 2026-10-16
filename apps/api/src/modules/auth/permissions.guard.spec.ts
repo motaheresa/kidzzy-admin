@@ -1,5 +1,10 @@
 import type { ExecutionContext } from '@nestjs/common';
-import { Public, RequirePermission, SignedIn } from './access.decorators';
+import {
+  AllowedDuringPasswordChange,
+  Public,
+  RequirePermission,
+  SignedIn,
+} from './access.decorators';
 import { PermissionsGuard } from './permissions.guard';
 
 // Decorated handlers to run the guard against, as Nest would.
@@ -9,6 +14,7 @@ class Routes {
   @RequirePermission('groups.read') readGroups() {}
   undeclared() {}
   @Public() @SignedIn() twice() {}
+  @SignedIn() @AllowedDuringPasswordChange() changePassword() {}
 }
 
 @RequirePermission('payments.read')
@@ -20,7 +26,7 @@ class ClassLevel {
 function contextFor(
   controller: new () => object,
   method: string,
-  auth?: { permissions: string[] },
+  auth?: { permissions: string[]; mustChangePassword?: boolean },
 ): ExecutionContext {
   const handler = (controller.prototype as Record<string, () => void>)[method];
   return {
@@ -39,9 +45,46 @@ const status = (fn: () => unknown) => {
   }
 };
 
+const codeOf = (fn: () => unknown) => {
+  try {
+    fn();
+    return 'allowed';
+  } catch (error) {
+    return (error as { code?: string }).code;
+  }
+};
+
 describe('PermissionsGuard', () => {
   const guard = new PermissionsGuard();
-  const signedIn = (permissions: string[] = []) => ({ permissions });
+  const signedIn = (permissions: string[] = []) => ({ permissions, mustChangePassword: false });
+
+  describe('while the password must be changed (US-02)', () => {
+    const mustChange = (permissions: string[] = []) => ({ permissions, mustChangePassword: true });
+
+    it.each([
+      ['a permission route the user holds', 'readGroups', ['groups.read:any']],
+      ['a signed-in route', 'signedIn', []],
+    ])('refuses %s with PASSWORD_CHANGE_REQUIRED (403)', (_label, method, permissions) => {
+      const run = () => guard.canActivate(contextFor(Routes, method, mustChange(permissions)));
+      expect(status(run)).toBe(403);
+      expect(codeOf(run)).toBe('PASSWORD_CHANGE_REQUIRED');
+    });
+
+    it('lets an @AllowedDuringPasswordChange() route and a public route through', () => {
+      expect(
+        status(() => guard.canActivate(contextFor(Routes, 'changePassword', mustChange()))),
+      ).toBe('allowed');
+      expect(status(() => guard.canActivate(contextFor(Routes, 'open', mustChange())))).toBe(
+        'allowed',
+      );
+    });
+
+    it('says PASSWORD_CHANGE_REQUIRED before FORBIDDEN, so the client knows what to do', () => {
+      expect(codeOf(() => guard.canActivate(contextFor(Routes, 'readGroups', mustChange())))).toBe(
+        'PASSWORD_CHANGE_REQUIRED',
+      );
+    });
+  });
 
   it('lets anyone through a @Public() route, even without a login', () => {
     expect(status(() => guard.canActivate(contextFor(Routes, 'open')))).toBe('allowed');
