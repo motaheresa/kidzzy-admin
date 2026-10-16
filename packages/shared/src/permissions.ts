@@ -40,6 +40,17 @@ export const PERMISSIONS = {
 
 export type PermissionKey = keyof typeof PERMISSIONS;
 
+/** any: every record in the academy. own: only the user's own records (see the top of the file). */
+export type PermissionScope = 'any' | 'own';
+
+/**
+ * A permission without its scope, e.g. 'groups.read': what a route requires (@RequirePermission,
+ * x-permission in openapi.yaml). The caller holds it when they have either scope of it.
+ */
+export type PermissionAction = PermissionKey extends `${infer Action}:${PermissionScope}`
+  ? Action
+  : never;
+
 export const PERMISSION_KEYS = Object.keys(PERMISSIONS) as PermissionKey[];
 
 /** Roles seeded in every academy; they cannot be deleted (roles.is_system). */

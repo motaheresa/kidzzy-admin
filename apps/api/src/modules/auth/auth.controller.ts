@@ -25,7 +25,7 @@ import {
 import { AuthService, type IssuedTokens } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
-import { Public } from './public.decorator';
+import { Public, SignedIn } from './access.decorators';
 
 /**
  * POST /auth/login, /auth/refresh, /auth/logout (US-01) and GET /auth/me (US-03).
@@ -68,11 +68,13 @@ export class AuthController {
   }
 
   /** GET /auth/me (US-03): who is signed in. The web app's session check on every start. */
+  @SignedIn()
   @Get('me')
   me(@Req() req: AuthenticatedRequest): Promise<Me> {
     return this.auth.loadMe(req.auth.userId);
   }
 
+  @SignedIn()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(

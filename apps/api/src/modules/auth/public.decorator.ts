@@ -1,9 +1,2 @@
-import { SetMetadata } from '@nestjs/common';
-
-export const IS_PUBLIC_KEY = 'isPublic';
-
-/**
- * Every route needs a valid login by default (the global JwtAuthGuard).
- * @Public() opts a route out: login, refresh and the health check.
- */
-export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+// Kept so existing imports keep working; the access decorators live in access.decorators.ts.
+export { IS_PUBLIC_KEY, Public } from './access.decorators';

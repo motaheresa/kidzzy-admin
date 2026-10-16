@@ -6,6 +6,8 @@ import { MissingTenantContextError } from './tenancy.errors';
 export interface TenantStore extends ClsStore {
   academyId?: string;
   userId?: string;
+  /** The caller's permission keys from the access token (read by AccessContext). */
+  permissions?: string[];
 }
 
 /**

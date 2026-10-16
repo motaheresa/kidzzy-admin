@@ -57,8 +57,9 @@ export class AuthService {
 
     // From here on this request belongs to the user's academy, so every query below is scoped.
     this.tenant.set(user.academyId, user.id);
-    const tokens = await this.issueTokens(user.id, user.academyId, randomUUID());
-    return { me: await this.loadMe(user.id), tokens };
+    const me = await this.loadMe(user.id);
+    const tokens = await this.issueTokens(user.id, user.academyId, randomUUID(), me.permissions);
+    return { me, tokens };
   }
 
   /**
@@ -102,7 +103,10 @@ export class AuthService {
   ): Promise<IssuedTokens | null> {
     // Atomic claim: if two requests race with the same token, only one wins.
     if (!(await this.refreshTokens.claim(token.id, now))) return null;
-    return this.issueTokens(token.userId, token.academyId, token.familyId);
+    // The CURRENT permission keys go into the new access token: a role changed since the last
+    // token applies from now on (ADR-0013). loadMe also refuses a user deactivated meanwhile.
+    const { permissions } = await this.loadMe(token.userId);
+    return this.issueTokens(token.userId, token.academyId, token.familyId, permissions);
   }
 
   /** Ends the session: every refresh token since this login stops working. */
@@ -124,8 +128,14 @@ export class AuthService {
     userId: string,
     academyId: string,
     sessionId: string,
+    permissions: string[],
   ): Promise<IssuedTokens> {
-    const payload: AccessTokenPayload = { sub: userId, aid: academyId, sid: sessionId };
+    const payload: AccessTokenPayload = {
+      sub: userId,
+      aid: academyId,
+      sid: sessionId,
+      perms: permissions,
+    };
     const accessToken = await this.jwt.signAsync(payload);
 
     // The refresh token is random, not a JWT: the database decides whether it is still valid,

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { Test } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
+import type { INestApplication, Type } from '@nestjs/common';
 import { getOptionsToken } from '@nestjs/throttler';
 import { hash } from '@node-rs/argon2';
 import type { App } from 'supertest/types';
@@ -17,11 +17,17 @@ import { PrismaService } from '../src/modules/prisma/prisma.service';
  * `loginRateLimit` replaces the login throttler's limit for this app only. Tests never change
  * process.env at runtime: the config is validated and cached when AppModule is imported, so a
  * later change would be ignored, and it would leak into other tests in the same process.
+ *
+ * `extraControllers` adds test-only controllers (e.g. test/support/access-test.controller.ts) to
+ * this app only. They are never part of AppModule, so they never exist in the real API.
  */
 export async function createTestApp(
-  options: { loginRateLimit?: number } = {},
+  options: { loginRateLimit?: number; extraControllers?: Type<unknown>[] } = {},
 ): Promise<INestApplication<App>> {
-  const builder = Test.createTestingModule({ imports: [AppModule] });
+  const builder = Test.createTestingModule({
+    imports: [AppModule],
+    controllers: options.extraControllers ?? [],
+  });
   if (options.loginRateLimit !== undefined) {
     builder
       .overrideProvider(getOptionsToken())
