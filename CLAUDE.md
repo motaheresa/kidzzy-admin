@@ -108,7 +108,7 @@ route (app/router.tsx) -> layout (Public / Protected) -> page -> feature compone
 - Queries retry network, timeout and server errors at most twice; mutations never retry.
 - A 401 `UNAUTHENTICATED` triggers one shared refresh and one retry. So **an API handler never throws 401 `UNAUTHENTICATED` after a side effect**: only the guard and the refresh endpoint may.
 - `returnTo` and any other redirect target go through `safeReturnTo`.
-- The service worker does no offline or API caching.
+- No offline support. The service worker is our own `apps/web/src/sw.ts` (vite-plugin-pwa `injectManifest` with no injection point): it caches nothing (no precache, no runtime caching, no navigation fallback, no fetch handler), deletes every cache the old worker left, and has a marked place for web push. `scripts/check-build.mjs` fails the build if the built worker gains a precache manifest. Never add caching to it.
 
 ## Auth and errors
 

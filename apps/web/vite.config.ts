@@ -11,6 +11,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // PWA for installation and web push only, never offline (docs/design-system.md).
+      // Our own worker, src/sw.ts, built without a precache manifest: with no injection point,
+      // vite-plugin-pwa compiles the file and skips Workbox entirely.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: { injectionPoint: undefined, rollupFormat: 'iife' },
       registerType: 'autoUpdate',
       manifest: {
         name: 'كيدزي كودرز - نظام الادارة',

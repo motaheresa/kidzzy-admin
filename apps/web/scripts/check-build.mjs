@@ -44,8 +44,44 @@ for (const file of textFiles) {
   }
 }
 
+// ── Service worker: installable, but caches nothing (no offline support) ───────────────────
+const swPath = join(DIST, 'sw.js');
+let sw = '';
+try {
+  sw = readFileSync(swPath, 'utf8');
+} catch {
+  problems.push('dist/sw.js is missing');
+}
+if (sw) {
+  const forbidden = [
+    ['__WB_MANIFEST', 'a precache manifest injection point'],
+    ['precache', 'precaching'],
+    ['workbox', 'Workbox'],
+    ['registerRoute', 'runtime caching routes'],
+    ['NavigationRoute', 'a navigation fallback'],
+    ['cache.put', 'writing to a cache'],
+    ['cache.add', 'writing to a cache'],
+    ['"fetch"', 'a fetch handler'],
+    ["'fetch'", 'a fetch handler'],
+  ];
+  for (const [text, what] of forbidden) {
+    if (sw.includes(text)) problems.push(`dist/sw.js contains ${what} (${text})`);
+  }
+  // An injected precache list looks like [{url:"...",revision:...}]
+  if (/revision\s*:/.test(sw) || /url\s*:\s*["'][^"']+\.(html|js|css)["']/.test(sw)) {
+    problems.push('dist/sw.js contains a list of files to precache');
+  }
+  if (!sw.includes('caches.delete') || !sw.includes('clients.claim')) {
+    problems.push('dist/sw.js must delete old caches and claim clients on activate');
+  }
+}
+const workboxFiles = files.filter((f) => /workbox-[\w-]+\.js$/.test(f));
+for (const f of workboxFiles) problems.push(`unexpected Workbox runtime: ${relative(DIST, f)}`);
+
 if (problems.length > 0) {
   console.error(`check-build failed:\n- ${problems.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`check-build: ok (${fonts.length} self-hosted font files)`);
+console.log(
+  `check-build: ok (${fonts.length} self-hosted font files; sw.js ${sw.length} bytes, no precache manifest)`,
+);

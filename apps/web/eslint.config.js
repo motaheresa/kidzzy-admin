@@ -82,6 +82,16 @@ export default tseslint.config(
     },
   },
   {
+    // The service worker runs in a worker scope (self, caches, clients), not a page.
+    files: ['src/sw.ts'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
+    // Node scripts run by package.json (icons, build checks).
+    files: ['scripts/**/*.mjs', 'eslint-rules/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     plugins: { boundaries, local },
     settings: {

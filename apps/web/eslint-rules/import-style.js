@@ -4,7 +4,7 @@
 //   Across units   -> '@/...'    ('@/lib/http', '@/components/ui', '@/features/auth')
 //
 // A unit is one feature (src/features/<name>), one lib module (src/lib/<name>), src/components/ui,
-// src/app, src/pages, src/styles, src/test, or a file directly in src (main.tsx).
+// src/app, src/pages, src/styles, src/test, or the files directly in src (main.tsx, sw.ts).
 // The rule is autofixable: `eslint --fix` rewrites an import to the right style.
 import path from 'node:path';
 
@@ -14,7 +14,7 @@ const SRC = path.resolve(import.meta.dirname, '../src');
 function unitOf(absolutePath) {
   const parts = path.relative(SRC, absolutePath).split(path.sep);
   if (parts[0] === '..' || path.isAbsolute(parts[0])) return null;
-  if (parts.length === 1) return `src/${parts[0]}`; // a file directly in src
+  if (parts.length === 1) return 'src'; // files directly in src (main.tsx, sw.ts) form one unit
   const [top, second] = parts;
   if (top === 'features' || top === 'lib') return `${top}/${second.replace(/\.[cm]?[jt]sx?$/, '')}`;
   if (top === 'components') return `components/${second}`;
