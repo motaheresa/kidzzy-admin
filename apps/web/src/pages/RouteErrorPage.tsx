@@ -1,6 +1,6 @@
 import { isRouteErrorResponse, useRouteError } from 'react-router';
-import { Button, FullScreenMessage } from '../components/ui';
-import { KIND_MESSAGES, normalizeError } from '../lib/errors';
+import { Button, FullScreenMessage } from '@/components/ui';
+import { KIND_MESSAGES, normalizeError } from '@/lib/errors';
 
 /**
  * The route error boundary (errorElement): a screen threw while rendering, or a route failed.

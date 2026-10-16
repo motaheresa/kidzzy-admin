@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
-import { useApiMutation, useQueryClient } from '../../../lib/query';
-import { LOGIN_PATH } from '../../../lib/routing';
+import { useApiMutation, useQueryClient } from '@/lib/query';
+import { LOGIN_PATH } from '@/lib/routing';
 import { logout } from '../api/auth.api';
 import { markSignedOut } from '../session';
 

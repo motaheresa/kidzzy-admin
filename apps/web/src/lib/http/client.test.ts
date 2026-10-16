@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { AppError } from '../errors';
+import { AppError } from '@/lib/errors';
 import { http, REQUEST_TIMEOUT_MS } from './client';
 import { REFRESH_LOCK } from './refresh';
 import { onSessionExpired } from './session-events';

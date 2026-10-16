@@ -1,4 +1,4 @@
-import type { AppError } from '../errors';
+import type { AppError } from '@/lib/errors';
 
 /** `meta` accepted by every query and mutation. */
 export interface ApiMeta extends Record<string, unknown> {

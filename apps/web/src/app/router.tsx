@@ -1,8 +1,8 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
-import { HomePage } from '../pages/HomePage';
-import { LoginPage } from '../pages/LoginPage';
-import { NotFoundPage } from '../pages/NotFoundPage';
-import { RouteErrorPage } from '../pages/RouteErrorPage';
+import { HomePage } from '@/pages/HomePage';
+import { LoginPage } from '@/pages/LoginPage';
+import { NotFoundPage } from '@/pages/NotFoundPage';
+import { RouteErrorPage } from '@/pages/RouteErrorPage';
 import { ProtectedLayout } from './layouts/ProtectedLayout';
 import { PublicLayout } from './layouts/PublicLayout';
 import { RootLayout } from './layouts/RootLayout';

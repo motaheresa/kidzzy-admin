@@ -1,4 +1,4 @@
-import { Button } from '../../../components/ui';
+import { Button } from '@/components/ui';
 import { useLogout } from '../hooks/useLogout';
 
 /** Signs out of this device; the login page opens whatever the API answers. */

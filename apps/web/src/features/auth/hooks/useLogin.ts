@@ -1,6 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router';
-import { useApiMutation, useQueryClient } from '../../../lib/query';
-import { safeReturnTo } from '../../../lib/routing';
+import { useApiMutation, useQueryClient } from '@/lib/query';
+import { safeReturnTo } from '@/lib/routing';
 import { login } from '../api/auth.api';
 import { authKeys } from '../api/auth.keys';
 import type { LoginInput, Me } from '../types';

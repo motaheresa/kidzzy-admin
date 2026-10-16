@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { FullScreenMessage } from '../components/ui';
+import { FullScreenMessage } from '@/components/ui';
 
 /** Any path no route matches. */
 export function NotFoundPage() {

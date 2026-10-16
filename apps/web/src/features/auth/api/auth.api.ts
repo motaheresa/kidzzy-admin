@@ -1,4 +1,4 @@
-import { http } from '../../../lib/http';
+import { http } from '@/lib/http';
 import type { LoginInput, Me } from '../types';
 
 // The auth endpoints (openapi.yaml, tag Auth), as plain functions over the http client.

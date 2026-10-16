@@ -1,4 +1,4 @@
-import { CurrentUserCard, LogoutButton } from '../features/auth';
+import { CurrentUserCard, LogoutButton } from '@/features/auth';
 
 /** Home: shows who is signed in until the real screens arrive. Composition only. */
 export function HomePage() {

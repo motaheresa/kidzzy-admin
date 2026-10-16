@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
-import { fromResponse, timeoutError } from '../errors';
+import { fromResponse, timeoutError } from '@/lib/errors';
 import { createQueryClient, shouldRetryQuery } from './client';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));

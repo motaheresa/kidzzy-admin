@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { Button, FullScreenMessage } from '../../components/ui';
-import { useSession } from '../../features/auth';
-import { loginPathFor } from '../../lib/routing';
+import { Button, FullScreenMessage } from '@/components/ui';
+import { useSession } from '@/features/auth';
+import { loginPathFor } from '@/lib/routing';
 
 /**
  * Wraps every screen that needs a signed-in user. It asks GET /auth/me (useSession):

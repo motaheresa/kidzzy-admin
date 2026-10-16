@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Alert, Button, TextField } from '../../../components/ui';
+import { Alert, Button, TextField } from '@/components/ui';
 import { useLogin } from '../hooks/useLogin';
 
 /**

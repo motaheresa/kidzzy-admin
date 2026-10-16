@@ -88,6 +88,7 @@ lib/                        http (client), query, errors, routing helpers
 ```
 
 - Components never call the API; hooks do. Use the shared ui components before writing a raw element.
+- Imports: **`@/` across units, relative inside one** (`@/` = `src/`). A unit is one feature (`features/<name>`), one lib module (`lib/<name>`), `components/ui`, `app`, `pages`, `styles` or `test`. So `@/lib/http`, `@/components/ui`, `@/features/auth` from anywhere else, and `../hooks/useLogin` or `../atoms/input` inside. The local ESLint rule `local/import-style` enforces it and `eslint --fix` rewrites a wrong import.
 - Imports flow app → pages → features → ui → lib (`boundaries/dependencies`). A feature imports another feature only through its `index.ts`; `components/ui` never imports a feature, a page or the app.
 
 ## Web data flow

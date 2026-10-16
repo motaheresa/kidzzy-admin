@@ -1,4 +1,4 @@
-import { LoginForm } from '../features/auth';
+import { LoginForm } from '@/features/auth';
 
 /** The login screen (US-01). Layout is temporary until the high-fidelity design. */
 export function LoginPage() {

@@ -4,6 +4,7 @@ import boundaries from 'eslint-plugin-boundaries';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
+import local from './eslint-rules/import-style.js';
 
 /**
  * Architectural boundaries (ADR-0011). Each folder is an element; an import between elements is
@@ -82,14 +83,20 @@ export default tseslint.config(
   },
   {
     files: ['src/**/*.{ts,tsx}'],
-    plugins: { boundaries },
+    plugins: { boundaries, local },
     settings: {
       'boundaries/elements': elements,
-      // Resolves extensionless relative imports ("../lib/api") to their .ts/.tsx file.
-      'import/resolver': { node: { extensions: ['.ts', '.tsx'] } },
+      // Resolves "@/..." (tsconfig paths) and extensionless relative imports to their file, so
+      // boundaries knows which layer an import reaches.
+      'import/resolver': {
+        typescript: { project: './tsconfig.app.json' },
+        node: { extensions: ['.ts', '.tsx'] },
+      },
     },
     rules: {
       'boundaries/dependencies': ['error', { default: 'disallow', policies: boundaryPolicies }],
+      // Relative imports inside a unit, "@/..." across units (CLAUDE.md, Imports).
+      'local/import-style': 'error',
     },
   },
   {

@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -25,6 +26,8 @@ export default defineConfig({
       },
     }),
   ],
+  // "@/..." = src/... (same as tsconfig paths; CLAUDE.md has the import rule)
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     port: 5173,
     // Same-origin /api in development, like production (ADR-005)

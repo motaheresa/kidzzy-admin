@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from 'react-router';
-import { FullScreenMessage } from '../../components/ui';
-import { useSession } from '../../features/auth';
-import { HOME_PATH } from '../../lib/routing';
+import { FullScreenMessage } from '@/components/ui';
+import { useSession } from '@/features/auth';
+import { HOME_PATH } from '@/lib/routing';
 
 /**
  * Wraps the screens for signed-out users (/login). A user who is already signed in goes home.

@@ -1,5 +1,5 @@
-import { isAppError } from '../../../lib/errors';
-import { useApiQuery } from '../../../lib/query';
+import { isAppError } from '@/lib/errors';
+import { useApiQuery } from '@/lib/query';
 import { getMe } from '../api/auth.api';
 import { authKeys } from '../api/auth.keys';
 import { SESSION_STALE_TIME_MS } from '../session';

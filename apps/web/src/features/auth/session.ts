@@ -1,4 +1,4 @@
-import type { QueryClient } from '../../lib/query';
+import type { QueryClient } from '@/lib/query';
 import { authKeys } from './api/auth.keys';
 
 /** How long a known session is trusted before GET /auth/me is asked again (no refetch per page). */
