@@ -27,3 +27,7 @@ Thumbs.db
 
 # prisma
 apps/api/src/generated/
+
+# original design documents and brand material: local reference only, never committed
+# (also blocked by .husky/pre-commit, see CLAUDE.md "Private evidence")
+private_evidence/
