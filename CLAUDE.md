@@ -111,9 +111,46 @@ route (app/router.tsx) -> layout (Public / Protected) -> page -> feature compone
 - `returnTo` and any other redirect target go through `safeReturnTo`.
 - No offline support. The service worker is our own `apps/web/src/sw.ts` (vite-plugin-pwa `injectManifest` with no injection point): it caches nothing (no precache, no runtime caching, no navigation fallback, no fetch handler), deletes every cache the old worker left, and has a marked place for web push. `scripts/check-build.mjs` fails the build if the built worker gains a precache manifest. Never add caching to it.
 
+## Authorization
+
+ADR-0013 has the reasons. Permission keys are `resource.action:scope` (`packages/shared/src/permissions.ts`).
+
+- Every route declares **exactly one** access rule (fail closed):
+  - `@Public()` for anyone (login, refresh, health)
+  - `@SignedIn()` for any signed-in user (`/auth/me`, `/auth/logout`)
+  - `@RequirePermission('groups.read')` for an action without its scope, matching `x-permission` in openapi.yaml
+- `test/route-declarations.e2e-spec.ts` walks every route and fails, naming it, when one declares none or several. `PermissionsGuard` also refuses such a route at runtime.
+- `PermissionsGuard` (global, after `JwtAuthGuard`) checks the token's `perms` claim, with no database query:
+  - the caller holds `action:any` or `action:own` → it passes
+  - otherwise → 403 `FORBIDDEN`
+- Login and every refresh put the current keys into the token, so a role change applies within 15 minutes.
+- The scope pattern: the service asks `AccessContext` and the repository filters.
+
+  ```ts
+  @RequirePermission('groups.read')
+  @Get()
+  list() {
+    const scope = this.access.scopeFor('groups.read'); // 'any' | 'own'
+    return this.groups.list(scope === 'own' ? { instructorId: this.access.userId } : {});
+  }
+
+  @RequirePermission('groups.read')
+  @Get(':id')
+  async get(@Param('id') id: string) {
+    const group = await this.groups.findById(id); // null for another academy's row → 404
+    if (!group) throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND);
+    this.access.ensureOwner(this.access.scopeFor('groups.read'), group.instructorId); // not theirs → 403
+    return toGroup(group);
+  }
+  ```
+
+- Not theirs (same academy, scope `own`) is **403**. Another academy's record is **404**, because the tenant scope never finds it.
+- **The web app only hides or shows.** `usePermissions().can()` / `scopeFor()` and the `RequirePermission` route wrapper (`apps/web/src/app`) never protect data. The API enforces every permission, and its 403 goes through the error layer.
+- Tests of a permissioned endpoint use real users of the seeded Admin and Instructor roles; mechanism tests use `test/support/access-test.controller.ts` through `createTestApp({ extraControllers })`.
+
 ## Auth and errors
 
-- Every route requires a login through the global `JwtAuthGuard`; mark the exceptions with `@Public()`. The guard fills `TenantContext` from the access token, which is what scopes `prisma.db`.
+- Every route requires a login through the global `JwtAuthGuard` unless it is `@Public()` (see "Authorization" for the declaration every route needs). The guard fills `TenantContext` from the access token, which is what scopes `prisma.db`.
 - Signed-in handlers read the caller from `req.auth` (`AuthenticatedRequest`): `userId`, `academyId`, `sessionId`.
 - Never throw 401 `UNAUTHENTICATED` from a handler after it changed something: the web client refreshes and retries such requests once (ADR-0012). Use 403 or 409 for rule failures.
 - Throw `AppException(ErrorCode.X, HttpStatus.Y, detail)` for errors the client acts on; `ProblemDetailsFilter` turns every error into RFC 9457 with a stable `code`. Never leak internal messages in `detail`.
