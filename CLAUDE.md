@@ -82,12 +82,13 @@ features/<feature>/hooks/      TanStack Query useQuery / useMutation over those 
 features/<feature>/components/ the feature's components
 features/<feature>/types/      its types
 features/<feature>/index.ts    its public API: the only file other folders import
-components/ui/atoms/        shared single elements (Button, Input, Alert)
-components/ui/molecules/    shared combinations (TextField)
+components/ui/atoms/        shadcn/ui primitives on our tokens (button, input, label, alert, card, badge, spinner, skeleton)
+components/ui/molecules/    our combinations (FormField, PageHeader, EmptyState, FullScreenMessage, Toaster)
 lib/                        http (client), query, errors, routing helpers
 ```
 
 - Components never call the API; hooks do. Use the shared ui components before writing a raw element.
+- Design system: `docs/design-system.md` (tokens, components, motion, RTL, PWA policy), previewed at `/dev/design-system` in development. Colors come from tokens only (a new text/background pair goes into `src/lib/design-tokens` and its contrast test); logical classes only (ESLint refuses `ml-`, `left-`, `text-right`); motion through `src/lib/motion` presets, which do nothing under prefers-reduced-motion.
 - Imports: **`@/` across units, relative inside one** (`@/` = `src/`). A unit is one feature (`features/<name>`), one lib module (`lib/<name>`), `components/ui`, `app`, `pages`, `styles` or `test`. So `@/lib/http`, `@/components/ui`, `@/features/auth` from anywhere else, and `../hooks/useLogin` or `../atoms/input` inside. The local ESLint rule `local/import-style` enforces it and `eslint --fix` rewrites a wrong import.
 - Imports flow app → pages → features → ui → lib (`boundaries/dependencies`). A feature imports another feature only through its `index.ts`; `components/ui` never imports a feature, a page or the app.
 
