@@ -1,4 +1,14 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Me } from '@kidzzy/shared';
@@ -17,7 +27,10 @@ import { LoginDto } from './dto/login.dto';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
 import { Public } from './public.decorator';
 
-/** POST /auth/login, /auth/refresh and /auth/logout (US-01). Tokens only ever travel as cookies. */
+/**
+ * POST /auth/login, /auth/refresh, /auth/logout (US-01) and GET /auth/me (US-03).
+ * Tokens only ever travel as cookies.
+ */
 @Controller('auth')
 export class AuthController {
   private readonly secureCookies: boolean;
@@ -52,6 +65,12 @@ export class AuthController {
       this.clearCookies(res); // a dead refresh token is useless; drop it from the browser
       throw error;
     }
+  }
+
+  /** GET /auth/me (US-03): who is signed in. The web app's session check on every start. */
+  @Get('me')
+  me(@Req() req: AuthenticatedRequest): Promise<Me> {
+    return this.auth.loadMe(req.auth.userId);
   }
 
   @Post('logout')

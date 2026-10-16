@@ -110,9 +110,14 @@ export class AuthService {
     await this.refreshTokens.revokeSession(sessionId);
   }
 
-  /** The signed-in user with roles and permission keys; runs in the user's tenant context. */
+  /**
+   * The signed-in user with roles and permission keys; runs in the user's tenant context.
+   * A user deactivated after logging in gets 401 UNAUTHENTICATED, never a stale Me.
+   */
   async loadMe(userId: string): Promise<Me> {
-    return toMe(await this.users.findWithAccess(userId));
+    const user = await this.users.findActiveWithAccess(userId);
+    if (!user) throw unauthenticated();
+    return toMe(user);
   }
 
   private async issueTokens(
