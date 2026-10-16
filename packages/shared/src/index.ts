@@ -49,6 +49,8 @@ export const ErrorCode = {
   Unauthenticated: 'UNAUTHENTICATED',
   InvalidCredentials: 'INVALID_CREDENTIALS',
   PasswordChangeRequired: 'PASSWORD_CHANGE_REQUIRED',
+  CurrentPasswordIncorrect: 'CURRENT_PASSWORD_INCORRECT',
+  PasswordUnchanged: 'PASSWORD_UNCHANGED',
   Forbidden: 'FORBIDDEN',
   NotFound: 'NOT_FOUND',
   EmailTaken: 'EMAIL_TAKEN',
@@ -99,6 +101,17 @@ export interface Me {
   permissions: string[];
   mustChangePassword: boolean;
   academy: { id: string; name: string; timezone: string };
+}
+
+/** POST /auth/change-password body (openapi.yaml: ChangePasswordRequest). */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** POST /instructors/{id}/reset-password body (openapi.yaml: ResetPasswordRequest). */
+export interface ResetPasswordRequest {
+  temporaryPassword: string;
 }
 
 /** Id and display name of a related record (openapi.yaml: GroupRef). */

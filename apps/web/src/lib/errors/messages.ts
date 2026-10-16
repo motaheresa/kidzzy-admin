@@ -13,8 +13,10 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   UNAUTHENTICATED: 'انتهت الجلسة، سجل الدخول تاني',
   // One message for wrong password, unknown account and deactivated account (US-01).
   INVALID_CREDENTIALS: 'بيانات الدخول غير صحيحة',
-  // Its own case on purpose: US-02 will send the user to the change-password screen.
+  // The app also sends the user to the change-password screen (AppProviders, US-02).
   PASSWORD_CHANGE_REQUIRED: 'لازم تغير كلمة السر الأول',
+  CURRENT_PASSWORD_INCORRECT: 'كلمة السر الحالية مش صحيحة',
+  PASSWORD_UNCHANGED: 'اختار كلمة سر جديدة غير الحالية',
   FORBIDDEN: 'مش مسموح لك تعمل ده',
   NOT_FOUND: 'الحاجة دي مش موجودة',
   EMAIL_TAKEN: 'الايميل ده مستخدم لحساب تاني',
@@ -70,11 +72,14 @@ export const FIELD_MESSAGES: Record<string, string> = {
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';
 
 /**
- * Codes that are about one field of the form (a 409 "already used"): the error layer also puts
+ * Codes that are about one field of the form (a 409 "already used", a 422 "wrong current
+ * password"): the error layer also puts
  * the code's message under that field, so the form shows it where the user has to fix it.
  */
 export const CODE_FIELDS: Partial<Record<ErrorCode, string>> = {
   EMAIL_TAKEN: 'email',
   PHONE_TAKEN: 'phone',
   STUDENT_CODE_TAKEN: 'code',
+  CURRENT_PASSWORD_INCORRECT: 'currentPassword',
+  PASSWORD_UNCHANGED: 'newPassword',
 };
