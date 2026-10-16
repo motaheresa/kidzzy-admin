@@ -1,16 +1,33 @@
+import { createHmac } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
+import { getOptionsToken } from '@nestjs/throttler';
 import { hash } from '@node-rs/argon2';
 import type { App } from 'supertest/types';
 import { SystemRole } from '@kidzzy/shared';
 import { seedAccess } from '../prisma/seed/access.seed';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
+import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
-/** Starts the whole API exactly as main.ts does (same global setup). */
-export async function createTestApp(): Promise<INestApplication<App>> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+/**
+ * Starts the whole API exactly as main.ts does (same global setup).
+ *
+ * `loginRateLimit` replaces the login throttler's limit for this app only. Tests never change
+ * process.env at runtime: the config is validated and cached when AppModule is imported, so a
+ * later change would be ignored, and it would leak into other tests in the same process.
+ */
+export async function createTestApp(
+  options: { loginRateLimit?: number } = {},
+): Promise<INestApplication<App>> {
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  if (options.loginRateLimit !== undefined) {
+    builder
+      .overrideProvider(getOptionsToken())
+      .useValue([{ name: 'login', ttl: 60_000, limit: options.loginRateLimit }]);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   configureApp(app);
   await app.init();
@@ -43,8 +60,9 @@ export async function createUser(
     data: {
       academyId,
       name: user.name,
-      email: user.email ?? null,
-      phone: user.phone ?? null,
+      // Stored the way the app stores them, exactly like a real write
+      email: user.email === undefined ? null : normalizeEmail(user.email),
+      phone: user.phone === undefined ? null : normalizePhone(user.phone),
       passwordHash: await hash(user.password),
       isActive: user.isActive ?? true,
       roles: { create: { roleId: role.id } },
@@ -60,6 +78,21 @@ export async function removeAcademy(prisma: PrismaService, academyId: string): P
   await prisma.unscoped.user.deleteMany({ where });
   await prisma.unscoped.role.deleteMany({ where });
   await prisma.unscoped.academy.deleteMany({ where: { id: academyId } });
+}
+
+/**
+ * Builds a JWT by hand, so tests can forge tokens the app must refuse: signed with another
+ * secret, expired, or with alg "none" (no signature at all).
+ */
+export function signTestJwt(
+  payload: Record<string, unknown>,
+  secret: string,
+  alg: 'HS256' | 'none' = 'HS256',
+): string {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${encode({ alg, typ: 'JWT' })}.${encode(payload)}`;
+  if (alg === 'none') return `${unsigned}.`;
+  return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
 }
 
 /** Parses Set-Cookie headers into { name: { value, attributes } }. */

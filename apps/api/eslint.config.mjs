@@ -32,4 +32,10 @@ export default tseslint.config(
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
+  {
+    // App code logs through Nest's Logger, never console: a stray console.log of a request body
+    // or a password would end up in the PM2 logs. The seed and the tests may still print.
+    files: ['src/**/*.ts'],
+    rules: { 'no-console': 'error' },
+  },
 );

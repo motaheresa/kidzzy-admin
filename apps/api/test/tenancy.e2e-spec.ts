@@ -123,6 +123,41 @@ describe('Tenancy (e2e)', () => {
     ).rejects.toThrow(/users_email_or_phone_check/);
   });
 
+  it.each(['Upper@test.local', ' padded@test.local', ''])(
+    'rejects a non-normalized email %j at the database level',
+    async (email) => {
+      await expect(
+        prisma.unscoped.user.create({
+          data: { academyId: academyA, name: 'raw', email, passwordHash: 'x' },
+        }),
+      ).rejects.toThrow(/users_email_normalized_check/);
+    },
+  );
+
+  it.each(['010 1234 5678', '010-1234-5678', '12345', '0101234+5678'])(
+    'rejects a non-normalized phone %j at the database level',
+    async (phone) => {
+      await expect(
+        prisma.unscoped.user.create({
+          data: { academyId: academyA, name: 'raw', phone, passwordHash: 'x' },
+        }),
+      ).rejects.toThrow(/users_phone_format_check/);
+    },
+  );
+
+  it('accepts normalized email and phone', async () => {
+    const created = await prisma.unscoped.user.create({
+      data: {
+        academyId: academyA,
+        name: 'clean',
+        email: `clean-${run}@test.local`,
+        phone: `+2010${String(run).slice(-8)}`,
+        passwordHash: 'x',
+      },
+    });
+    expect(created.id).toBeTruthy();
+  });
+
   it('seeds Admin and Instructor with their permissions, idempotently', async () => {
     await seedAccess(prisma.unscoped, { name: `Test A ${run}`, timezone: 'Africa/Cairo' });
     const roles = await tenant.run(academyA, () =>

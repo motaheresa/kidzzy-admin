@@ -27,7 +27,8 @@ export class AuthController {
     config: ConfigService,
   ) {
     // Secure cookies need HTTPS; COOKIE_SECURE=false only for local development over http.
-    this.secureCookies = config.get<string>('COOKIE_SECURE') !== 'false';
+    // A boolean after validateEnv, which also refuses false in production.
+    this.secureCookies = config.getOrThrow<boolean>('COOKIE_SECURE');
   }
 
   @Public()

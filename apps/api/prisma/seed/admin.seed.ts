@@ -1,5 +1,6 @@
 import { SystemRole } from '@kidzzy/shared';
 import { hash } from '@node-rs/argon2';
+import { normalizeEmail } from '../../src/common/normalize/login-identifiers';
 import type { PrismaClient } from '../../src/generated/prisma/client';
 
 /**
@@ -13,7 +14,7 @@ export async function seedAdmin(
 ): Promise<'created' | 'exists'> {
   if (admin.password.length < 8) throw new Error('SEED_ADMIN_PASSWORD needs at least 8 characters');
 
-  const email = admin.email.trim().toLowerCase();
+  const email = normalizeEmail(admin.email);
   const existing = await prisma.user.findFirst({
     where: { academyId, email },
     select: { id: true },

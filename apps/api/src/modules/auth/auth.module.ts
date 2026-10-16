@@ -15,14 +15,18 @@ import { PasswordService } from './password.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+        // Pinned here so every sign and every verify in the app uses HS256 only: a token that
+        // names another algorithm (for example "none", which has no signature) is rejected.
+        signOptions: { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+        verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
     // Counts login attempts per client IP in memory; one API instance in V1 (ADR-0007).
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
-        { name: 'login', ttl: 60_000, limit: Number(config.get('LOGIN_RATE_LIMIT') ?? 5) },
+        // A positive integer, default 5, checked at startup by validateEnv.
+        { name: 'login', ttl: 60_000, limit: config.getOrThrow<number>('LOGIN_RATE_LIMIT') },
       ],
     }),
   ],

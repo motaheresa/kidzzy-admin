@@ -4,20 +4,18 @@ import type { App } from 'supertest/types';
 import { createTestApp } from './helpers';
 
 // API Design V1: at most 5 login attempts per minute per IP, then 429 RATE_LIMITED.
-// Its own file, so it gets a fresh app (and a fresh in-memory counter) with the default limit.
+// Its own file, so it gets a fresh app (and a fresh in-memory counter). The limit is set here,
+// not read from the developer's .env; the default of 5 is covered by env.validation.spec.ts.
 
 describe('Login rate limit (e2e)', () => {
   let app: INestApplication<App>;
-  const previousLimit = process.env.LOGIN_RATE_LIMIT;
 
   beforeAll(async () => {
-    delete process.env.LOGIN_RATE_LIMIT;
-    app = await createTestApp();
+    app = await createTestApp({ loginRateLimit: 5 });
   });
 
   afterAll(async () => {
     await app.close();
-    process.env.LOGIN_RATE_LIMIT = previousLimit;
   });
 
   it('allows 5 attempts a minute, then answers 429', async () => {
