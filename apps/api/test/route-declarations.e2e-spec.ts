@@ -4,7 +4,10 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
-import { accessDeclarationsOf } from '../src/modules/auth/access.decorators';
+import {
+  accessDeclarationsOf,
+  isAllowedDuringPasswordChange,
+} from '../src/modules/auth/access.decorators';
 
 // Fail closed (CLAUDE.md, Authorization): every route of the REAL app must declare exactly one of
 // @Public(), @SignedIn() or @RequirePermission(). This walks every registered controller method
@@ -41,6 +44,7 @@ describe('Route access declarations (e2e)', () => {
           {
             route: `${RequestMethod[method]} /${segments.join('/')}`,
             declarations: accessDeclarationsOf(handler, controller),
+            allowedDuringPasswordChange: isAllowedDuringPasswordChange(handler),
           },
         ];
       });
@@ -59,5 +63,15 @@ describe('Route access declarations (e2e)', () => {
       .filter((r) => r.declarations.length !== 1)
       .map((r) => `${r.route} declares ${r.declarations.length}`);
     expect(offenders).toEqual([]);
+  });
+
+  it('only these routes work while a temporary password must be changed (US-02)', () => {
+    // Adding @AllowedDuringPasswordChange() to any other route fails here, by name: a user with
+    // a temporary password must not reach data before choosing their own password.
+    const allowed = routes()
+      .filter((r) => r.allowedDuringPasswordChange)
+      .map((r) => r.route)
+      .sort();
+    expect(allowed).toEqual(['GET /auth/me', 'POST /auth/change-password', 'POST /auth/logout']);
   });
 });

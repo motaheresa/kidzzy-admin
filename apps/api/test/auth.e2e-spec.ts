@@ -169,7 +169,13 @@ describe('Auth (e2e)', () => {
       beforeAll(async () => {
         const admin = await prisma.unscoped.user.findFirstOrThrow({ where: { email } });
         // The shape the app issues (ADR-0013: the permission keys travel in the token).
-        claims = { sub: admin.id, aid: academyId, sid: randomUUID(), perms: [] };
+        claims = {
+          sub: admin.id,
+          aid: academyId,
+          sid: randomUUID(),
+          perms: [],
+          mustChangePassword: false,
+        };
         secret = app.get(ConfigService).getOrThrow<string>('JWT_ACCESS_SECRET');
       });
 

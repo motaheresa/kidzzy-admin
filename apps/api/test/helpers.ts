@@ -14,7 +14,9 @@ import { PrismaService } from '../src/modules/prisma/prisma.service';
 /**
  * Starts the whole API exactly as main.ts does (same global setup).
  *
- * `loginRateLimit` replaces the login throttler's limit for this app only. Tests never change
+ * `loginRateLimit` and `passwordRateLimit` replace the limits of the 'login' and 'password'
+ * (change-password) throttlers for this app only; giving one leaves the other at 1000, so it
+ * never gets in the way. Tests never change
  * process.env at runtime: the config is validated and cached when AppModule is imported, so a
  * later change would be ignored, and it would leak into other tests in the same process.
  *
@@ -22,16 +24,21 @@ import { PrismaService } from '../src/modules/prisma/prisma.service';
  * this app only. They are never part of AppModule, so they never exist in the real API.
  */
 export async function createTestApp(
-  options: { loginRateLimit?: number; extraControllers?: Type<unknown>[] } = {},
+  options: {
+    loginRateLimit?: number;
+    passwordRateLimit?: number;
+    extraControllers?: Type<unknown>[];
+  } = {},
 ): Promise<INestApplication<App>> {
   const builder = Test.createTestingModule({
     imports: [AppModule],
     controllers: options.extraControllers ?? [],
   });
-  if (options.loginRateLimit !== undefined) {
-    builder
-      .overrideProvider(getOptionsToken())
-      .useValue([{ name: 'login', ttl: 60_000, limit: options.loginRateLimit }]);
+  if (options.loginRateLimit !== undefined || options.passwordRateLimit !== undefined) {
+    builder.overrideProvider(getOptionsToken()).useValue([
+      { name: 'login', ttl: 60_000, limit: options.loginRateLimit ?? 1000 },
+      { name: 'password', ttl: 60_000, limit: options.passwordRateLimit ?? 1000 },
+    ]);
   }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();
