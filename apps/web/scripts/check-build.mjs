@@ -78,6 +78,19 @@ if (sw) {
 const workboxFiles = files.filter((f) => /workbox-[\w-]+\.js$/.test(f));
 for (const f of workboxFiles) problems.push(`unexpected Workbox runtime: ${relative(DIST, f)}`);
 
+// ── The design-system preview page is development only ─────────────────────────────────────
+for (const file of textFiles) {
+  const text = readFileSync(file, 'utf8');
+  if (text.includes('/dev/design-system') || text.includes('DesignSystemPage')) {
+    problems.push(
+      `the dev-only design-system page is in the production build: ${relative(DIST, file)}`,
+    );
+  }
+}
+for (const f of files.filter((f) => /DesignSystemPage/i.test(f))) {
+  problems.push(`unexpected dev chunk: ${relative(DIST, f)}`);
+}
+
 if (problems.length > 0) {
   console.error(`check-build failed:\n- ${problems.join('\n- ')}`);
   process.exit(1);

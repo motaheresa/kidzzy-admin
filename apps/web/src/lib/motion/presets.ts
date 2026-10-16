@@ -28,6 +28,9 @@ export type MotionTargets = Element | Element[] | NodeListOf<Element> | null;
  */
 export function withMotion(animate: () => void): gsap.MatchMedia {
   const mm = gsap.matchMedia();
+  // Without matchMedia (very old browsers, jsdom) the preference is unknown: no motion, and
+  // never an error, because motion must not be able to break a screen.
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return mm;
   mm.add(MOTION_ALLOWED, animate);
   return mm;
 }

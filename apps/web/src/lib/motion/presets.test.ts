@@ -64,6 +64,13 @@ describe('motion presets', () => {
     expect(el.style.opacity).toBe('');
   });
 
+  it('does nothing, and never throws, when the browser has no matchMedia', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const el = element();
+    expect(() => fadeUp([el]).revert()).not.toThrow();
+    expect(el.style.opacity).toBe('');
+  });
+
   it('ignores missing targets instead of throwing', () => {
     setReducedMotion(false);
     expect(() => fadeUp(null).revert()).not.toThrow();
