@@ -1,10 +1,34 @@
 @import 'tailwindcss';
+@import './tokens.css';
+@import './fonts.css';
 
-@theme {
-  --font-sans: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+/* Base styles on the tokens. Logical properties only (start/end, ps/pe), so RTL is correct. */
+@layer base {
+  html {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    min-height: 100dvh;
+    line-height: var(--text-base--line-height);
+  }
+
+  /* Visible keyboard focus everywhere, never on mouse click (focus-visible). */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-100);
+    color: var(--color-brand-900);
+  }
 }
 
-html {
-  background: #fafaf8;
-  color: #1f1f1d;
+/* Tables and counters: Western digits with equal widths so columns line up. */
+@utility numeric {
+  font-variant-numeric: tabular-nums;
 }
