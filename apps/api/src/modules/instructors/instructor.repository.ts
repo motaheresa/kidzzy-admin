@@ -168,6 +168,17 @@ export class InstructorRepository {
     });
   }
 
+  /**
+   * A temporary password set by the admin (US-02): the instructor must replace it at the next
+   * login. Call findById first.
+   */
+  async setTemporaryPassword(id: string, passwordHash: string): Promise<void> {
+    await this.txHost.tx.user.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: true },
+    });
+  }
+
   /** WHERE conditions of the list, joined with AND. academy_id is filtered here, by hand. */
   private listConditions(filter: InstructorFilter): Prisma.Sql {
     const academyId = this.tenant.requireAcademyId();
