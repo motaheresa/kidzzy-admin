@@ -238,4 +238,60 @@ describe('Auth (e2e)', () => {
       await refresh(cookies.refresh_token.value).expect(401);
     });
   });
+
+  describe('GET /auth/me', () => {
+    const me = (accessToken?: string) => {
+      const req = request(app.getHttpServer()).get('/api/v1/auth/me');
+      return accessToken ? req.set('Cookie', `access_token=${accessToken}`) : req;
+    };
+
+    it('returns the signed-in user, exactly the Me contract', async () => {
+      const signedIn = await login({ login: email, password }).expect(200);
+      const cookies = readCookies(signedIn.headers['set-cookie']);
+
+      const res = await me(cookies.access_token.value).expect(200);
+      // Same body as the login response, and no column beyond the Me schema (openapi.yaml).
+      expect(res.body).toEqual(signedIn.body);
+      expect(Object.keys(res.body as object).sort()).toEqual(
+        [
+          'academy',
+          'email',
+          'id',
+          'mustChangePassword',
+          'name',
+          'permissions',
+          'phone',
+          'roles',
+        ].sort(),
+      );
+      expect(Object.keys((res.body as { academy: object }).academy).sort()).toEqual([
+        'id',
+        'name',
+        'timezone',
+      ]);
+    });
+
+    it('answers 401 UNAUTHENTICATED without an access cookie', async () => {
+      const res = await me().expect(401);
+      expect(res.body).toMatchObject({ status: 401, code: 'UNAUTHENTICATED' });
+    });
+
+    it('answers 401 for a user deactivated after logging in, never a stale Me', async () => {
+      const userId = await createUser(prisma, academyId, {
+        name: 'Deactivated later',
+        email: `later-${email}`,
+        password,
+        role: SystemRole.Instructor,
+      });
+      const cookies = readCookies(
+        (await login({ login: `later-${email}`, password }).expect(200)).headers['set-cookie'],
+      );
+      await me(cookies.access_token.value).expect(200);
+
+      await prisma.unscoped.user.update({ where: { id: userId }, data: { isActive: false } });
+      // The access token is still valid for up to 15 minutes; /auth/me must not trust it alone.
+      const res = await me(cookies.access_token.value).expect(401);
+      expect(res.body).toMatchObject({ status: 401, code: 'UNAUTHENTICATED' });
+    });
+  });
 });

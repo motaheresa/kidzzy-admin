@@ -77,23 +77,43 @@ Web, in `apps/web/src/`:
 ```text
 app/                        providers (QueryClientProvider) and the app shell
 pages/                      one component per screen, composing features and ui
-features/<feature>/api/        functions over lib/api, one per endpoint
+features/<feature>/api/        functions over lib/http, one per endpoint, plus <feature>.keys.ts
 features/<feature>/hooks/      TanStack Query useQuery / useMutation over those functions
 features/<feature>/components/ the feature's components
 features/<feature>/types/      its types
 features/<feature>/index.ts    its public API: the only file other folders import
 components/ui/atoms/        shared single elements (Button, Input, Alert)
 components/ui/molecules/    shared combinations (TextField)
-lib/                        API client and utilities
+lib/                        http (client), query, errors, routing helpers
 ```
 
 - Components never call the API; hooks do. Use the shared ui components before writing a raw element.
 - Imports flow app → pages → features → ui → lib (`boundaries/dependencies`). A feature imports another feature only through its `index.ts`; `components/ui` never imports a feature, a page or the app.
 
+## Web data flow
+
+ADR-0012 has the reasons; it builds on the layout in ADR-0011.
+
+```text
+route (app/router.tsx) -> layout (Public / Protected) -> page -> feature component -> feature hook
+  -> useApiQuery / useApiMutation (lib/query) -> feature api function -> http (lib/http) -> AppError (lib/errors)
+```
+
+- A signed-in screen is a child route of `ProtectedLayout`; pages only compose feature components and never call data hooks.
+- Only `lib/http` calls `fetch`, and only `lib/query` and `app` import `@tanstack/react-query` (both enforced by ESLint). Feature hooks use `useApiQuery`, `useApiMutation` and `useQueryClient` from `lib/query`.
+- Query keys come from the feature's key factory (`authKeys.me()`), never a literal array.
+- The session is the `['auth', 'me']` query (`useSession`): a `Me`, or `null` when signed out.
+- Every error is an `AppError`. Messages live only in `lib/errors/messages.ts` (Arabic, one per `ErrorCode`, plus field messages); never show the server's `detail`. A screen that shows its own errors sets `meta: { errorHandling: 'local' }`; otherwise the global reporter toasts it.
+- Queries retry network, timeout and server errors at most twice; mutations never retry.
+- A 401 `UNAUTHENTICATED` triggers one shared refresh and one retry. So **an API handler never throws 401 `UNAUTHENTICATED` after a side effect**: only the guard and the refresh endpoint may.
+- `returnTo` and any other redirect target go through `safeReturnTo`.
+- The service worker does no offline or API caching.
+
 ## Auth and errors
 
 - Every route requires a login through the global `JwtAuthGuard`; mark the exceptions with `@Public()`. The guard fills `TenantContext` from the access token, which is what scopes `prisma.db`.
 - Signed-in handlers read the caller from `req.auth` (`AuthenticatedRequest`): `userId`, `academyId`, `sessionId`.
+- Never throw 401 `UNAUTHENTICATED` from a handler after it changed something: the web client refreshes and retries such requests once (ADR-0012). Use 403 or 409 for rule failures.
 - Throw `AppException(ErrorCode.X, HttpStatus.Y, detail)` for errors the client acts on; `ProblemDetailsFilter` turns every error into RFC 9457 with a stable `code`. Never leak internal messages in `detail`.
 - Environment variables are validated at startup in `src/common/config/env.validation.ts`; add a new variable there first and read it with `ConfigService`, which returns the typed value. Tests never change `process.env` at runtime; `createTestApp` takes overrides instead.
 - App code logs through Nest's `Logger`, never `console` (ESLint `no-console`).

@@ -58,10 +58,14 @@ export class UserRepository {
     });
   }
 
-  /** The user with academy, roles and permissions, in the current academy; throws if absent. */
-  findWithAccess(userId: string): Promise<UserWithAccess> {
-    return this.txHost.tx.user.findUniqueOrThrow({
-      where: { id: userId },
+  /**
+   * The ACTIVE user with academy, roles and permissions, in the current academy, or null when
+   * the user does not exist here or was deactivated (their access token may still be valid for
+   * up to 15 minutes, so the caller must not trust the token alone).
+   */
+  findActiveWithAccess(userId: string): Promise<UserWithAccess | null> {
+    return this.txHost.tx.user.findFirst({
+      where: { id: userId, isActive: true },
       select: {
         id: true,
         name: true,

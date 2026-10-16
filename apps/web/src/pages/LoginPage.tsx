@@ -1,7 +1,7 @@
-import { LoginForm, type Me } from '../features/auth';
+import { LoginForm } from '../features/auth';
 
 /** The login screen (US-01). Layout is temporary until the high-fidelity design. */
-export function LoginPage({ onLoggedIn }: { onLoggedIn: (me: Me) => void }) {
+export function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
       <header className="text-center">
@@ -9,7 +9,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (me: Me) => void }) {
         <p className="text-neutral-600">تسجيل الدخول</p>
       </header>
 
-      <LoginForm onLoggedIn={onLoggedIn} />
+      <LoginForm />
     </main>
   );
 }

@@ -53,6 +53,11 @@ const boundaryPolicies = [
   { from: { element: { type: 'lib' } }, allow: [to('lib')] },
 ];
 
+const FETCH_MESSAGE =
+  'Use the http client from src/lib/http (timeout, refresh, AppError), never fetch directly (ADR-0012).';
+const QUERY_MESSAGE =
+  'Use useApiQuery / useApiMutation / useQueryClient from src/lib/query, not @tanstack/react-query (ADR-0012).';
+
 export default tseslint.config(
   // private_evidence is local reference material (CLAUDE.md), never linted
   { ignores: ['dist', '**/private_evidence/**'] },
@@ -85,6 +90,39 @@ export default tseslint.config(
     },
     rules: {
       'boundaries/dependencies': ['error', { default: 'disallow', policies: boundaryPolicies }],
+    },
+  },
+  {
+    // Network layer (ADR-0012): only src/lib/http talks to the network, so every request gets
+    // the timeout, the refresh and the AppError mapping.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/lib/http/**'],
+    rules: {
+      'no-restricted-globals': ['error', { name: 'fetch', message: FETCH_MESSAGE }],
+      'no-restricted-properties': [
+        'error',
+        ...['window', 'globalThis', 'self'].map((object) => ({
+          object,
+          property: 'fetch',
+          message: FETCH_MESSAGE,
+        })),
+      ],
+    },
+  },
+  {
+    // Query layer (ADR-0012): features fetch through useApiQuery / useApiMutation from
+    // src/lib/query, which carry the app's error handling and types. Only lib/query and the
+    // app layer (QueryClientProvider) import TanStack Query itself.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/lib/query/**', 'src/app/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: '@tanstack/react-query', message: QUERY_MESSAGE }],
+          patterns: [{ group: ['@tanstack/react-query/*'], message: QUERY_MESSAGE }],
+        },
+      ],
     },
   },
 );
