@@ -20,9 +20,21 @@ export default defineConfig({
         dir: 'rtl',
         start_url: '/',
         display: 'standalone',
-        theme_color: '#2f5fd0',
-        background_color: '#fafaf8',
-        icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+        // From the tokens (src/styles/tokens.css): --color-primary and --color-background.
+        theme_color: '#3c1590',
+        background_color: '#f8f7fc',
+        // Generated from brand/logo.png by `pnpm assets:icons` (docs/design-system.md).
+        icons: [
+          { src: '/pwa-64x64.png', sizes: '64x64', type: 'image/png' },
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: '/maskable-icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
       },
     }),
   ],
