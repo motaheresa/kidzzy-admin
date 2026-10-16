@@ -13,12 +13,25 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  ConfirmDialog,
+  DetailList,
   EmptyState,
   FormField,
   FullScreenMessage,
   PageHeader,
+  Pagination,
+  SearchInput,
   Skeleton,
   Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
 } from '@/components/ui';
 import { AA_TEXT, AA_UI, contrast, TEXT_PAIRS, UI_PAIRS } from '@/lib/design-tokens';
 import { formatMoney, formatNumber } from '@/lib/format';
@@ -60,6 +73,91 @@ const COLOR_TOKENS = [
 /** A --color-* token as #rrggbb, read from the page's computed styles. */
 function readToken(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim();
+}
+
+const DEMO_ROWS = [
+  { name: 'منى عادل', phone: '01012345678', active: true },
+  { name: 'أحمد سمير', phone: '01198765432', active: true },
+  { name: 'سارة محمود', phone: '01234567890', active: false },
+];
+
+/** A list screen's parts together, with local state instead of the URL. */
+function ListDemo() {
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const rows = DEMO_ROWS.filter(
+    (row) =>
+      row.name.includes(search) && (filter === 'all' || row.active === (filter === 'active')),
+  );
+  return (
+    <Card>
+      <CardContent className="grid gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput label="دور" placeholder="الاسم" onSearch={setSearch} />
+          <ToggleGroup
+            type="single"
+            aria-label="الحالة"
+            value={filter}
+            onValueChange={(value) => value && setFilter(value)}
+          >
+            <ToggleGroupItem value="all">الكل</ToggleGroupItem>
+            <ToggleGroupItem value="active">شغالين</ToggleGroupItem>
+            <ToggleGroupItem value="inactive">متوقفين</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>الاسم</TableHead>
+              <TableHead>الموبايل</TableHead>
+              <TableHead>الحالة</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.name}>
+                <TableCell className="font-medium">{row.name}</TableCell>
+                <TableCell dir="ltr" className="text-end">
+                  {row.phone}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={row.active ? 'success' : 'neutral'}>
+                    {row.active ? 'شغال' : 'متوقف'}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <Pagination page={page} pageSize={20} total={45} onPageChange={setPage} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConfirmDemo() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={setOpen}
+      trigger={<Button variant="outline">ايقاف المدرس</Button>}
+      title="توقف منى عادل؟"
+      description="مش هتقدر تسجل دخول، وبياناتها هتفضل زي ما هي."
+      confirmLabel="ايوه، وقفها"
+      tone="danger"
+      busy={busy}
+      onConfirm={() => {
+        setBusy(true);
+        setTimeout(() => {
+          setBusy(false);
+          setOpen(false);
+        }, 1200);
+      }}
+    />
+  );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -321,6 +419,29 @@ export function DesignSystemPage() {
             }
           />
         </Card>
+      </Section>
+
+      <Section title="Lists: search, filter, table, pagination">
+        <ListDemo />
+      </Section>
+
+      <Section title="Detail list, textarea">
+        <Card>
+          <CardContent className="grid gap-4">
+            <DetailList
+              items={[
+                { label: 'الايميل', value: 'mona@kidzzy.test', dir: 'ltr' },
+                { label: 'رقم الموبايل', value: null },
+                { label: 'اتضاف في', value: '16 أكتوبر 2026' },
+              ]}
+            />
+            <Textarea placeholder="ملاحظات" aria-label="ملاحظات" />
+          </CardContent>
+        </Card>
+      </Section>
+
+      <Section title="Confirm dialog">
+        <ConfirmDemo />
       </Section>
 
       <Section title="Toasts">
