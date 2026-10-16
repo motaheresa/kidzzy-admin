@@ -3,4 +3,6 @@
 export { Alert } from './atoms/Alert';
 export { Button, type ButtonVariant } from './atoms/Button';
 export { Input } from './atoms/Input';
+export { Spinner } from './atoms/Spinner';
+export { FullScreenMessage } from './molecules/FullScreenMessage';
 export { TextField } from './molecules/TextField';

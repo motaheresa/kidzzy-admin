@@ -17,9 +17,22 @@ const me = {
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+// The app first asks GET /auth/me. Here nobody is signed in (me and refresh answer 401), and
+// POST /auth/login answers with what each test gives.
+const signedOut = () =>
+  json(401, { type: 'about:blank', title: 'Unauthorized', status: 401, code: 'UNAUTHENTICATED' });
+function mockApi(loginAnswer: () => Response) {
+  return vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation((input) =>
+      Promise.resolve(String(input).endsWith('/auth/login') ? loginAnswer() : signedOut()),
+    );
+}
+
 async function fillAndSubmit() {
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('الايميل او رقم الموبايل'), 'm@test.local');
+  // The session check runs first; the form appears once it says "signed out".
+  await user.type(await screen.findByLabelText('الايميل او رقم الموبايل'), 'm@test.local');
   await user.type(screen.getByLabelText('كلمة السر'), 'secret-123');
   await user.click(screen.getByRole('button', { name: 'دخول' }));
 }
@@ -28,7 +41,7 @@ describe('Login (US-01)', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('logs in and shows who is signed in', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, me));
+    const fetch = mockApi(() => json(200, me));
     render(<App />);
     await fillAndSubmit();
 
@@ -43,7 +56,7 @@ describe('Login (US-01)', () => {
   });
 
   it('shows one generic message for wrong credentials', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    mockApi(() =>
       json(401, {
         type: 'about:blank',
         title: 'Unauthorized',
@@ -58,7 +71,7 @@ describe('Login (US-01)', () => {
   });
 
   it('tells the user to wait after too many attempts', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    mockApi(() =>
       json(429, {
         type: 'about:blank',
         title: 'Too Many Requests',

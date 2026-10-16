@@ -1,25 +1,17 @@
 import { useState } from 'react';
-import type { Me } from '../features/auth';
-import { HomePage } from '../pages/HomePage';
-import { LoginPage } from '../pages/LoginPage';
+import { RouterProvider } from 'react-router';
 import { AppProviders } from './providers';
+import { createAppRouter } from './router';
 
 /**
- * App shell: picks the screen. After login it shows who is signed in until the real screens
- * arrive. The session lives in httpOnly cookies; reopening the page shows the login form again
- * until GET /auth/me (US-03) lets the app ask who is signed in.
+ * The app: providers around the router. The session is the ['auth', 'me'] query (useSession),
+ * not component state, so reopening the app with a valid session lands on the home page.
  */
-function AppShell() {
-  const [me, setMe] = useState<Me | null>(null);
-
-  if (!me) return <LoginPage onLoggedIn={setMe} />;
-  return <HomePage me={me} onLoggedOut={() => setMe(null)} />;
-}
-
 export default function App() {
+  const [router] = useState(createAppRouter);
   return (
     <AppProviders>
-      <AppShell />
+      <RouterProvider router={router} />
     </AppProviders>
   );
 }

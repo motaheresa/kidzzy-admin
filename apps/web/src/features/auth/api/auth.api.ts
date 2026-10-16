@@ -1,15 +1,20 @@
-import { api } from '../../../lib/api';
+import { http } from '../../../lib/http';
 import type { LoginInput, Me } from '../types';
 
-// The auth endpoints (openapi.yaml, tag Auth). Plain functions over the API client; components
-// never call them directly, the hooks in ../hooks do.
+// The auth endpoints (openapi.yaml, tag Auth), as plain functions over the http client.
+// Components never call them; the hooks in ../hooks do.
 
-/** Logs in; the API sets the httpOnly auth cookies and returns the user. */
+/** POST /auth/login: the API sets the httpOnly auth cookies and returns the user. */
 export function login(input: LoginInput): Promise<Me> {
-  return api<Me>('/auth/login', { method: 'POST', body: input });
+  return http.post<Me>('/auth/login', input);
 }
 
-/** Revokes the session and clears the cookies. */
+/** POST /auth/logout: revokes the session and clears the cookies. */
 export function logout(): Promise<void> {
-  return api<void>('/auth/logout', { method: 'POST' });
+  return http.post<void>('/auth/logout');
+}
+
+/** GET /auth/me: who is signed in (401 UNAUTHENTICATED when nobody is). */
+export function getMe(signal?: AbortSignal): Promise<Me> {
+  return http.get<Me>('/auth/me', { signal });
 }
