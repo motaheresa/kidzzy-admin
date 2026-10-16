@@ -67,6 +67,7 @@ Other scales: type `text-xs` to `text-4xl` with Arabic line heights (body 1.7); 
 | `SearchInput`       | A list's search box: it calls `onSearch` with the trimmed text once typing pauses (`SEARCH_DEBOUNCE_MS`, 300 ms). Keep the search in the URL with `useListParams` (`src/lib/hooks`).                                                                     |
 | `Pagination`        | Previous / next under an offset-paginated list, with "صفحة 2 من 5"; nothing when everything fits on one page.                                                                                                                                            |
 | `DetailList`        | A record's fields as label and value pairs; an empty value shows a dash.                                                                                                                                                                                 |
+| `TextareaField`     | `FormField` for multi-line text (notes): the same label, hint and error wiring around a `Textarea`.                                                                                                                                                      |
 
 Rules: every interactive element is at least **44 × 44 px**; keyboard focus is always visible (`:focus-visible` outline in the ring color); never remove an outline without replacing it.
 

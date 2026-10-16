@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Textarea,
+  TextareaField,
   ToggleGroup,
   ToggleGroupItem,
 } from '@/components/ui';
@@ -425,7 +425,7 @@ export function DesignSystemPage() {
         <ListDemo />
       </Section>
 
-      <Section title="Detail list, textarea">
+      <Section title="Detail list, textarea field">
         <Card>
           <CardContent className="grid gap-4">
             <DetailList
@@ -435,7 +435,7 @@ export function DesignSystemPage() {
                 { label: 'اتضاف في', value: '16 أكتوبر 2026' },
               ]}
             />
-            <Textarea placeholder="ملاحظات" aria-label="ملاحظات" />
+            <TextareaField label="ملاحظات" hint="اختياري" placeholder="اكتب ملاحظة" />
           </CardContent>
         </Card>
       </Section>
