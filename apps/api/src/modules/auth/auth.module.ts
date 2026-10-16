@@ -1,16 +1,23 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { UsersModule } from '../users/users.module';
+import { AccessContext } from './access-context';
 import { ACCESS_TOKEN_TTL_SECONDS } from './auth.config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PasswordService } from './password.service';
+import { PermissionsGuard } from './permissions.guard';
 import { RefreshTokenRepository } from './refresh-token.repository';
 
+/**
+ * Authentication and authorization. Global so every feature module can inject AccessContext
+ * (CLAUDE.md, Authorization) without importing this module.
+ */
+@Global()
 @Module({
   imports: [
     UsersModule,
@@ -38,9 +45,12 @@ import { RefreshTokenRepository } from './refresh-token.repository';
     AuthService,
     PasswordService,
     RefreshTokenRepository,
-    // Registered globally: every route of every module requires a login unless marked @Public().
+    AccessContext,
+    // Registered globally, in this order: JwtAuthGuard authenticates (every route needs a login
+    // unless it is @Public()), then PermissionsGuard enforces the route's declared access rule.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
-  exports: [AuthService, PasswordService],
+  exports: [AuthService, PasswordService, AccessContext],
 })
 export class AuthModule {}

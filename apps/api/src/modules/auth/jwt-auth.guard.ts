@@ -7,7 +7,7 @@ import { ClsService } from 'nestjs-cls';
 import { AppException } from '../../common/errors/app.exception';
 import { TenantContext, type TenantStore } from '../tenancy/tenant-context';
 import { ACCESS_COOKIE, isAccessTokenPayload } from './auth.config';
-import { IS_PUBLIC_KEY } from './public.decorator';
+import { IS_PUBLIC_KEY } from './access.decorators';
 
 /** The signed-in caller, attached to the request by JwtAuthGuard. */
 export interface AuthenticatedRequest extends Request {
