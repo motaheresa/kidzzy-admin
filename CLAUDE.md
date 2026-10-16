@@ -47,13 +47,48 @@ Run lint, typecheck and the tests before saying a change is done.
 
 ## Data access
 
-- Inject `PrismaService` and use `prisma.db`: queries on every model with `academyId` are limited to the academy in `TenantContext`, and throw `MissingTenantContextError` when there is none.
-- `prisma.unscoped` crosses academies; use it only for the seed, background jobs and the login lookup, and say why in the pull request.
+- Only repositories (`*.repository.ts`) query the database (see "Code structure"). They use `TransactionHost.tx`, which is the open transaction or `prisma.db`: queries on every model with `academyId` are limited to the academy in `TenantContext`, and throw `MissingTenantContextError` when there is none.
+- `prisma.unscoped` crosses academies; use it only in the seed, background jobs and repository methods whose name and comment say why (today `findLoginCandidates` and `findForRefresh`), and say why in the pull request.
 - On create, still pass `academyId: tenant.requireAcademyId()`: the generated types require it, and the extension rejects any other academy.
 - Raw SQL is never scoped automatically; filter by `academy_id` yourself.
 - Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`.
 - Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
 - Every email or phone that is written or looked up goes through `normalizeEmail` / `normalizePhone` (`src/common/normalize`); the database rejects any other form. Never match them with `mode: 'insensitive'`: Prisma sends it as `ILIKE`, where `%` and `_` are wildcards.
+
+## Code structure
+
+ADR-0011 has the reasons. Each rule below is enforced by ESLint where it can be.
+
+API, per module in `apps/api/src/modules/<module>/`:
+
+```text
+dto/                   request DTOs: input shape only (class-validator), never a database lookup
+<name>.controller.ts   HTTP only: DTO in, service call, mapped response out
+<name>.service.ts      business rules; throws AppException (409 state conflict, 422 contradicting values)
+<name>.repository.ts   the only Prisma access, one per aggregate, methods named by intent
+<name>.mapper.ts       response builders (toMe): never return a Prisma row
+```
+
+- No generic base repository. A module exports its repository when another module needs it (`UsersModule` exports `UserRepository`).
+- A service method that writes more than one row is marked `@Transactional()` (`@nestjs-cls/transactional`); every repository call inside it joins the same tenant-scoped transaction. A write that must survive a failure (revoking a session) stays outside it.
+
+Web, in `apps/web/src/`:
+
+```text
+app/                        providers (QueryClientProvider) and the app shell
+pages/                      one component per screen, composing features and ui
+features/<feature>/api/        functions over lib/api, one per endpoint
+features/<feature>/hooks/      TanStack Query useQuery / useMutation over those functions
+features/<feature>/components/ the feature's components
+features/<feature>/types/      its types
+features/<feature>/index.ts    its public API: the only file other folders import
+components/ui/atoms/        shared single elements (Button, Input, Alert)
+components/ui/molecules/    shared combinations (TextField)
+lib/                        API client and utilities
+```
+
+- Components never call the API; hooks do. Use the shared ui components before writing a raw element.
+- Imports flow app → pages → features → ui → lib (`boundaries/dependencies`). A feature imports another feature only through its `index.ts`; `components/ui` never imports a feature, a page or the app.
 
 ## Auth and errors
 
