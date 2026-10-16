@@ -20,6 +20,25 @@ export interface AccessTokenPayload {
   aid: string;
   /** Session id: the refresh-token family started at login, revoked on logout */
   sid: string;
+  /**
+   * The user's permission keys (resource.action:scope) when the token was issued, at login or the
+   * last refresh. PermissionsGuard checks them with no database query, so a role change or a
+   * deactivation applies at the next refresh, within ACCESS_TOKEN_TTL_SECONDS (ADR-0013).
+   */
+  perms: string[];
+}
+
+/** True when a verified JWT payload has the shape the app issues (anything else is invalid). */
+export function isAccessTokenPayload(value: unknown): value is AccessTokenPayload {
+  if (typeof value !== 'object' || value === null) return false;
+  const { sub, aid, sid, perms } = value as Record<string, unknown>;
+  return (
+    typeof sub === 'string' &&
+    typeof aid === 'string' &&
+    typeof sid === 'string' &&
+    Array.isArray(perms) &&
+    perms.every((key) => typeof key === 'string')
+  );
 }
 
 /** httpOnly: no JavaScript access. SameSite=Strict: never sent by another site's page. */
