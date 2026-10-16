@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -10,6 +11,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // PWA for installation and web push only, never offline (docs/design-system.md).
+      // Our own worker, src/sw.ts, built without a precache manifest: with no injection point,
+      // vite-plugin-pwa compiles the file and skips Workbox entirely.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: { injectionPoint: undefined, rollupFormat: 'iife' },
       registerType: 'autoUpdate',
       manifest: {
         name: 'كيدزي كودرز - نظام الادارة',
@@ -19,12 +27,26 @@ export default defineConfig({
         dir: 'rtl',
         start_url: '/',
         display: 'standalone',
-        theme_color: '#2f5fd0',
-        background_color: '#fafaf8',
-        icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+        // From the tokens (src/styles/tokens.css): --color-primary and --color-background.
+        theme_color: '#3c1590',
+        background_color: '#f8f7fc',
+        // Generated from brand/logo.png by `pnpm assets:icons` (docs/design-system.md).
+        icons: [
+          { src: '/pwa-64x64.png', sizes: '64x64', type: 'image/png' },
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: '/maskable-icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
       },
     }),
   ],
+  // "@/..." = src/... (same as tsconfig paths; CLAUDE.md has the import rule)
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     port: 5173,
     // Same-origin /api in development, like production (ADR-005)

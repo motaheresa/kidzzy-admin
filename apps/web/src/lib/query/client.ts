@@ -1,5 +1,5 @@
 import { isCancelledError, MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
-import { normalizeError, reportError, type ErrorKind } from '../errors';
+import { normalizeError, reportError, type ErrorKind } from '@/lib/errors';
 import type { ApiMeta } from './register';
 
 /** Failures worth trying again: the request may succeed a moment later. */

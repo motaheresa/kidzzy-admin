@@ -1,8 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
-import { markSignedOut } from '../features/auth';
-import { onSessionExpired } from '../lib/http';
-import { createQueryClient, type QueryClient } from '../lib/query';
+import { markSignedOut } from '@/features/auth';
+import { onSessionExpired } from '@/lib/http';
+import { createQueryClient, type QueryClient } from '@/lib/query';
 
 /**
  * App-wide providers. One QueryClient per app instance, created once (useState), so a

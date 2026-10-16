@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { emitSessionExpired } from '../lib/http';
+import { emitSessionExpired } from '@/lib/http';
 import { AppProviders } from './providers';
 import { routes } from './router';
 

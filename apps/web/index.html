@@ -2,9 +2,19 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#2f5fd0" />
+    <!-- The interface font's Arabic file, fetched before the CSS asks for it (self-hosted). -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/node_modules/@fontsource-variable/cairo/files/cairo-arabic-wght-normal.woff2"
+    />
+    <!-- --color-primary (src/styles/tokens.css) -->
+    <meta name="theme-color" content="#3c1590" />
     <title>كيدزي كودرز - نظام الادارة</title>
   </head>
   <body>

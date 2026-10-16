@@ -1,5 +1,5 @@
 import { API_PREFIX, ErrorCode } from '@kidzzy/shared';
-import { fromResponse, isAppError, normalizeError, timeoutError } from '../errors';
+import { fromResponse, isAppError, normalizeError, timeoutError } from '@/lib/errors';
 import { refreshOnce, type RefreshOutcome } from './refresh';
 
 /** A request that has not answered after this long fails with kind 'timeout'. */

@@ -7,7 +7,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import type { AppError } from '../errors';
+import type { AppError } from '@/lib/errors';
 
 /**
  * Reads data from the API: TanStack Query's useQuery with the app's types (errors are AppError,

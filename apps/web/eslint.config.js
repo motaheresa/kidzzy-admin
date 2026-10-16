@@ -4,6 +4,7 @@ import boundaries from 'eslint-plugin-boundaries';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
+import local from './eslint-rules/import-style.js';
 
 /**
  * Architectural boundaries (ADR-0011). Each folder is an element; an import between elements is
@@ -58,6 +59,12 @@ const FETCH_MESSAGE =
 const QUERY_MESSAGE =
   'Use useApiQuery / useApiMutation / useQueryClient from src/lib/query, not @tanstack/react-query (ADR-0012).';
 
+/** A Tailwind class with a physical direction: ml-, pr-, left-, rounded-l-, text-right, … */
+const PHYSICAL_CLASS =
+  '/(^|\\s)(\\w+:)*-?(ml|mr|pl|pr|left|right|rounded-l|rounded-r|border-l|border-r)-|(^|\\s)(\\w+:)*(text|float)-(left|right)(\\s|$)/';
+const PHYSICAL_MESSAGE =
+  'Use logical classes (ms-/me-, ps-/pe-, start-/end-, text-start/text-end, rounded-s/e) so RTL is correct.';
+
 export default tseslint.config(
   // private_evidence is local reference material (CLAUDE.md), never linted
   { ignores: ['dist', '**/private_evidence/**'] },
@@ -81,15 +88,45 @@ export default tseslint.config(
     },
   },
   {
+    // RTL: logical properties only (ps/pe, ms/me, start/end, text-start), never physical left
+    // and right, which point the wrong way in Arabic (docs/design-system.md, RTL rules).
     files: ['src/**/*.{ts,tsx}'],
-    plugins: { boundaries },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...['Literal', 'TemplateElement'].map((node) => ({
+          selector: `${node}[${node === 'Literal' ? 'value' : 'value.raw'}=${PHYSICAL_CLASS}]`,
+          message: PHYSICAL_MESSAGE,
+        })),
+      ],
+    },
+  },
+  {
+    // The service worker runs in a worker scope (self, caches, clients), not a page.
+    files: ['src/sw.ts'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
+    // Node scripts run by package.json (icons, build checks).
+    files: ['scripts/**/*.mjs', 'eslint-rules/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: { boundaries, local },
     settings: {
       'boundaries/elements': elements,
-      // Resolves extensionless relative imports ("../lib/api") to their .ts/.tsx file.
-      'import/resolver': { node: { extensions: ['.ts', '.tsx'] } },
+      // Resolves "@/..." (tsconfig paths) and extensionless relative imports to their file, so
+      // boundaries knows which layer an import reaches.
+      'import/resolver': {
+        typescript: { project: './tsconfig.app.json' },
+        node: { extensions: ['.ts', '.tsx'] },
+      },
     },
     rules: {
       'boundaries/dependencies': ['error', { default: 'disallow', policies: boundaryPolicies }],
+      // Relative imports inside a unit, "@/..." across units (CLAUDE.md, Imports).
+      'local/import-style': 'error',
     },
   },
   {

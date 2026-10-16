@@ -21,8 +21,11 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* "@/..." = src/... (CLAUDE.md: @/ across units, relative inside one) */
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"],
-  "exclude": ["**/private_evidence/**"]
+  "exclude": ["**/private_evidence/**", "src/sw.ts", "src/sw.test.ts"]
 }
