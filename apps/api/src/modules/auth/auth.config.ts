@@ -26,18 +26,25 @@ export interface AccessTokenPayload {
    * deactivation applies at the next refresh, within ACCESS_TOKEN_TTL_SECONDS (ADR-0013).
    */
   perms: string[];
+  /**
+   * The user must replace a temporary password (US-02). While it is true, PermissionsGuard only
+   * lets the routes marked @AllowedDuringPasswordChange() through. Written from the user row at
+   * login and at every refresh, like perms.
+   */
+  mustChangePassword: boolean;
 }
 
 /** True when a verified JWT payload has the shape the app issues (anything else is invalid). */
 export function isAccessTokenPayload(value: unknown): value is AccessTokenPayload {
   if (typeof value !== 'object' || value === null) return false;
-  const { sub, aid, sid, perms } = value as Record<string, unknown>;
+  const { sub, aid, sid, perms, mustChangePassword } = value as Record<string, unknown>;
   return (
     typeof sub === 'string' &&
     typeof aid === 'string' &&
     typeof sid === 'string' &&
     Array.isArray(perms) &&
-    perms.every((key) => typeof key === 'string')
+    perms.every((key) => typeof key === 'string') &&
+    typeof mustChangePassword === 'boolean'
   );
 }
 

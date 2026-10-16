@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Me } from '@kidzzy/shared';
 import type { Request, Response } from 'express';
 import {
@@ -23,12 +23,15 @@ import {
   REFRESH_TOKEN_TTL_SECONDS,
 } from './auth.config';
 import { AuthService, type IssuedTokens } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
-import { Public, SignedIn } from './access.decorators';
+import { AllowedDuringPasswordChange, Public, SignedIn } from './access.decorators';
+import { UserThrottlerGuard } from './user-throttler.guard';
 
 /**
- * POST /auth/login, /auth/refresh, /auth/logout (US-01) and GET /auth/me (US-03).
+ * POST /auth/login, /auth/refresh, /auth/logout (US-01), GET /auth/me (US-03) and
+ * POST /auth/change-password (US-02).
  * Tokens only ever travel as cookies.
  */
 @Controller('auth')
@@ -46,6 +49,7 @@ export class AuthController {
 
   @Public()
   @UseGuards(ThrottlerGuard) // 5 attempts per minute per IP (API Design V1), then 429
+  @SkipThrottle({ password: true }) // only the 'login' throttler counts here
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response): Promise<Me> {
@@ -69,12 +73,37 @@ export class AuthController {
 
   /** GET /auth/me (US-03): who is signed in. The web app's session check on every start. */
   @SignedIn()
+  @AllowedDuringPasswordChange() // the app needs it to show the change-password screen
   @Get('me')
   me(@Req() req: AuthenticatedRequest): Promise<Me> {
     return this.auth.loadMe(req.auth.userId);
   }
 
+  /**
+   * POST /auth/change-password (US-02). On success this device gets new cookies (a new session)
+   * and every other session of the user ends. 5 attempts a minute per user, then 429.
+   */
   @SignedIn()
+  @AllowedDuringPasswordChange()
+  @UseGuards(UserThrottlerGuard)
+  @SkipThrottle({ login: true }) // only the 'password' throttler counts here
+  @Post('change-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    const tokens = await this.auth.changePassword(
+      req.auth.userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    this.setCookies(res, tokens);
+  }
+
+  @SignedIn()
+  @AllowedDuringPasswordChange() // signing out is always possible
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
