@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'dist/**', 'src/generated/**'],
+    // private_evidence is local reference material (CLAUDE.md), never linted
+    ignores: ['eslint.config.mjs', 'dist/**', 'src/generated/**', '**/private_evidence/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

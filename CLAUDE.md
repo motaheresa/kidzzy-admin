@@ -8,6 +8,14 @@ Academy management system for KidzzyCoders, an online kids' coding academy in Eg
 
 The design documents are linked from `docs/README.md` (PRD, SRS, user flows, wireframes, ERD, backlog, architecture, API design). Decisions are in `docs/adr/`, and the API contract is `docs/api/openapi.yaml`. When code and documents disagree, ask before choosing.
 
+## Private evidence
+
+`private_evidence/` at the repository root is local only: it is in `.gitignore`, `.prettierignore`, both ESLint ignores and the TypeScript excludes, and `.husky/pre-commit` refuses any commit that stages a path under it.
+
+- It holds the original design documents (`project-docs/`, with its own `README.md`), brand notes (`brand-notes.md`) and brand assets (`KC Academy/`: logo, posters, reels).
+- It is reference only. Never copy it into the app, except an asset chosen on purpose (for example the logo), which then lives under `apps/web` like any other source file.
+- When it disagrees with the repository, the repository wins: ADRs, `openapi.yaml`, the Prisma schema and migrations, and this file.
+
 ## Stack and layout
 
 pnpm monorepo (`pnpm-workspace.yaml`):
