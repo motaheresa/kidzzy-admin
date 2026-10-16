@@ -39,4 +39,24 @@ export default tseslint.config(
     files: ['src/**/*.ts'],
     rules: { 'no-console': 'error' },
   },
+  {
+    // Repository layer (ADR-0011): only repositories and the prisma module touch Prisma.
+    // Services, controllers, mappers and guards go through a repository's intent-named methods.
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.repository.ts', 'src/modules/prisma/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/prisma/prisma.service', '**/generated/prisma/**', '@prisma/*'],
+              message:
+                'Only repositories (*.repository.ts) and the prisma module use Prisma; call a repository method instead (ADR-0011).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
