@@ -131,6 +131,59 @@ export interface InstructorCreate {
   temporaryPassword: string;
 }
 
+/** A payment cycle (openapi.yaml: PaymentCycle). Money is a decimal string in EGP. */
+export interface PaymentCycle {
+  id: string;
+  payeeType: PayeeType;
+  payeeId: string;
+  payeeName: string;
+  cycleNumber: number;
+  sessionsPerCycle: number;
+  amount: string;
+  openingCount: number;
+  sessionsCounted: number;
+  status: CycleStatus;
+  /** ISO 8601, UTC */
+  dueAt: string | null;
+  /** ISO 8601, UTC */
+  paidAt: string | null;
+}
+
+/** A student record (openapi.yaml: Student). */
+export interface Student {
+  id: string;
+  /** Stored trimmed and uppercase, unique per academy. */
+  code: string;
+  name: string;
+  age: number | null;
+  parentName: string;
+  parentPhone: string;
+  notes: string | null;
+  isActive: boolean;
+  currentGroup: GroupRef | null;
+  currentCycle: PaymentCycle | null;
+}
+
+/** POST /students body (openapi.yaml: StudentCreate). */
+export interface StudentCreate {
+  code: string;
+  name: string;
+  age?: number;
+  parentName: string;
+  parentPhone: string;
+  notes?: string;
+}
+
+/** PATCH /students/{id} body (openapi.yaml: StudentUpdate); null clears age or notes. */
+export interface StudentUpdate {
+  code?: string;
+  name?: string;
+  age?: number | null;
+  parentName?: string;
+  parentPhone?: string;
+  notes?: string | null;
+}
+
 /** PATCH /instructors/{id} body (openapi.yaml: InstructorUpdate); null removes email or phone. */
 export interface InstructorUpdate {
   name?: string;
