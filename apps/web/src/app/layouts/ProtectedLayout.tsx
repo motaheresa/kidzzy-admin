@@ -2,11 +2,13 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { Button, FullScreenMessage } from '@/components/ui';
 import { useSession } from '@/features/auth';
 import { loginPathFor } from '@/lib/routing';
+import { AppNav } from './AppNav';
 
 /**
  * Wraps every screen that needs a signed-in user. It asks GET /auth/me (useSession):
  * - while it loads: a full-screen loader, so the login form never flashes for a signed-in user;
- * - signed in: the app shell (header with the logo and the academy) around the screen;
+ * - signed in: the app shell (header with the logo, the academy and the navigation) around the
+ *   screen;
  * - signed out (null): the login page, with returnTo = the current path and query;
  * - the check failed (network, server): an error with "try again", because an outage is not a
  *   reason to sign the user out.
@@ -28,6 +30,7 @@ export function ProtectedLayout() {
               <span className="text-xs text-muted-foreground">{session.data.academy.name}</span>
             </div>
           </div>
+          <AppNav />
         </header>
         <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-8">
           <Outlet />

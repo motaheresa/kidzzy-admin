@@ -1,20 +1,28 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { HomePage } from '@/pages/HomePage';
+import { EditInstructorPage } from '@/pages/instructors/EditInstructorPage';
+import { InstructorPage } from '@/pages/instructors/InstructorPage';
+import { InstructorsPage } from '@/pages/instructors/InstructorsPage';
+import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
 import { ProtectedLayout } from './layouts/ProtectedLayout';
 import { PublicLayout } from './layouts/PublicLayout';
 import { RootLayout } from './layouts/RootLayout';
+import { RequirePermission } from './RequirePermission';
 
 /**
  * Every route of the app (ADR-0012). Layout routes have no path: they wrap their children.
  *   RootLayout (toaster, error boundary)
  *     PublicLayout     /login        signed-in users are sent home
  *     ProtectedLayout  /             signed-out users are sent to /login?returnTo=…
+ *       RequirePermission instructors.read     /instructors, /instructors/:id
+ *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
  *     NotFoundPage     *
  *     DesignSystemPage /dev/design-system   development only
- * A new signed-in screen is a child of ProtectedLayout.
+ * A new signed-in screen is a child of ProtectedLayout, inside a RequirePermission for the
+ * permission its main endpoint requires, and gets its link in layouts/AppNav.tsx.
  */
 
 /**
@@ -39,7 +47,26 @@ export const routes: RouteObject[] = [
     errorElement: <RouteErrorPage />,
     children: [
       { element: <PublicLayout />, children: [{ path: '/login', element: <LoginPage /> }] },
-      { element: <ProtectedLayout />, children: [{ path: '/', element: <HomePage /> }] },
+      {
+        element: <ProtectedLayout />,
+        children: [
+          { path: '/', element: <HomePage /> },
+          {
+            element: <RequirePermission permission="instructors.read" />,
+            children: [
+              { path: '/instructors', element: <InstructorsPage /> },
+              { path: '/instructors/:id', element: <InstructorPage /> },
+            ],
+          },
+          {
+            element: <RequirePermission permission="instructors.manage" />,
+            children: [
+              { path: '/instructors/new', element: <NewInstructorPage /> },
+              { path: '/instructors/:id/edit', element: <EditInstructorPage /> },
+            ],
+          },
+        ],
+      },
       ...devRoutes,
       { path: '*', element: <NotFoundPage /> },
     ],

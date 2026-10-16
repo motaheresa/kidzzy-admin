@@ -59,6 +59,7 @@ export const FIELD_MESSAGES: Record<string, string> = {
   email: 'اكتب ايميل صحيح',
   phone: 'اكتب رقم موبايل صحيح',
   name: 'اكتب الاسم',
+  temporaryPassword: 'كلمة السر المؤقتة لازم تكون 8 حروف على الاقل',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';

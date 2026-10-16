@@ -82,9 +82,9 @@ features/<feature>/hooks/      TanStack Query useQuery / useMutation over those 
 features/<feature>/components/ the feature's components
 features/<feature>/types/      its types
 features/<feature>/index.ts    its public API: the only file other folders import
-components/ui/atoms/        shadcn/ui primitives on our tokens (button, input, label, alert, card, badge, spinner, skeleton)
-components/ui/molecules/    our combinations (FormField, PageHeader, EmptyState, FullScreenMessage, Toaster)
-lib/                        http (client), query, errors, routing helpers
+components/ui/atoms/        shadcn/ui primitives on our tokens (button, input, textarea, label, alert, alert-dialog, card, badge, table, toggle-group, spinner, skeleton)
+components/ui/molecules/    our combinations (FormField, PageHeader, EmptyState, ConfirmDialog, SearchInput, Pagination, DetailList, FullScreenMessage, Toaster)
+lib/                        http (client), query, errors, routing helpers, hooks (useListParams)
 ```
 
 - Components never call the API; hooks do. Use the shared ui components before writing a raw element.
@@ -106,6 +106,9 @@ route (app/router.tsx) -> layout (Public / Protected) -> page -> feature compone
 - Query keys come from the feature's key factory (`authKeys.me()`), never a literal array.
 - The session is the `['auth', 'me']` query (`useSession`): a `Me`, or `null` when signed out.
 - Every error is an `AppError`. Messages live only in `lib/errors/messages.ts` (Arabic, one per `ErrorCode`, plus field messages); never show the server's `detail`. A screen that shows its own errors sets `meta: { errorHandling: 'local' }`; otherwise the global reporter toasts it.
+- A 409 code that is about one field (`EMAIL_TAKEN`, `PHONE_TAKEN`, `STUDENT_CODE_TAKEN`) is listed in `CODE_FIELDS` (`lib/errors/messages.ts`), so the error layer also puts its message in `fieldErrors` and the form shows it under that field.
+- A list screen keeps its page, search and filters in the URL with `useListParams` (`src/lib/hooks`), so a reload, the back button and a shared link keep them.
+- A signed-in screen's route sits inside `RequirePermission` for the permission its main endpoint needs, and its section gets a link in `app/layouts/AppNav.tsx`, shown by permission.
 - Queries retry network, timeout and server errors at most twice; mutations never retry.
 - A 401 `UNAUTHENTICATED` triggers one shared refresh and one retry. So **an API handler never throws 401 `UNAUTHENTICATED` after a side effect**: only the guard and the refresh endpoint may.
 - `returnTo` and any other redirect target go through `safeReturnTo`.
