@@ -64,3 +64,45 @@ export function timeToString(time: Date): string {
 export function stringToTime(time: string): Date {
   return new Date(`1970-01-01T${time}:00.000Z`);
 }
+
+/** What replacing a group's schedule does to its slot rows. */
+export interface ScheduleDiff<S extends ScheduleSlot & { id: string; retired: boolean }> {
+  /** In use before and after: same row, same sessions (a single reschedule on it survives). */
+  keep: S[];
+  /** Retired before, back in the schedule: the row is used again. */
+  revive: S[];
+  /** In use before, gone now: its future Scheduled sessions go, and the row is deleted or retired. */
+  remove: S[];
+  /** In neither: new rows. */
+  add: ScheduleSlot[];
+}
+
+/**
+ * Matches the new schedule against the group's slot rows by weekday, start time and duration.
+ * A slot that did not change keeps its row, so the sessions already generated for it (and any
+ * reschedule of one of them) stay; only what really changed is rebuilt (AC of US-10). Retired
+ * rows are matched too, so a slot that comes back reuses its row instead of duplicating its days.
+ */
+export function diffSchedule<S extends ScheduleSlot & { id: string; retired: boolean }>(
+  existing: readonly S[],
+  incoming: readonly ScheduleSlot[],
+): ScheduleDiff<S> {
+  const used = new Set<string>();
+  const keep: S[] = [];
+  const revive: S[] = [];
+  const add: ScheduleSlot[] = [];
+  for (const slot of incoming) {
+    // Prefer a row that is in use over a retired one with the same shape.
+    const match =
+      existing.find((row) => !used.has(row.id) && !row.retired && sameSlot(row, slot)) ??
+      existing.find((row) => !used.has(row.id) && row.retired && sameSlot(row, slot));
+    if (!match) {
+      add.push(slot);
+      continue;
+    }
+    used.add(match.id);
+    (match.retired ? revive : keep).push(match);
+  }
+  const remove = existing.filter((row) => !row.retired && !used.has(row.id));
+  return { keep, revive, remove, add };
+}
