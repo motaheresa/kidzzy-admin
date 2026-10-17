@@ -101,7 +101,14 @@ export function InstructorDetails({ id }: { id: string }) {
           ) : (
             <ul className="grid gap-2">
               {data.groups.map((group) => (
-                <li key={group.id}>{group.name}</li>
+                <li key={group.id}>
+                  <Link
+                    to={`/groups/${group.id}`}
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {group.name}
+                  </Link>
+                </li>
               ))}
             </ul>
           )}

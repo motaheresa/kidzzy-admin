@@ -29,6 +29,11 @@ export function listInstructors(
   return http.get<Page<Instructor>>(`/instructors?${query.toString()}`, { signal });
 }
 
+/** GET /instructors?isActive=true: every active instructor (up to 100), for a choice list. */
+export function listActiveInstructors(signal?: AbortSignal): Promise<Page<Instructor>> {
+  return http.get<Page<Instructor>>('/instructors?isActive=true&pageSize=100', { signal });
+}
+
 /** GET /instructors/{id}: the instructor with their groups. */
 export function getInstructor(id: string, signal?: AbortSignal): Promise<InstructorDetail> {
   return http.get<InstructorDetail>(path(id), { signal });

@@ -13,6 +13,7 @@ interface NavItem {
 /** The main sections, in the wireframe's order. A new screen adds its link here. */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'الرئيسية' },
+  { to: '/groups', label: 'الجروبات', permission: 'groups.read' },
   { to: '/students', label: 'الطلاب', permission: 'students.read' },
   { to: '/instructors', label: 'المدرسين', permission: 'instructors.read' },
 ];

@@ -6,6 +6,8 @@ export const instructorKeys = {
   all: ['instructors'] as const,
   lists: () => [...instructorKeys.all, 'list'] as const,
   list: (params: InstructorListParams) => [...instructorKeys.lists(), params] as const,
+  /** Under lists(), so every change that invalidates the lists refreshes the choice list too. */
+  options: () => [...instructorKeys.lists(), 'options'] as const,
   details: () => [...instructorKeys.all, 'detail'] as const,
   detail: (id: string) => [...instructorKeys.details(), id] as const,
 };

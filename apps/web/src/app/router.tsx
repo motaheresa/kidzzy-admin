@@ -1,5 +1,8 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { GroupPage } from '@/pages/groups/GroupPage';
+import { GroupsPage } from '@/pages/groups/GroupsPage';
+import { NewGroupPage } from '@/pages/groups/NewGroupPage';
 import { HomePage } from '@/pages/HomePage';
 import { EditInstructorPage } from '@/pages/instructors/EditInstructorPage';
 import { InstructorPage } from '@/pages/instructors/InstructorPage';
@@ -23,6 +26,8 @@ import { RequirePermission } from './RequirePermission';
  *     PublicLayout     /login        signed-in users are sent home
  *     ProtectedLayout  /             signed-out users are sent to /login?returnTo=…
  *       /change-password   any signed-in user; the only screen during a temporary password
+ *       RequirePermission groups.read          /groups, /groups/:id
+ *       RequirePermission groups.create        /groups/new
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission instructors.read     /instructors, /instructors/:id
@@ -61,6 +66,17 @@ export const routes: RouteObject[] = [
           { path: '/', element: <HomePage /> },
           // Every signed-in user may change their password: no RequirePermission (US-02).
           { path: '/change-password', element: <ChangePasswordPage /> },
+          {
+            element: <RequirePermission permission="groups.read" />,
+            children: [
+              { path: '/groups', element: <GroupsPage /> },
+              { path: '/groups/:id', element: <GroupPage /> },
+            ],
+          },
+          {
+            element: <RequirePermission permission="groups.create" />,
+            children: [{ path: '/groups/new', element: <NewGroupPage /> }],
+          },
           {
             element: <RequirePermission permission="students.read" />,
             children: [
