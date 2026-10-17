@@ -110,6 +110,32 @@ describe('students list', () => {
     await waitFor(() => expect(calls.at(-1)?.url.searchParams.get('isActive')).toBe('false'));
   });
 
+  it('searches by name or code through the URL, with its own empty state (US-06)', async () => {
+    api(admin, {
+      'GET /students': (url) =>
+        json(200, page(url.searchParams.get('search') === 'احمد' ? [] : [student])),
+    });
+    const router = renderAt('/students?page=2');
+    await screen.findByRole('link', { name: 'طالب 1' });
+
+    await userEvent.setup().type(screen.getByRole('searchbox', { name: 'دور على طالب' }), 'احمد');
+
+    expect(await screen.findByText('مفيش طالب بالاسم او الكود ده')).toBeInTheDocument();
+    // Typing goes back to page 1 and keeps the search in the URL.
+    expect(decodeURIComponent(router.state.location.search)).toBe('?search=احمد');
+    const last = calls.filter((c) => c.url.pathname.endsWith('/students')).at(-1);
+    expect(last?.url.searchParams.get('search')).toBe('احمد');
+    expect(last?.url.searchParams.get('page')).toBe('1');
+    expect(screen.queryByRole('link', { name: 'اضافة طالب' })).toBeInTheDocument();
+  });
+
+  it('starts from the search in the URL', async () => {
+    api(admin, { 'GET /students': () => json(200, page([student])) });
+    renderAt('/students?search=KC-001');
+    expect(await screen.findByRole('searchbox', { name: 'دور على طالب' })).toHaveValue('KC-001');
+    await waitFor(() => expect(calls.at(-1)?.url.searchParams.get('search')).toBe('KC-001'));
+  });
+
   it('tells an instructor that their students will appear here, with no add button', async () => {
     api(instructorUser, { 'GET /students': () => json(200, page([])) });
     renderAt('/students');

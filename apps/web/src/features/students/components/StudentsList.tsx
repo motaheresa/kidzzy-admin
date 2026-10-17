@@ -5,6 +5,7 @@ import {
   Button,
   EmptyState,
   Pagination,
+  SearchInput,
   Skeleton,
   Table,
   TableBody,
@@ -27,13 +28,32 @@ const ACTIVE_FILTERS = [
   { value: 'inactive', label: 'متوقفين', isActive: false },
 ] as const;
 
+/** What the empty list says, from the most specific reason to the least. */
+function emptyText(ownOnly: boolean, search: string, isActive: boolean | undefined) {
+  if (ownOnly) {
+    return {
+      title: 'مفيش طلاب في جروباتك لسه',
+      description: 'الطلاب اللي في الجروبات اللي بتدرسها هيظهروا هنا.',
+    };
+  }
+  if (search) {
+    return {
+      title: 'مفيش طالب بالاسم او الكود ده',
+      description: 'جرب جزء من الاسم او الكود، او شيل الفلتر.',
+    };
+  }
+  if (isActive !== undefined)
+    return { title: 'مفيش طلاب بالحالة دي', description: 'جرب فلتر تاني.' };
+  return { title: 'مفيش طلاب لسه', description: 'ابدأ باضافة اول طالب.' };
+}
+
 /**
- * The students list (US-05): the active filter and the page kept in the URL, a table with a link
- * to each student, and empty and error states. The search box arrives with US-06.
+ * The students list (US-05, US-06): search by name or code, the active filter and the page, all
+ * kept in the URL; a table with a link to each student; empty and error states.
  */
 export function StudentsList() {
-  const { page, isActive, setPage, setIsActive } = useListParams();
-  const students = useStudents({ page, isActive });
+  const { page, search, isActive, setPage, setSearch, setIsActive } = useListParams();
+  const students = useStudents({ page, search, isActive });
   const { can, scopeFor } = usePermissions();
   const canManage = can('students.manage');
   // An instructor reads only their own students: those of the groups they teach (US-07/08).
@@ -52,6 +72,12 @@ export function StudentsList() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
+        <SearchInput
+          label="دور على طالب"
+          placeholder="الاسم او الكود"
+          defaultValue={search}
+          onSearch={setSearch}
+        />
         <ToggleGroup
           type="single"
           aria-label="الحالة"
@@ -87,21 +113,10 @@ export function StudentsList() {
       ) : students.data.data.length === 0 ? (
         <EmptyState
           icon={<GraduationCapIcon aria-hidden="true" />}
-          title={
-            ownOnly
-              ? 'مفيش طلاب في جروباتك لسه'
-              : isActive !== undefined
-                ? 'مفيش طلاب بالحالة دي'
-                : 'مفيش طلاب لسه'
+          {...emptyText(ownOnly, search, isActive)}
+          action={
+            !ownOnly && !search && isActive === undefined ? addButton || undefined : undefined
           }
-          description={
-            ownOnly
-              ? 'الطلاب اللي في الجروبات اللي بتدرسها هيظهروا هنا.'
-              : isActive !== undefined
-                ? 'جرب فلتر تاني.'
-                : 'ابدأ باضافة اول طالب.'
-          }
-          action={!ownOnly && isActive === undefined ? addButton || undefined : undefined}
         />
       ) : (
         <>
