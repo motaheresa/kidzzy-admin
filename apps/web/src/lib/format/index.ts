@@ -20,3 +20,12 @@ export function formatMoney(amount: string): string {
 export function formatDate(value: Date | string, timeZone = 'Africa/Cairo'): string {
   return new Intl.DateTimeFormat(LOCALE, { dateStyle: 'long', timeZone }).format(new Date(value));
 }
+
+/** A date and time in the academy's timezone, e.g. "16 أكتوبر 2026، 4:00 م". */
+export function formatDateTime(value: Date | string, timeZone = 'Africa/Cairo'): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    dateStyle: 'long',
+    timeStyle: 'short',
+    timeZone,
+  }).format(new Date(value));
+}

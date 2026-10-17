@@ -53,6 +53,8 @@ export const ErrorCode = {
   PasswordUnchanged: 'PASSWORD_UNCHANGED',
   Forbidden: 'FORBIDDEN',
   NotFound: 'NOT_FOUND',
+  ScheduleOverlap: 'SCHEDULE_OVERLAP',
+  InstructorNotAssignable: 'INSTRUCTOR_NOT_ASSIGNABLE',
   EmailTaken: 'EMAIL_TAKEN',
   PhoneTaken: 'PHONE_TAKEN',
   SessionNotScheduled: 'SESSION_NOT_SCHEDULED',
@@ -142,6 +144,53 @@ export interface InstructorCreate {
   email?: string;
   phone?: string;
   temporaryPassword: string;
+}
+
+/** One weekly meeting of a group (openapi.yaml: ScheduleSlot). */
+export interface ScheduleSlot {
+  /** 0 = Sunday … 6 = Saturday */
+  weekday: number;
+  /** Academy-local "HH:MM" */
+  startTime: string;
+  durationMin: number;
+}
+
+/** A group with its weekly schedule (openapi.yaml: Group). */
+export interface Group {
+  id: string;
+  name: string;
+  level: string;
+  instructor: GroupRef;
+  /** Academy-local date, YYYY-MM-DD */
+  startDate: string;
+  isActive: boolean;
+  schedule: ScheduleSlot[];
+  studentCount: number;
+  heldCount: number;
+  /** ISO 8601, UTC */
+  nextSessionAt: string | null;
+}
+
+/** POST /groups body (openapi.yaml: GroupCreate). */
+export interface GroupCreate {
+  name: string;
+  level: string;
+  instructorId: string;
+  startDate: string;
+  schedule: ScheduleSlot[];
+}
+
+/** PATCH /groups/{id} body (openapi.yaml: GroupUpdate). */
+export interface GroupUpdate {
+  name?: string;
+  level?: string;
+  instructorId?: string;
+  isActive?: boolean;
+}
+
+/** PUT /groups/{id}/schedule body (openapi.yaml: ScheduleReplace). */
+export interface ScheduleReplace {
+  schedule: ScheduleSlot[];
 }
 
 /** A payment cycle (openapi.yaml: PaymentCycle). Money is a decimal string in EGP. */

@@ -1,0 +1,137 @@
+import { Injectable } from '@nestjs/common';
+import { TransactionHost } from '@nestjs-cls/transactional';
+import type { ScheduleSlot } from '@kidzzy/shared';
+import { normalizeSearchText } from '../../common/normalize/search-text';
+import type { PageWindow } from '../../common/pagination/page';
+import { escapeLike } from '../../common/search/escape-like';
+import { Prisma } from '../../generated/prisma/client';
+import type { TenantTransactionalAdapter } from '../prisma/transaction';
+import { TenantContext } from '../tenancy/tenant-context';
+import { stringToTime } from './schedule';
+
+/** A group with its instructor's name and its weekly slots, as the mapper needs them. */
+export interface GroupRow {
+  id: string;
+  name: string;
+  level: string;
+  startDate: Date;
+  isActive: boolean;
+  instructor: { id: string; name: string };
+  slots: { weekday: number; startTime: Date; durationMin: number }[];
+}
+
+export interface GroupFilter {
+  search?: string;
+  isActive?: boolean;
+  instructorId?: string;
+}
+
+const GROUP_SELECT = {
+  id: true,
+  name: true,
+  level: true,
+  startDate: true,
+  isActive: true,
+  instructor: { select: { id: true, name: true } },
+  slots: {
+    select: { weekday: true, startTime: true, durationMin: true },
+    orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
+  },
+} as const satisfies Prisma.GroupSelect;
+
+/**
+ * Reads and writes groups with their weekly slots (US-07). Queries go through `txHost.tx` (the
+ * open transaction or `prisma.db`), limited to the academy in TenantContext. The list is raw
+ * SQL, which is never scoped automatically: it filters academy_id itself.
+ */
+@Injectable()
+export class GroupRepository {
+  constructor(
+    private readonly txHost: TransactionHost<TenantTransactionalAdapter>,
+    private readonly tenant: TenantContext,
+  ) {}
+
+  /**
+   * One page of groups, sorted by name, and the total that match. The search matches part of
+   * the name or the level in their search form (escapeLike, so % and _ are literal). The SQL
+   * only picks ids; rows are read through the scoped client.
+   */
+  async list(
+    filter: GroupFilter,
+    window: PageWindow,
+  ): Promise<{ rows: GroupRow[]; total: number }> {
+    const conditions = [Prisma.sql`g.academy_id = ${this.tenant.requireAcademyId()}::uuid`];
+    if (filter.isActive !== undefined) {
+      conditions.push(Prisma.sql`g.is_active = ${filter.isActive}`);
+    }
+    if (filter.instructorId) {
+      conditions.push(Prisma.sql`g.instructor_id = ${filter.instructorId}::uuid`);
+    }
+    const search = filter.search ? normalizeSearchText(filter.search) : '';
+    if (search) {
+      conditions.push(Prisma.sql`g.search_text LIKE ${`%${escapeLike(search)}%`} ESCAPE '\\'`);
+    }
+    const where = Prisma.join(conditions, ' AND ');
+
+    const [counted] = await this.txHost.tx.$queryRaw<{ total: bigint }[]>`
+      SELECT count(*) AS total FROM groups g WHERE ${where}`;
+    const ids = await this.txHost.tx.$queryRaw<{ id: string }[]>`
+      SELECT g.id FROM groups g WHERE ${where}
+      ORDER BY g.name, g.id
+      LIMIT ${window.take} OFFSET ${window.skip}`;
+
+    const rows = await this.txHost.tx.group.findMany({
+      where: { id: { in: ids.map(({ id }) => id) } },
+      select: GROUP_SELECT,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return {
+      rows: ids.flatMap(({ id }) => byId.get(id) ?? []),
+      total: Number(counted?.total ?? 0),
+    };
+  }
+
+  /** The group in the current academy, or null (unknown id or another academy). */
+  findById(id: string): Promise<GroupRow | null> {
+    return this.txHost.tx.group.findFirst({ where: { id }, select: GROUP_SELECT });
+  }
+
+  /**
+   * Creates the group and its slots. Slots are created with createMany and an explicit
+   * academyId (nested creates are not tenant-scoped by the extension).
+   * The caller wraps it in @Transactional(): the group and its slots land together.
+   */
+  async create(input: {
+    name: string;
+    level: string;
+    instructorId: string;
+    startDate: string;
+    slots: ScheduleSlot[];
+  }): Promise<GroupRow> {
+    const academyId = this.tenant.requireAcademyId();
+    const group = await this.txHost.tx.group.create({
+      data: {
+        academyId,
+        name: input.name,
+        level: input.level,
+        searchText: normalizeSearchText(`${input.name} ${input.level}`),
+        instructorId: input.instructorId,
+        startDate: new Date(`${input.startDate}T00:00:00.000Z`),
+      },
+      select: { id: true },
+    });
+    await this.txHost.tx.scheduleSlot.createMany({
+      data: input.slots.map((slot) => ({
+        academyId,
+        groupId: group.id,
+        weekday: slot.weekday,
+        startTime: stringToTime(slot.startTime),
+        durationMin: slot.durationMin,
+      })),
+    });
+    return this.txHost.tx.group.findFirstOrThrow({
+      where: { id: group.id },
+      select: GROUP_SELECT,
+    });
+  }
+}

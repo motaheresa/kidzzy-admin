@@ -21,6 +21,7 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
+  SelectField,
   Skeleton,
   Spinner,
   Table,
@@ -348,6 +349,15 @@ export function DesignSystemPage() {
             dir="ltr"
             className="text-start"
           />
+          <SelectField label="المدرس" hint="القائمة بتفتح بقائمة الموبايل">
+            <option value="">اختار المدرس</option>
+            <option value="1">منى عادل</option>
+            <option value="2">أحمد سمير</option>
+          </SelectField>
+          <SelectField label="اليوم" error="اختار اليوم" defaultValue="">
+            <option value="">اختار</option>
+            <option value="6">السبت</option>
+          </SelectField>
           <FormField label="مقفول" disabled defaultValue="مش متاح" />
         </div>
       </Section>

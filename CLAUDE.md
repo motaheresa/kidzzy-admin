@@ -83,8 +83,8 @@ features/<feature>/hooks/      TanStack Query useQuery / useMutation over those 
 features/<feature>/components/ the feature's components
 features/<feature>/types/      its types
 features/<feature>/index.ts    its public API: the only file other folders import
-components/ui/atoms/        shadcn/ui primitives on our tokens (button, input, textarea, label, alert, alert-dialog, card, badge, table, toggle-group, spinner, skeleton)
-components/ui/molecules/    our combinations (FormField, TextareaField, PageHeader, EmptyState, ConfirmDialog, SearchInput, Pagination, DetailList, FullScreenMessage, Toaster)
+components/ui/atoms/        shadcn/ui primitives on our tokens (button, input, textarea, label, alert, alert-dialog, card, badge, select, table, toggle-group, spinner, skeleton)
+components/ui/molecules/    our combinations (FormField, SelectField, TextareaField, PageHeader, EmptyState, ConfirmDialog, SearchInput, Pagination, DetailList, FullScreenMessage, Toaster)
 lib/                        http (client), query, errors, routing helpers, hooks (useListParams)
 ```
 

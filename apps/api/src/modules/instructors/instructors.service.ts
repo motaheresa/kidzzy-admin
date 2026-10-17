@@ -36,8 +36,7 @@ export class InstructorsService {
 
   async get(id: string): Promise<InstructorDetail> {
     const instructor = await this.findOrThrow(id);
-    // TODO(US-07): the groups this instructor teaches, once groups exist.
-    return toInstructorDetail(instructor, []);
+    return toInstructorDetail(instructor, await this.instructors.findGroupRefs(id));
   }
 
   /**
@@ -78,7 +77,7 @@ export class InstructorsService {
    * AC: a deactivated instructor cannot log in (login only finds active users), and every
    * session ends: no refresh works, so the access token they hold stops within 15 minutes
    * (ADR-0013). Both writes in one transaction. Idempotent.
-   * TODO(US-07): an inactive instructor cannot be assigned to a new group.
+   * An inactive instructor cannot be given a new group: GroupsService checks findAssignable.
    */
   @Transactional()
   async deactivate(id: string): Promise<Instructor> {

@@ -4,4 +4,5 @@ export { CreateInstructorForm } from './components/CreateInstructorForm';
 export { EditInstructorForm } from './components/EditInstructorForm';
 export { InstructorDetails } from './components/InstructorDetails';
 export { InstructorsList } from './components/InstructorsList';
+export { useInstructorOptions } from './hooks/useInstructorOptions';
 export type { Instructor, InstructorDetail } from './types';

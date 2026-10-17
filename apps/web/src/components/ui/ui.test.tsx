@@ -12,6 +12,7 @@ import {
   Pagination,
   SEARCH_DEBOUNCE_MS,
   SearchInput,
+  SelectField,
   Spinner,
   TextareaField,
   ToggleGroup,
@@ -112,6 +113,26 @@ describe('FormField', () => {
   it('keeps an id given by the caller', () => {
     render(<FormField label="كود الطالب" id="student-code" />);
     expect(screen.getByLabelText('كود الطالب')).toHaveAttribute('id', 'student-code');
+  });
+});
+
+describe('SelectField', () => {
+  it('connects the label, hint and error to a native select, and picks an option', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <SelectField label="المدرس" hint="اختار واحد" error="اختار المدرس" onChange={onChange}>
+        <option value="">اختار</option>
+        <option value="u1">منى</option>
+      </SelectField>,
+    );
+    const select = screen.getByLabelText('المدرس');
+    expect(select.tagName).toBe('SELECT');
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveAccessibleDescription('اختار واحد اختار المدرس');
+    await user.selectOptions(select, 'منى');
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(select).toHaveValue('u1');
   });
 });
 

@@ -19,6 +19,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   PASSWORD_UNCHANGED: 'اختار كلمة سر جديدة غير الحالية',
   FORBIDDEN: 'مش مسموح لك تعمل ده',
   NOT_FOUND: 'الحاجة دي مش موجودة',
+  SCHEDULE_OVERLAP: 'فيه ميعادين متداخلين في نفس اليوم، او ميعاد بيخلص بعد نص الليل',
+  INSTRUCTOR_NOT_ASSIGNABLE: 'المدرس ده مش شغال، اختار مدرس تاني',
   EMAIL_TAKEN: 'الايميل ده مستخدم لحساب تاني',
   PHONE_TAKEN: 'رقم الموبايل ده مستخدم لحساب تاني',
   SESSION_NOT_SCHEDULED: 'الحصة دي مش في حالة مجدولة',
@@ -67,6 +69,13 @@ export const FIELD_MESSAGES: Record<string, string> = {
   parentName: 'اكتب اسم ولي الامر',
   parentPhone: 'اكتب رقم موبايل صحيح لولي الامر',
   notes: 'الملاحظات 1000 حرف على الاكتر',
+  level: 'اكتب المستوى او الكورس',
+  instructorId: 'اختار المدرس',
+  startDate: 'اختار تاريخ البداية',
+  schedule: 'ضيف ميعاد واحد على الاقل، ومواعيد صح',
+  weekday: 'اختار اليوم',
+  startTime: 'اكتب وقت صح، مثلا 16:00',
+  durationMin: 'المدة من 15 لـ 240 دقيقة',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';
@@ -80,6 +89,8 @@ export const CODE_FIELDS: Partial<Record<ErrorCode, string>> = {
   EMAIL_TAKEN: 'email',
   PHONE_TAKEN: 'phone',
   STUDENT_CODE_TAKEN: 'code',
+  SCHEDULE_OVERLAP: 'schedule',
+  INSTRUCTOR_NOT_ASSIGNABLE: 'instructorId',
   CURRENT_PASSWORD_INCORRECT: 'currentPassword',
   PASSWORD_UNCHANGED: 'newPassword',
 };

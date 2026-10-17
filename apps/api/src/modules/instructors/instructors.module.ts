@@ -11,5 +11,7 @@ import { InstructorsService } from './instructors.service';
 @Module({
   controllers: [InstructorsController],
   providers: [InstructorsService, InstructorRepository],
+  // GroupsService asks it whether an instructor can be given a group (findAssignable).
+  exports: [InstructorRepository],
 })
 export class InstructorsModule {}
