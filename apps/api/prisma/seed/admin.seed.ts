@@ -1,6 +1,7 @@
 import { SystemRole } from '@kidzzy/shared';
 import { hash } from '@node-rs/argon2';
 import { normalizeEmail } from '../../src/common/normalize/login-identifiers';
+import { normalizeSearchText } from '../../src/common/normalize/search-text';
 import type { PrismaClient } from '../../src/generated/prisma/client';
 
 /**
@@ -29,6 +30,7 @@ export async function seedAdmin(
     data: {
       academyId,
       name: admin.name,
+      nameSearch: normalizeSearchText(admin.name),
       email,
       passwordHash: await hash(admin.password),
       roles: { create: { roleId: adminRole.id } },

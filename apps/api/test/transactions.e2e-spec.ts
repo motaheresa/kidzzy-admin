@@ -44,10 +44,22 @@ describe('Transactions (e2e)', () => {
       timezone: 'Africa/Cairo',
     }));
     ({ id: alice } = await prisma.unscoped.user.create({
-      data: { academyId: academyA, name: 'alice', email: email('alice'), passwordHash: 'x' },
+      data: {
+        academyId: academyA,
+        name: 'alice',
+        nameSearch: 'alice',
+        email: email('alice'),
+        passwordHash: 'x',
+      },
     }));
     ({ id: bob } = await prisma.unscoped.user.create({
-      data: { academyId: academyB, name: 'bob', email: email('bob'), passwordHash: 'x' },
+      data: {
+        academyId: academyB,
+        name: 'bob',
+        nameSearch: 'bob',
+        email: email('bob'),
+        passwordHash: 'x',
+      },
     }));
   });
 
@@ -82,6 +94,7 @@ describe('Transactions (e2e)', () => {
             data: {
               academyId: academyB,
               name: 'mallory',
+              nameSearch: 'mallory',
               email: email('mallory'),
               passwordHash: 'x',
             },
@@ -107,7 +120,13 @@ describe('Transactions (e2e)', () => {
             expiresAt: new Date(Date.now() + 60_000),
           });
           await txHost.tx.user.create({
-            data: { academyId: academyA, name: 'newcomer', email: newcomer, passwordHash: 'x' },
+            data: {
+              academyId: academyA,
+              name: 'newcomer',
+              nameSearch: 'newcomer',
+              email: newcomer,
+              passwordHash: 'x',
+            },
           });
           // Both writes are visible inside the transaction...
           expect(await txHost.tx.refreshToken.count({ where: { familyId } })).toBe(1);

@@ -3,9 +3,11 @@ import { TransactionHost } from '@nestjs-cls/transactional';
 import { ErrorCode } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { normalizePhone } from '../../common/normalize/login-identifiers';
+import { normalizeSearchText } from '../../common/normalize/search-text';
 import { normalizeStudentCode } from '../../common/normalize/student-code';
 import type { PageWindow } from '../../common/pagination/page';
-import type { Prisma } from '../../generated/prisma/client';
+import { escapeLike } from '../../common/search/escape-like';
+import { Prisma } from '../../generated/prisma/client';
 import { uniqueViolationIndex } from '../prisma/prisma-errors';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
@@ -55,24 +57,59 @@ export class StudentRepository {
     private readonly tenant: TenantContext,
   ) {}
 
-  /** One page of students, sorted by name, and the total that match. */
+  /**
+   * One page of students and the total that match (US-05, US-06).
+   *
+   * With a search, a student matches on part of the name in its search form (normalizeSearchText:
+   * "احمد" finds "أحمد", "فاطمه" finds "فاطمة") or part of the code. AC: an exact code match comes
+   * first; then by name. Without a search, by name.
+   *
+   * Raw SQL, because Prisma's `contains` does not escape % and _ (escapeLike + ESCAPE '\' here)
+   * and cannot sort by "is this the exact code". Raw SQL is never scoped automatically, so it
+   * filters academy_id itself. Values are bound parameters, never pasted into the SQL text.
+   * The SQL only picks the ids; the rows are then read through the scoped client.
+   */
   async list(
-    filter: { isActive?: boolean },
+    filter: { isActive?: boolean; search?: string },
     window: PageWindow,
   ): Promise<{ rows: StudentRow[]; total: number }> {
-    const where: Prisma.StudentWhereInput =
-      filter.isActive === undefined ? {} : { isActive: filter.isActive };
-    const [rows, total] = await Promise.all([
-      this.txHost.tx.student.findMany({
-        where,
-        select: STUDENT_SELECT,
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
-        skip: window.skip,
-        take: window.take,
-      }),
-      this.txHost.tx.student.count({ where }),
-    ]);
-    return { rows, total };
+    const academyId = this.tenant.requireAcademyId();
+    const conditions = [Prisma.sql`s.academy_id = ${academyId}::uuid`];
+    if (filter.isActive !== undefined) {
+      conditions.push(Prisma.sql`s.is_active = ${filter.isActive}`);
+    }
+
+    // A code is only letters and digits, which the search form keeps; so a search that is empty
+    // in its search form (spaces, tatweel, diacritics only) is no search at all.
+    const name = filter.search ? normalizeSearchText(filter.search) : '';
+    const code = name ? normalizeStudentCode(filter.search ?? '') : '';
+    if (name) {
+      conditions.push(Prisma.sql`(
+        s.name_search LIKE ${`%${escapeLike(name)}%`} ESCAPE '\\'
+        OR s.code LIKE ${`%${escapeLike(code)}%`} ESCAPE '\\')`);
+    }
+
+    const where = Prisma.join(conditions, ' AND ');
+    const order = code
+      ? Prisma.sql`(s.code = ${code}) DESC, s.name, s.id`
+      : Prisma.sql`s.name, s.id`;
+
+    const [counted] = await this.txHost.tx.$queryRaw<{ total: bigint }[]>`
+      SELECT count(*) AS total FROM students s WHERE ${where}`;
+    const ids = await this.txHost.tx.$queryRaw<{ id: string }[]>`
+      SELECT s.id FROM students s WHERE ${where}
+      ORDER BY ${order}
+      LIMIT ${window.take} OFFSET ${window.skip}`;
+
+    const rows = await this.txHost.tx.student.findMany({
+      where: { id: { in: ids.map(({ id }) => id) } },
+      select: STUDENT_SELECT,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return {
+      rows: ids.flatMap(({ id }) => byId.get(id) ?? []),
+      total: Number(counted?.total ?? 0),
+    };
   }
 
   /** The student in the current academy, or null (unknown id or another academy). */
@@ -94,6 +131,7 @@ export class StudentRepository {
         data: {
           academyId: this.tenant.requireAcademyId(),
           ...input,
+          nameSearch: normalizeSearchText(input.name),
           code: normalizeStudentCode(input.code),
           parentPhone: normalizePhone(input.parentPhone),
         },
@@ -107,6 +145,7 @@ export class StudentRepository {
   /** Changes the fields given; null clears age or notes. Call findById first. */
   async update(id: string, changes: StudentChanges): Promise<StudentRow> {
     const data: Prisma.StudentUpdateInput = { ...changes };
+    if (changes.name !== undefined) data.nameSearch = normalizeSearchText(changes.name);
     if (changes.code !== undefined) data.code = normalizeStudentCode(changes.code);
     if (changes.parentPhone !== undefined) data.parentPhone = normalizePhone(changes.parentPhone);
     try {

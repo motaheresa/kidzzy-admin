@@ -3,6 +3,7 @@ import { TransactionHost } from '@nestjs-cls/transactional';
 import { ErrorCode, SystemRole } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { normalizeEmail, normalizePhone } from '../../common/normalize/login-identifiers';
+import { normalizeSearchText } from '../../common/normalize/search-text';
 import type { PageWindow } from '../../common/pagination/page';
 import { escapeLike } from '../../common/search/escape-like';
 import { Prisma } from '../../generated/prisma/client';
@@ -125,6 +126,7 @@ export class InstructorRepository {
         data: {
           academyId: this.tenant.requireAcademyId(),
           name: input.name,
+          nameSearch: normalizeSearchText(input.name),
           email: input.email === null ? null : normalizeEmail(input.email),
           phone: input.phone === null ? null : normalizePhone(input.phone),
           passwordHash: input.passwordHash,
@@ -145,7 +147,10 @@ export class InstructorRepository {
     changes: { name?: string; email?: string | null; phone?: string | null },
   ): Promise<InstructorRow> {
     const data: Prisma.UserUpdateInput = {};
-    if (changes.name !== undefined) data.name = changes.name;
+    if (changes.name !== undefined) {
+      data.name = changes.name;
+      data.nameSearch = normalizeSearchText(changes.name);
+    }
     if (changes.email !== undefined) {
       data.email = changes.email === null ? null : normalizeEmail(changes.email);
     }
@@ -200,14 +205,17 @@ export class InstructorRepository {
 }
 
 /**
- * The search matches part of the name (any case), of the email, or of the phone's digits.
- * TODO(SCRUM-19): match the name through the normalized Arabic search column.
+ * The search matches part of the name in its search form (normalizeSearchText: "احمد" finds
+ * "أحمد", any case), of the email, or of the phone's digits.
  */
 function searchAlternatives(search: string): Prisma.Sql[] {
   const alternatives = [
-    Prisma.sql`u.name ILIKE ${`%${escapeLike(search)}%`} ESCAPE '\\'`,
     Prisma.sql`u.email LIKE ${`%${escapeLike(normalizeEmail(search))}%`} ESCAPE '\\'`,
   ];
+  const name = normalizeSearchText(search);
+  if (name) {
+    alternatives.push(Prisma.sql`u.name_search LIKE ${`%${escapeLike(name)}%`} ESCAPE '\\'`);
+  }
   const digits = search.replace(/\D/g, '');
   if (digits) alternatives.push(Prisma.sql`u.phone LIKE ${`%${digits}%`}`);
   return alternatives;
