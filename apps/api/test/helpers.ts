@@ -10,6 +10,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
 import { normalizeSearchText } from '../src/common/normalize/search-text';
+import { Clock } from '../src/modules/sessions/clock';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /**
@@ -28,6 +29,8 @@ export async function createTestApp(
   options: {
     loginRateLimit?: number;
     passwordRateLimit?: number;
+    /** Fixes the time the API sees (Clock), so generation does not depend on the day of the run. */
+    now?: Date;
     extraControllers?: Type<unknown>[];
   } = {},
 ): Promise<INestApplication<App>> {
@@ -40,6 +43,10 @@ export async function createTestApp(
       { name: 'login', ttl: 60_000, limit: options.loginRateLimit ?? 1000 },
       { name: 'password', ttl: 60_000, limit: options.passwordRateLimit ?? 1000 },
     ]);
+  }
+  if (options.now) {
+    const now = options.now;
+    builder.overrideProvider(Clock).useValue({ now: () => new Date(now) });
   }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();
@@ -89,6 +96,7 @@ export async function createUser(
 /** Deletes everything a test academy owns, in foreign-key order. */
 export async function removeAcademy(prisma: PrismaService, academyId: string): Promise<void> {
   const where = { academyId };
+  await prisma.unscoped.session.deleteMany({ where });
   await prisma.unscoped.scheduleSlot.deleteMany({ where });
   await prisma.unscoped.group.deleteMany({ where });
   await prisma.unscoped.student.deleteMany({ where });

@@ -10,6 +10,7 @@ describe('TENANT_MODELS', () => {
       'RefreshToken',
       'Role',
       'ScheduleSlot',
+      'Session',
       'Student',
       'User',
     ]);

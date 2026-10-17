@@ -2698,11 +2698,12 @@ components:
           type: integer
         heldCount:
           type: integer
+          description: Sessions of the group marked Held
         nextSessionAt:
           anyOf:
             - type: string
               format: date-time
-              description: ISO 8601, UTC
+              description: ISO 8601, UTC. The earliest Scheduled session still ahead
             - type: 'null'
       additionalProperties: false
       required:

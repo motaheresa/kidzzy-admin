@@ -246,6 +246,16 @@ describe('group detail', () => {
     expect(screen.getByText('مفيش طلاب في الجروب لسه')).toBeInTheDocument();
   });
 
+  it('shows the numbers of the sessions: held count and the next session', async () => {
+    api(admin, {
+      [`GET /groups/${group.id}`]: () =>
+        json(200, { ...group, heldCount: 5, nextSessionAt: '2026-11-03T14:00:00.000Z' }),
+    });
+    renderAt(`/groups/${group.id}`);
+    expect(await screen.findByText('5')).toBeInTheDocument();
+    expect(screen.getByText(/3 نوفمبر 2026/)).toBeInTheDocument();
+  });
+
   it('AC-08: says the group is not the instructor’s own on 403, and not found on 404', async () => {
     api(instructorUser, { [`GET /groups/${group.id}`]: () => problem(403, 'FORBIDDEN') });
     renderAt(`/groups/${group.id}`);

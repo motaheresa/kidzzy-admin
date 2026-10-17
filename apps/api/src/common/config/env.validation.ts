@@ -5,6 +5,7 @@ import {
   IsInt,
   IsString,
   Matches,
+  Max,
   Min,
   MinLength,
   NotEquals,
@@ -21,6 +22,7 @@ export type NodeEnv = (typeof NODE_ENVS)[number];
 const DEFAULTS = {
   LOGIN_RATE_LIMIT: '5',
   COOKIE_SECURE: 'true',
+  SESSION_GENERATION_WEEKS: '4',
 } as const;
 
 /** "5" -> 5; anything that is not a whole number stays as it is, so @IsInt rejects it. */
@@ -67,6 +69,12 @@ export class EnvironmentVariables {
   @Transform(({ value }) => toBoolean(value))
   @IsBoolean({ message: 'COOKIE_SECURE must be true or false' })
   COOKIE_SECURE!: boolean;
+
+  @Transform(({ value }) => toInteger(value))
+  @Max(26, { message: 'SESSION_GENERATION_WEEKS must be at most 26' })
+  @Min(1, { message: 'SESSION_GENERATION_WEEKS must be at least 1' })
+  @IsInt({ message: 'SESSION_GENERATION_WEEKS must be a whole number' })
+  SESSION_GENERATION_WEEKS!: number;
 }
 
 /**

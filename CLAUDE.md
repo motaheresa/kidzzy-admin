@@ -48,10 +48,12 @@ Run lint, typecheck and the tests before saying a change is done.
 ## Data access
 
 - Only repositories (`*.repository.ts`) query the database (see "Code structure"). They use `TransactionHost.tx`, which is the open transaction or `prisma.db`: queries on every model with `academyId` are limited to the academy in `TenantContext`, and throw `MissingTenantContextError` when there is none.
-- `prisma.unscoped` crosses academies; use it only in the seed, background jobs and repository methods whose name and comment say why (today `findLoginCandidates` and `findForRefresh`), and say why in the pull request.
+- `prisma.unscoped` crosses academies; use it only in the seed, background jobs and repository methods whose name and comment say why (today `findLoginCandidates`, `findForRefresh` and `AcademyRepository.listForJobs`), and say why in the pull request.
 - On create, still pass `academyId: tenant.requireAcademyId()`: the generated types require it, and the extension rejects any other academy.
 - Raw SQL is never scoped automatically; filter by `academy_id` yourself.
-- Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`.
+- Code outside an HTTP request (jobs, tests) wraps its work in `tenant.run(academyId, fn)`. A `@Cron` job (ADR-0007, `@nestjs/schedule`) lists the academies with `AcademyRepository.listForJobs`, then runs each academy's work inside `tenant.run`, logging a failure per academy so one does not stop the others (see `SessionGenerationJob`).
+- Time: timestamps are UTC, but a schedule's time is a local wall-clock time in the academy's IANA zone, and Egypt has daylight saving time. Turn a local date and time into an instant with `occurrenceInstant` (Luxon), never with a fixed offset. "Today" comes from the injectable `Clock`, so tests fix it (`createTestApp({ now })`).
+- A reference that may be null stays a composite foreign key through a mirror column: `sessions.slot_id` with `slot_academy_id`, set together by a CHECK and equal to `academy_id`.
 - Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
 - A new tenant table also gets `@@unique([id, academyId])`. A table that points at it uses a composite foreign key, `(x_id, academy_id)` referencing `x(id, academy_id)`, so a row can never reference another academy's record (SCRUM-57). `students` is the first table built this way.
 - Every email or phone that is written or looked up goes through `normalizeEmail` / `normalizePhone` (`src/common/normalize`); the database rejects any other form. Never match them with `mode: 'insensitive'`: Prisma sends it as `ILIKE`, where `%` and `_` are wildcards.

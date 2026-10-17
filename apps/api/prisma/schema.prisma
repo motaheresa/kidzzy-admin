@@ -37,6 +37,7 @@ model Academy {
   students      Student[]
   groups        Group[]
   scheduleSlots ScheduleSlot[]
+  sessions      Session[]
 
   @@map("academies")
 }
@@ -63,6 +64,7 @@ model User {
   roles         UserRole[]
   refreshTokens RefreshToken[]
   groups        Group[]
+  sessions      Session[]
 
   @@unique([academyId, email])
   @@unique([academyId, phone])
@@ -205,6 +207,7 @@ model Group {
   /// Composite foreign key: the instructor must belong to the same academy as the group.
   instructor User           @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
   slots      ScheduleSlot[]
+  sessions   Session[]
 
   /// Composite key for tenant-safe foreign keys (schedule_slots, sessions).
   @@unique([id, academyId])
@@ -225,11 +228,61 @@ model ScheduleSlot {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  group   Group   @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+  academy  Academy   @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  group    Group     @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+  sessions Session[]
 
   /// Composite key for tenant-safe foreign keys (sessions.slot_id).
   @@unique([id, academyId])
   @@index([groupId])
   @@map("schedule_slots")
+}
+
+/// scheduled, held or cancelled (BR-01). Only held sessions get a number (BR-03).
+enum SessionStatus {
+  scheduled
+  held
+  cancelled
+
+  @@map("session_status")
+}
+
+/// One meeting of a group (US-11). Generated from a weekly slot, or added as a make-up (null slot).
+/// Check constraints and the notes on the slot pair are in the sessions migration.
+model Session {
+  id             String        @id @default(uuid()) @db.Uuid
+  academyId      String        @map("academy_id") @db.Uuid
+  groupId        String        @map("group_id") @db.Uuid
+  /// Copied from the group when generated, so a later instructor change keeps history correct.
+  instructorId   String        @map("instructor_id") @db.Uuid
+  /// Null for make-up and extra sessions. slotAcademyId mirrors academyId whenever slotId is set:
+  /// an optional composite foreign key needs its own nullable column (see the migration).
+  slotId         String?       @map("slot_id") @db.Uuid
+  slotAcademyId  String?       @map("slot_academy_id") @db.Uuid
+  /// The slot's original academy-local date. A reschedule changes scheduledAt but keeps this, so
+  /// the slot is never generated again for that day (unique with slotId).
+  occurrenceDate DateTime?     @map("occurrence_date") @db.Date
+  scheduledAt    DateTime      @map("scheduled_at") @db.Timestamptz(3)
+  durationMin    Int           @map("duration_min") @db.SmallInt
+  status         SessionStatus @default(scheduled)
+  sessionNumber  Int?          @map("session_number")
+  isMakeup       Boolean       @default(false) @map("is_makeup")
+  cancelReason   String?       @map("cancel_reason")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy    Academy       @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  group      Group         @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor User          @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  slot       ScheduleSlot? @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
+
+  /// Generation inserts with ON CONFLICT DO NOTHING against this: running twice, or the job and a
+  /// request at once, never duplicates a day (AC). Rows with a null slot never conflict.
+  @@unique([slotId, occurrenceDate])
+  /// BR-03: a number is unique per group. Rows with a null number never conflict.
+  @@unique([groupId, sessionNumber])
+  /// Composite key for tenant-safe foreign keys (later: attendance, cycle_sessions).
+  @@unique([id, academyId])
+  @@index([groupId, scheduledAt])
+  @@map("sessions")
 }

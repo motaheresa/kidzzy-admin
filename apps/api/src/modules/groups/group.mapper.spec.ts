@@ -12,6 +12,8 @@ const row: GroupRow & { academyId: string; searchText: string } = {
     { weekday: 6, startTime: new Date('1970-01-01T16:00:00.000Z'), durationMin: 60 },
     { weekday: 2, startTime: new Date('1970-01-01T16:00:00.000Z'), durationMin: 60 },
   ],
+  _count: { sessions: 3 },
+  sessions: [{ scheduledAt: new Date('2026-11-03T14:00:00.000Z') }],
   // Columns the API must never show.
   academyId: 'a1',
   searchText: 'x',
@@ -19,7 +21,7 @@ const row: GroupRow & { academyId: string; searchText: string } = {
 
 describe('group mapper', () => {
   it('builds the Group response: local date, sorted schedule, no other column', () => {
-    expect(toGroup(row, { heldCount: 0, nextSessionAt: null })).toEqual({
+    expect(toGroup(row)).toEqual({
       id: 'g1',
       name: 'جروب A',
       level: 'Scratch 1',
@@ -31,8 +33,12 @@ describe('group mapper', () => {
         { weekday: 6, startTime: '16:00', durationMin: 60 },
       ],
       studentCount: 0,
-      heldCount: 0,
-      nextSessionAt: null,
+      heldCount: 3,
+      nextSessionAt: '2026-11-03T14:00:00.000Z',
     });
+  });
+
+  it('has no next session when none is ahead', () => {
+    expect(toGroup({ ...row, sessions: [] }).nextSessionAt).toBeNull();
   });
 });
