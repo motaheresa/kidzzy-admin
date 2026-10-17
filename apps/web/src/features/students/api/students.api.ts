@@ -22,6 +22,16 @@ export function listStudents(
   return http.get<Page<Student>>(`/students?${query.toString()}`, { signal });
 }
 
+/** How many students a picker shows for one search. */
+export const STUDENT_OPTIONS_SIZE = 10;
+
+/** GET /students?isActive=true: the active students matching a search, for a picker. */
+export function listStudentOptions(search: string, signal?: AbortSignal): Promise<Page<Student>> {
+  const query = new URLSearchParams({ isActive: 'true', pageSize: String(STUDENT_OPTIONS_SIZE) });
+  if (search) query.set('search', search);
+  return http.get<Page<Student>>(`/students?${query.toString()}`, { signal });
+}
+
 /** GET /students/{id} */
 export function getStudent(id: string, signal?: AbortSignal): Promise<Student> {
   return http.get<Student>(path(id), { signal });

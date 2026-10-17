@@ -1,4 +1,4 @@
-import { CalendarIcon, GraduationCapIcon, PencilIcon, UsersIcon } from 'lucide-react';
+import { CalendarIcon, PencilIcon, UsersIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   Alert,
@@ -20,7 +20,8 @@ import { GroupStatusBadge } from './GroupStatusBadge';
 
 /**
  * One group's screen (wireframe "Admin · Group"): name, level, instructor and start date, then
- * the weekly schedule and the numbers. The students and the sessions arrive with their stories.
+ * the weekly schedule and the numbers. The page puts the group's students under it (enrollments
+ * feature); the sessions arrive with their story.
  * An instructor who opens another instructor's group gets the API's 403 here (AC-08).
  */
 export function GroupDetails({ id }: { id: string }) {
@@ -122,20 +123,6 @@ export function GroupDetails({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>الطلاب</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EmptyState
-            icon={<GraduationCapIcon aria-hidden="true" />}
-            title="مفيش طلاب في الجروب لسه"
-            description="الطلاب هيظهروا هنا لما يتسجلوا في الجروب."
-            className="py-6"
-          />
-        </CardContent>
-      </Card>
     </div>
   );
 }

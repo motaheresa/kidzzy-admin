@@ -9,10 +9,14 @@ export function formatNumber(value: number): string {
   return numberFormat.format(value);
 }
 
-/** Money in EGP from the API's decimal string: "1500.00" -> "1,500.00 ج.م." */
+/**
+ * Money in EGP from the API's decimal string: "1500.00" -> "1,500.00 ج.م.". Intl.NumberFormat
+ * formats a numeric string as an exact decimal (ES2023), so money never becomes a JS number; the
+ * TypeScript lib in use only declares number, hence the cast.
+ */
 export function formatMoney(amount: string): string {
   return new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'EGP' }).format(
-    Number(amount),
+    amount as unknown as number,
   );
 }
 
@@ -28,4 +32,10 @@ export function formatDateTime(value: Date | string, timeZone = 'Africa/Cairo'):
     timeStyle: 'short',
     timeZone,
   }).format(new Date(value));
+}
+
+/** Today's date in the academy's timezone, YYYY-MM-DD (the API's date form). */
+export function localToday(timeZone = 'Africa/Cairo', now = new Date()): string {
+  // en-CA writes dates as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
 }

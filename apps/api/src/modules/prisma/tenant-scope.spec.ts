@@ -6,7 +6,10 @@ const A = 'academy-a';
 describe('TENANT_MODELS', () => {
   it('holds every model with academyId, and only those', () => {
     expect([...TENANT_MODELS].sort()).toEqual([
+      'Enrollment',
       'Group',
+      'PaymentCycle',
+      'PaymentPlan',
       'RefreshToken',
       'Role',
       'ScheduleSlot',

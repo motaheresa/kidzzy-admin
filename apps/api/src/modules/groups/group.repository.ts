@@ -25,8 +25,8 @@ export interface GroupRow {
   isActive: boolean;
   instructor: { id: string; name: string };
   slots: { weekday: number; startTime: Date; durationMin: number }[];
-  /** Held sessions of the group. */
-  _count: { sessions: number };
+  /** Held sessions, and open enrollments (the students in the group now). */
+  _count: { sessions: number; enrollments: number };
   /** At most one: the earliest Scheduled session still ahead. */
   sessions: { scheduledAt: Date }[];
 }
@@ -52,7 +52,12 @@ const groupSelect = (now: Date) =>
       select: { weekday: true, startTime: true, durationMin: true },
       orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
     },
-    _count: { select: { sessions: { where: { status: 'held' } } } },
+    _count: {
+      select: {
+        sessions: { where: { status: 'held' } },
+        enrollments: { where: { endDate: null } },
+      },
+    },
     sessions: {
       where: { status: 'scheduled', scheduledAt: { gt: now } },
       select: { scheduledAt: true },

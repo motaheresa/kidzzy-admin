@@ -278,9 +278,9 @@ describe('Students (e2e)', () => {
   });
 
   describe('permissions', () => {
-    it('an instructor (students.read:own) sees an empty list and gets 403 for one student', async () => {
-      // TODO(US-07/US-08): an instructor will see the students of the groups they teach.
-      // This pins today's behavior: no groups, so no students of their own.
+    it('an instructor (students.read:own) with no group sees no students and gets 403', async () => {
+      // Scope own is the students enrolled in the caller's groups (enrollments.e2e-spec.ts);
+      // this instructor teaches no group, so none are theirs.
       expect(await list({}, instructorToken)).toEqual({
         data: [],
         meta: { page: 1, pageSize: 20, total: 0 },

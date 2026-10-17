@@ -1,11 +1,14 @@
 import type { Student } from '@kidzzy/shared';
+import { toPaymentCycle } from '../payments/payment-cycle.mapper';
 import type { StudentRow } from './student.repository';
 
 /**
  * openapi.yaml: Student. Built field by field, so a new column never leaks into the API.
- * TODO(US-08): currentGroup from the open enrollment. TODO(US-12): currentCycle.
+ * currentGroup is the group of the open enrollment (US-08); currentCycle the cycle in progress.
  */
 export function toStudent(row: StudentRow): Student {
+  const group = row.enrollments[0]?.group;
+  const cycle = row.cycles[0];
   return {
     id: row.id,
     code: row.code,
@@ -15,7 +18,7 @@ export function toStudent(row: StudentRow): Student {
     parentPhone: row.parentPhone,
     notes: row.notes,
     isActive: row.isActive,
-    currentGroup: null,
-    currentCycle: null,
+    currentGroup: group ? { id: group.id, name: group.name } : null,
+    currentCycle: cycle ? toPaymentCycle(cycle) : null,
   };
 }

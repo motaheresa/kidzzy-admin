@@ -4,7 +4,7 @@ import { sortSlots, timeToString } from './schedule';
 
 /**
  * openapi.yaml: Group. Built field by field, so a new column never leaks into the API.
- * TODO(US-08): studentCount from the open enrollments.
+ * studentCount counts the open enrollments (US-08).
  */
 export function toGroup(row: GroupRow): Group {
   return {
@@ -21,7 +21,7 @@ export function toGroup(row: GroupRow): Group {
         durationMin: slot.durationMin,
       })),
     ),
-    studentCount: 0,
+    studentCount: row._count.enrollments,
     heldCount: row._count.sessions,
     nextSessionAt: row.sessions[0]?.scheduledAt.toISOString() ?? null,
   };

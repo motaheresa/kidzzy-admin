@@ -384,6 +384,7 @@ paths:
       tags:
         - Students
       summary: List and search students
+      description: Scope own (an instructor) lists only the students with an open enrollment in a group the caller teaches.
       operationId: listStudents
       x-permission: students.read
       x-story: US-06
@@ -406,6 +407,7 @@ paths:
           schema:
             type: string
             format: uuid
+          description: Students with an open enrollment in this group
         - name: isActive
           in: query
           required: false
@@ -525,7 +527,10 @@ paths:
       tags:
         - Students
       summary: Deactivate a student and end the enrollment
-      description: Nothing is deleted; the student's history and payments stay. Idempotent.
+      description:
+        Nothing is deleted; the student's history and payments stay. Idempotent. The open enrollment ends with
+        yesterday (academy-local) as its last day, or the day before its start when it starts later. The cycle in
+        progress and the plan stay with the student.
       operationId: deactivateStudent
       x-permission: students.manage
       x-story: US-05
@@ -872,6 +877,11 @@ paths:
       tags:
         - Groups
       summary: Enroll a student with a plan and starting point
+      description:
+        One transaction. A student enrolled for the first time gets plan version 1 and cycle 1, counting from
+        openingCount. A student who had cycles keeps the cycle in progress and its plan; a plan that differs from
+        their latest version becomes the next version, from the next cycle (BR-10), and an openingCount other than 0
+        is refused (STARTING_POINT_LOCKED). The start date must come after the end of the student's last enrollment.
       operationId: enrollStudent
       x-permission: enrollments.manage
       x-story: US-08, US-36
@@ -899,9 +909,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/EnrollConflict'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/EnrollRefused'
   /groups/{id}/attendance:
     get:
       tags:
@@ -2210,6 +2220,23 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    EnrollConflict:
+      description:
+        The student is already in a group (STUDENT_ALREADY_ENROLLED), the group is inactive (GROUP_INACTIVE), or a
+        starting point was sent for a student who already has cycles (STARTING_POINT_LOCKED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    EnrollRefused:
+      description:
+        The student is not an active student of the academy (STUDENT_NOT_ENROLLABLE), the starting point is not less
+        than the plan's sessions per cycle (STARTING_POINT_OUT_OF_RANGE), or the start date is not after the end of
+        the student's last enrollment (ENROLLMENT_DATE_INVALID)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     PasswordChangeRequired:
       description: A temporary password must be changed first (PASSWORD_CHANGE_REQUIRED)
       content:
@@ -2630,14 +2657,16 @@ components:
           anyOf:
             - type: string
               format: date
-              description: Academy-local date
+              description: Academy-local date, the last day in the group
             - type: 'null'
       additionalProperties: false
       required:
         - id
         - studentId
+        - studentName
         - group
         - startDate
+        - endDate
     TransferRequest:
       type: object
       properties:
@@ -2800,11 +2829,12 @@ components:
         sessionsPerCycle:
           type: integer
           minimum: 1
+          maximum: 100
         amount:
           type: string
-          pattern: ^\d+\.\d{2}$
+          pattern: ^(?!0+\.00$)\d{1,8}\.\d{2}$
           example: '1500.00'
-          description: Decimal amount in EGP
+          description: Decimal amount in EGP, above 0 and at most 99999999.99
       additionalProperties: false
       required:
         - sessionsPerCycle
@@ -2824,8 +2854,11 @@ components:
         openingCount:
           type: integer
           minimum: 0
+          maximum: 99
           default: 0
-          description: 'Starting point: sessions of the current cycle taken before the system (BR-14)'
+          description:
+            'Starting point: sessions of the current cycle taken before the system (BR-14), 0 to sessionsPerCycle - 1.
+            Only for a student who has no cycle yet.'
       additionalProperties: false
       required:
         - studentId

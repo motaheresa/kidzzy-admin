@@ -4,4 +4,5 @@ export { CreateStudentForm } from './components/CreateStudentForm';
 export { EditStudentForm } from './components/EditStudentForm';
 export { StudentProfile } from './components/StudentProfile';
 export { StudentsList } from './components/StudentsList';
+export { useStudentOptions } from './hooks/useStudentOptions';
 export type { Student } from './types';

@@ -14,6 +14,7 @@ generator client {
   moduleFormat        = "cjs"
   // Extensionless imports inside the generated client, so Jest (CommonJS) resolves them.
   importFileExtension = ""
+  previewFeatures     = ["partialIndexes"]
 }
 
 datasource db {
@@ -38,6 +39,9 @@ model Academy {
   groups        Group[]
   scheduleSlots ScheduleSlot[]
   sessions      Session[]
+  enrollments   Enrollment[]
+  paymentPlans  PaymentPlan[]
+  paymentCycles PaymentCycle[]
 
   @@map("academies")
 }
@@ -60,11 +64,13 @@ model User {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy       Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  roles         UserRole[]
-  refreshTokens RefreshToken[]
-  groups        Group[]
-  sessions      Session[]
+  academy          Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  roles            UserRole[]
+  refreshTokens    RefreshToken[]
+  groups           Group[]
+  sessions         Session[]
+  instructorPlans  PaymentPlan[]
+  instructorCycles PaymentCycle[]
 
   @@unique([academyId, email])
   @@unique([academyId, phone])
@@ -177,7 +183,10 @@ model Student {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academy     Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  enrollments Enrollment[]
+  plans       PaymentPlan[]
+  cycles      PaymentCycle[]
 
   @@unique([academyId, code])
   /// Composite key for tenant-safe foreign keys: a later table (enrollments, attendance)
@@ -203,16 +212,44 @@ model Group {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy    Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academy     Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
   /// Composite foreign key: the instructor must belong to the same academy as the group.
-  instructor User           @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
-  slots      ScheduleSlot[]
-  sessions   Session[]
+  instructor  User           @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  slots       ScheduleSlot[]
+  sessions    Session[]
+  enrollments Enrollment[]
 
   /// Composite key for tenant-safe foreign keys (schedule_slots, sessions).
   @@unique([id, academyId])
   @@index([academyId, instructorId])
   @@map("groups")
+}
+
+/// A student's time in a group (US-08, US-09). The days it covers are start_date to end_date,
+/// both included and academy-local; end_date null means the student is still in the group.
+/// Leaving (a transfer or deactivation) on day D sets end_date = D - 1, so a day never belongs to
+/// two enrollments. An enrollment that ends before it starts (end_date = start_date - 1) covered
+/// no day. Check constraint in the migration: end_date >= start_date - 1.
+model Enrollment {
+  id        String    @id @default(uuid()) @db.Uuid
+  academyId String    @map("academy_id") @db.Uuid
+  studentId String    @map("student_id") @db.Uuid
+  groupId   String    @map("group_id") @db.Uuid
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  student Student @relation(fields: [studentId, academyId], references: [id, academyId], onDelete: Restrict)
+  group   Group   @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  /// AC (US-08): at most one open enrollment per student, so a student is in one group at a time.
+  @@unique([studentId], map: "enrollments_student_open_key", where: raw("end_date IS NULL"))
+  @@index([studentId, startDate])
+  @@index([groupId])
+  @@map("enrollments")
 }
 
 /// One weekly meeting of a group: a weekday, a start time in the academy's timezone and a length.
@@ -288,4 +325,100 @@ model Session {
   @@unique([id, academyId])
   @@index([groupId, scheduledAt])
   @@map("sessions")
+}
+
+// ── Payments ───────────────────────────────────────────────────────────
+
+/// Who a plan or a cycle is for. The matching column (student_id or instructor_id) is set and
+/// the other is null (check constraints in the migration).
+enum PayeeType {
+  student
+  instructor
+
+  @@map("payee_type")
+}
+
+enum CycleStatus {
+  in_progress
+  due
+  paid
+
+  @@map("cycle_status")
+}
+
+/// One version of a payee's plan: N sessions per cycle for an amount (US-08, US-20, US-21).
+/// Versioned: a change inserts version + 1 and never edits a row (BR-10). Version 1 applies from
+/// cycle 1; a later version applies from effective_from_cycle, the cycle after the open one, so the
+/// cycle in progress keeps its plan. The references that may be null are composite foreign keys
+/// through mirror columns (student_academy_id, instructor_academy_id), like sessions.slot_id.
+model PaymentPlan {
+  id                  String    @id @default(uuid()) @db.Uuid
+  academyId           String    @map("academy_id") @db.Uuid
+  payeeType           PayeeType @map("payee_type")
+  studentId           String?   @map("student_id") @db.Uuid
+  studentAcademyId    String?   @map("student_academy_id") @db.Uuid
+  instructorId        String?   @map("instructor_id") @db.Uuid
+  instructorAcademyId String?   @map("instructor_academy_id") @db.Uuid
+  /// 1, 2, 3… per payee.
+  version             Int
+  /// N: a cycle is due when it counts N held sessions.
+  sessionsPerCycle    Int       @map("sessions_per_cycle") @db.SmallInt
+  /// Due per cycle, EGP.
+  amount              Decimal   @db.Decimal(10, 2)
+  effectiveFromCycle  Int       @map("effective_from_cycle")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy    Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  student    Student?       @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
+  instructor User?          @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
+  cycles     PaymentCycle[]
+
+  @@unique([id, academyId])
+  /// Target of payment_cycles' foreign key, which also carries N (see PaymentCycle).
+  @@unique([id, academyId, sessionsPerCycle])
+  /// NULLs are distinct in Postgres, so each pair only constrains its own payee type.
+  @@unique([studentId, version])
+  @@unique([instructorId, version])
+  @@map("payment_plans")
+}
+
+/// A payee's cycle of N held sessions (FR-15, FR-16). Cycles are numbered 1, 2, 3… per payee and
+/// belong to the payee, not to a group, so a transfer keeps them (BR-11). sessions_counted starts
+/// at opening_count, the starting point, which only the payee's first cycle may have (BR-14).
+/// Counting held sessions is US-22; nothing before it changes the counter.
+model PaymentCycle {
+  id                  String      @id @default(uuid()) @db.Uuid
+  academyId           String      @map("academy_id") @db.Uuid
+  payeeType           PayeeType   @map("payee_type")
+  studentId           String?     @map("student_id") @db.Uuid
+  studentAcademyId    String?     @map("student_academy_id") @db.Uuid
+  instructorId        String?     @map("instructor_id") @db.Uuid
+  instructorAcademyId String?     @map("instructor_academy_id") @db.Uuid
+  /// The plan version in effect when the cycle started; a later version never changes it.
+  planId              String      @map("plan_id") @db.Uuid
+  /// The plan's N, copied so a check constraint can compare the counters with it. The foreign
+  /// key (plan_id, academy_id, sessions_per_cycle) keeps it equal to the plan's.
+  sessionsPerCycle    Int         @map("sessions_per_cycle") @db.SmallInt
+  cycleNumber         Int         @map("cycle_number")
+  openingCount        Int         @default(0) @map("opening_count") @db.SmallInt
+  sessionsCounted     Int         @map("sessions_counted") @db.SmallInt
+  status              CycleStatus @default(in_progress)
+  dueAt               DateTime?   @map("due_at") @db.Timestamptz(3)
+  paidAt              DateTime?   @map("paid_at") @db.Timestamptz(3)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy    Academy     @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  student    Student?    @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
+  instructor User?       @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
+  plan       PaymentPlan @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([studentId, cycleNumber])
+  @@unique([instructorId, cycleNumber])
+  /// At most one cycle in progress per payee.
+  @@unique([studentId], map: "payment_cycles_student_open_key", where: raw("status = 'in_progress'"))
+  @@unique([instructorId], map: "payment_cycles_instructor_open_key", where: raw("status = 'in_progress'"))
+  @@index([planId])
+  @@map("payment_cycles")
 }
