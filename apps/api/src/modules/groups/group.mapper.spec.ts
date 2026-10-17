@@ -12,7 +12,7 @@ const row: GroupRow & { academyId: string; searchText: string } = {
     { weekday: 6, startTime: new Date('1970-01-01T16:00:00.000Z'), durationMin: 60 },
     { weekday: 2, startTime: new Date('1970-01-01T16:00:00.000Z'), durationMin: 60 },
   ],
-  _count: { sessions: 3 },
+  _count: { sessions: 3, enrollments: 5 },
   sessions: [{ scheduledAt: new Date('2026-11-03T14:00:00.000Z') }],
   // Columns the API must never show.
   academyId: 'a1',
@@ -32,7 +32,7 @@ describe('group mapper', () => {
         { weekday: 2, startTime: '16:00', durationMin: 60 },
         { weekday: 6, startTime: '16:00', durationMin: 60 },
       ],
-      studentCount: 0,
+      studentCount: 5,
       heldCount: 3,
       nextSessionAt: '2026-11-03T14:00:00.000Z',
     });

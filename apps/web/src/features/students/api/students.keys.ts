@@ -8,4 +8,5 @@ export const studentKeys = {
   list: (params: StudentListParams) => [...studentKeys.lists(), params] as const,
   details: () => [...studentKeys.all, 'detail'] as const,
   detail: (id: string) => [...studentKeys.details(), id] as const,
+  options: (search: string) => [...studentKeys.all, 'options', search] as const,
 };

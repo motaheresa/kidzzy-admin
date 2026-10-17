@@ -8,21 +8,11 @@ import { normalizeStudentCode } from '../../common/normalize/student-code';
 import type { PageWindow } from '../../common/pagination/page';
 import { escapeLike } from '../../common/search/escape-like';
 import { Prisma } from '../../generated/prisma/client';
+import { CYCLE_SELECT } from '../payments/payment-cycle.repository';
 import { uniqueViolationIndex } from '../prisma/prisma-errors';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
+import { stringToDate } from '../sessions/dates';
 import { TenantContext } from '../tenancy/tenant-context';
-
-/** A student as the API shows it. */
-export interface StudentRow {
-  id: string;
-  code: string;
-  name: string;
-  age: number | null;
-  parentName: string;
-  parentPhone: string;
-  notes: string | null;
-  isActive: boolean;
-}
 
 export interface StudentChanges {
   code?: string;
@@ -42,7 +32,33 @@ const STUDENT_SELECT = {
   parentPhone: true,
   notes: true,
   isActive: true,
+  // The open enrollment: at most one (partial unique index enrollments_student_open_key).
+  enrollments: {
+    where: { endDate: null },
+    select: {
+      startDate: true,
+      group: { select: { id: true, name: true, instructorId: true } },
+    },
+  },
+  // The cycle in progress: at most one (partial unique index payment_cycles_student_open_key).
+  cycles: { where: { status: 'in_progress' }, select: CYCLE_SELECT },
 } as const satisfies Prisma.StudentSelect;
+
+/**
+ * A student as the API shows it, with the open enrollment (its group and that group's
+ * instructor, the owner for scope `own`) and the cycle in progress, each an array of 0 or 1.
+ */
+export type StudentRow = Prisma.StudentGetPayload<{ select: typeof STUDENT_SELECT }>;
+
+/** Which students a list returns, besides the search. */
+export interface StudentFilter {
+  isActive?: boolean;
+  search?: string;
+  /** Students with an open enrollment in this group. */
+  groupId?: string;
+  /** Students with an open enrollment in a group this instructor teaches (scope own). */
+  instructorId?: string;
+}
 
 /**
  * Reads and writes student records (US-05). The code and the parent's phone are normalized
@@ -70,13 +86,30 @@ export class StudentRepository {
    * The SQL only picks the ids; the rows are then read through the scoped client.
    */
   async list(
-    filter: { isActive?: boolean; search?: string },
+    filter: StudentFilter,
     window: PageWindow,
   ): Promise<{ rows: StudentRow[]; total: number }> {
     const academyId = this.tenant.requireAcademyId();
     const conditions = [Prisma.sql`s.academy_id = ${academyId}::uuid`];
     if (filter.isActive !== undefined) {
       conditions.push(Prisma.sql`s.is_active = ${filter.isActive}`);
+    }
+    if (filter.groupId !== undefined || filter.instructorId !== undefined) {
+      const enrolledIn = [
+        Prisma.sql`e.student_id = s.id`,
+        Prisma.sql`e.academy_id = ${academyId}::uuid`,
+        Prisma.sql`e.end_date IS NULL`,
+      ];
+      if (filter.groupId !== undefined) {
+        enrolledIn.push(Prisma.sql`e.group_id = ${filter.groupId}::uuid`);
+      }
+      if (filter.instructorId !== undefined) {
+        enrolledIn.push(Prisma.sql`g.instructor_id = ${filter.instructorId}::uuid`);
+      }
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM enrollments e
+        JOIN groups g ON g.id = e.group_id AND g.academy_id = e.academy_id
+        WHERE ${Prisma.join(enrolledIn, ' AND ')})`);
     }
 
     // A code is only letters and digits, which the search form keeps; so a search that is empty
@@ -110,6 +143,18 @@ export class StudentRepository {
       rows: ids.flatMap(({ id }) => byId.get(id) ?? []),
       total: Number(counted?.total ?? 0),
     };
+  }
+
+  /**
+   * Locks the student row until the end of the transaction, so two changes of the same student's
+   * enrollment or plan (enroll, transfer, plan change, deactivate) run one after the other.
+   * Call it first in a @Transactional() method. Raw SQL: it filters academy_id itself.
+   */
+  async lock(id: string): Promise<void> {
+    await this.txHost.tx.$queryRaw`
+      SELECT id FROM students
+      WHERE id = ${id}::uuid AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+      FOR UPDATE`;
   }
 
   /** The student in the current academy, or null (unknown id or another academy). */
@@ -155,11 +200,20 @@ export class StudentRepository {
     }
   }
 
-  /** Activates or deactivates the record. Nothing is ever deleted. Call findById first. */
-  setActive(id: string, isActive: boolean): Promise<StudentRow> {
+  /**
+   * Deactivates the record and ends the open enrollment, if any, with `endDate` as its last day,
+   * in one statement (a nested write of the student aggregate). Nothing is ever deleted.
+   * Call findById first.
+   */
+  deactivate(id: string, endDate: string): Promise<StudentRow> {
     return this.txHost.tx.student.update({
       where: { id },
-      data: { isActive },
+      data: {
+        isActive: false,
+        enrollments: {
+          updateMany: { where: { endDate: null }, data: { endDate: stringToDate(endDate) } },
+        },
+      },
       select: STUDENT_SELECT,
     });
   }

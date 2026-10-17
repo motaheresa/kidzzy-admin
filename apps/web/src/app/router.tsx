@@ -1,6 +1,7 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { EditGroupPage } from '@/pages/groups/EditGroupPage';
+import { EnrollStudentPage } from '@/pages/groups/EnrollStudentPage';
 import { GroupPage } from '@/pages/groups/GroupPage';
 import { GroupsPage } from '@/pages/groups/GroupsPage';
 import { NewGroupPage } from '@/pages/groups/NewGroupPage';
@@ -30,6 +31,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
  *       RequirePermission groups.update        /groups/:id/edit
+ *       RequirePermission enrollments.manage   /groups/:id/enroll
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission instructors.read     /instructors, /instructors/:id
@@ -82,6 +84,10 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="groups.update" />,
             children: [{ path: '/groups/:id/edit', element: <EditGroupPage /> }],
+          },
+          {
+            element: <RequirePermission permission="enrollments.manage" />,
+            children: [{ path: '/groups/:id/enroll', element: <EnrollStudentPage /> }],
           },
           {
             element: <RequirePermission permission="students.read" />,

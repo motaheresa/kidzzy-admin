@@ -62,6 +62,9 @@ export const ErrorCode = {
   StudentAlreadyEnrolled: 'STUDENT_ALREADY_ENROLLED',
   StudentCodeTaken: 'STUDENT_CODE_TAKEN',
   StudentAbsent: 'STUDENT_ABSENT',
+  StudentNotEnrollable: 'STUDENT_NOT_ENROLLABLE',
+  GroupInactive: 'GROUP_INACTIVE',
+  EnrollmentDateInvalid: 'ENROLLMENT_DATE_INVALID',
   CycleNotDue: 'CYCLE_NOT_DUE',
   CycleAlreadyPaid: 'CYCLE_ALREADY_PAID',
   StartingPointLocked: 'STARTING_POINT_LOCKED',
@@ -209,6 +212,34 @@ export interface PaymentCycle {
   dueAt: string | null;
   /** ISO 8601, UTC */
   paidAt: string | null;
+}
+
+/** N sessions per cycle for an amount (openapi.yaml: PlanInput). amount: "1500.00". */
+export interface PlanInput {
+  sessionsPerCycle: number;
+  amount: string;
+}
+
+/** POST /groups/{id}/enrollments body (openapi.yaml: EnrollRequest). */
+export interface EnrollRequest {
+  studentId: string;
+  /** Academy-local date, YYYY-MM-DD */
+  startDate: string;
+  plan: PlanInput;
+  /** Starting point (BR-14): 0 to N-1, only for a first cycle. */
+  openingCount?: number;
+}
+
+/** A student enrollment (openapi.yaml: Enrollment). */
+export interface Enrollment {
+  id: string;
+  studentId: string;
+  studentName: string;
+  group: GroupRef;
+  /** Academy-local date, YYYY-MM-DD */
+  startDate: string;
+  /** Academy-local date, YYYY-MM-DD */
+  endDate: string | null;
 }
 
 /** A student record (openapi.yaml: Student). */

@@ -14,12 +14,14 @@ import {
 } from '@/components/ui';
 import { usePermissions } from '@/features/auth';
 import { useStudent } from '../hooks/useStudents';
+import { CycleCard } from './CycleCard';
 import { DeactivateStudentButton } from './DeactivateStudentButton';
 import { StudentStatusBadge } from './StudentStatusBadge';
 
 /**
- * One student's profile (wireframe "Admin · Student"): name, code and current group, then the
- * data card. The cycle, group history, payments and attendance sections arrive with their stories.
+ * One student's profile (wireframe "Admin · Student"): name, code and current group (a link for
+ * whoever reads groups), the cycle in progress, then the data card. The group history, payments
+ * and attendance sections arrive with their stories.
  */
 export function StudentProfile({ id }: { id: string }) {
   const student = useStudent(id);
@@ -59,7 +61,24 @@ export function StudentProfile({ id }: { id: string }) {
           <span className="flex flex-wrap items-center gap-2">
             <span dir="ltr">{data.code}</span>
             <span aria-hidden="true">·</span>
-            <span>{data.currentGroup ? `في ${data.currentGroup.name} دلوقتي` : 'مش في جروب'}</span>
+            {data.currentGroup ? (
+              <span>
+                في{' '}
+                {can('groups.read') ? (
+                  <Link
+                    to={`/groups/${data.currentGroup.id}`}
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {data.currentGroup.name}
+                  </Link>
+                ) : (
+                  data.currentGroup.name
+                )}{' '}
+                دلوقتي
+              </span>
+            ) : (
+              <span>مش في جروب</span>
+            )}
             <StudentStatusBadge isActive={data.isActive} />
           </span>
         }
@@ -77,6 +96,8 @@ export function StudentProfile({ id }: { id: string }) {
           )
         }
       />
+
+      {data.currentCycle && <CycleCard cycle={data.currentCycle} />}
 
       <Card>
         <CardHeader>

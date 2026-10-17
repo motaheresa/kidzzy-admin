@@ -371,14 +371,17 @@ describe('edit group', () => {
 
 describe('group detail', () => {
   it('shows the data, the schedule and an empty students section', async () => {
-    api(admin, { [`GET /groups/${group.id}`]: () => json(200, group) });
+    api(admin, {
+      [`GET /groups/${group.id}`]: () => json(200, group),
+      [`GET /groups/${group.id}/enrollments`]: () => json(200, { data: [] }),
+    });
     renderAt(`/groups/${group.id}`);
 
     expect(await screen.findByRole('heading', { name: 'جروب A' })).toBeInTheDocument();
     expect(screen.getByText('المدرس: Ana')).toBeInTheDocument();
     expect(screen.getByText('التلات · 4:00 م')).toBeInTheDocument();
     expect(screen.getByText('السبت · 4:00 م')).toBeInTheDocument();
-    expect(screen.getByText('مفيش طلاب في الجروب لسه')).toBeInTheDocument();
+    expect(await screen.findByText('مفيش طلاب في الجروب لسه')).toBeInTheDocument();
   });
 
   it('shows the numbers of the sessions: held count and the next session', async () => {
