@@ -47,3 +47,13 @@ export function formatSchedule(schedule: readonly ScheduleSlot[]): string {
     .map(([time, days]) => `${days.join(' و')} · ${formatTime12(time)}`)
     .join('، ');
 }
+
+/** Weekday first (Sunday is 0), then time: the order the API returns a schedule in. */
+export function sortSlots(slots: readonly ScheduleSlot[]): ScheduleSlot[] {
+  return [...slots].sort((a, b) => a.weekday - b.weekday || a.startTime.localeCompare(b.startTime));
+}
+
+/** Two slots are the same meeting when weekday, start time and length match. */
+export function sameSlot(a: ScheduleSlot, b: ScheduleSlot): boolean {
+  return a.weekday === b.weekday && a.startTime === b.startTime && a.durationMin === b.durationMin;
+}

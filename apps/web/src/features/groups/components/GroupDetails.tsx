@@ -1,4 +1,4 @@
-import { CalendarIcon, GraduationCapIcon, UsersIcon } from 'lucide-react';
+import { CalendarIcon, GraduationCapIcon, PencilIcon, UsersIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   Alert,
@@ -12,6 +12,7 @@ import {
   PageHeader,
   Skeleton,
 } from '@/components/ui';
+import { usePermissions } from '@/features/auth';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
 import { useGroup } from '../hooks/useGroups';
 import { formatDuration, formatSlot } from '../schedule-format';
@@ -24,6 +25,7 @@ import { GroupStatusBadge } from './GroupStatusBadge';
  */
 export function GroupDetails({ id }: { id: string }) {
   const group = useGroup(id);
+  const { can } = usePermissions();
 
   if (group.isPending) {
     return (
@@ -66,6 +68,16 @@ export function GroupDetails({ id }: { id: string }) {
             <span>بدأ {formatDate(data.startDate)}</span>
             <GroupStatusBadge isActive={data.isActive} />
           </span>
+        }
+        actions={
+          can('groups.update') && (
+            <Button asChild variant="outline">
+              <Link to={`/groups/${data.id}/edit`}>
+                <PencilIcon aria-hidden="true" />
+                تعديل
+              </Link>
+            </Button>
+          )
         }
       />
 
