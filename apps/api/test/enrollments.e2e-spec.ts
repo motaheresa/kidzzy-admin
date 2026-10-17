@@ -492,13 +492,29 @@ describe('Enrollments (e2e)', () => {
     it.each([
       ['an amount of zero', { amount: new Prisma.Decimal('0') }],
       ['a negative amount', { amount: new Prisma.Decimal('-5.00') }],
-      ['both payees', { instructorId: ana, instructorAcademyId: academyId }],
       ['a payee that does not match payee_type', { payeeType: 'instructor' }],
-      ['a mirror of another academy', { studentAcademyId: otherAcademyId }],
       ['version 1 from a later cycle', { version: 1, effectiveFromCycle: 2 }],
       ['0 sessions per cycle', { sessionsPerCycle: 0 }],
     ])('refuses a plan with %s', async (_label, data) => {
       await expect(planRow(data)).rejects.toThrow();
+    });
+
+    // Prisma fills the mirror columns itself from the relation, so the two checks on them are
+    // exercised with raw SQL, which is what any other writer could do.
+    const rawPlan = (mirror: string, instructor: string | null, instructorMirror: string | null) =>
+      prisma.unscoped.$executeRaw`
+        INSERT INTO payment_plans (id, academy_id, payee_type, student_id, student_academy_id,
+          instructor_id, instructor_academy_id, version, sessions_per_cycle, amount,
+          effective_from_cycle)
+        VALUES (gen_random_uuid(), ${academyId}::uuid, 'student', ${studentId}::uuid,
+          ${mirror}::uuid, ${instructor}::uuid, ${instructorMirror}::uuid, 8, 4, 100.00, 3)`;
+
+    it('refuses a plan for both a student and an instructor', async () => {
+      await expect(rawPlan(academyId, ana, academyId)).rejects.toThrow();
+    });
+
+    it('refuses a plan whose mirror column is another academy', async () => {
+      await expect(rawPlan(otherAcademyId, null, null)).rejects.toThrow();
     });
 
     it.each([
