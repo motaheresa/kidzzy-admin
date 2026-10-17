@@ -8,7 +8,13 @@ import { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { Clock } from '../sessions/clock';
 import { TenantContext } from '../tenancy/tenant-context';
-import { stringToTime } from './schedule';
+import { stringToTime, timeToString } from './schedule';
+
+/** A slot row for the schedule editor: retired ones are history, kept for matching. */
+export interface SlotRecord extends ScheduleSlot {
+  id: string;
+  retired: boolean;
+}
 
 /** A group with its instructor's name and its weekly slots, as the mapper needs them. */
 export interface GroupRow {
@@ -31,8 +37,7 @@ export interface GroupFilter {
   instructorId?: string;
 }
 
-/** What a group row holds. 
-ow decides which Scheduled session is the next one. */
+/** What a group row holds. `now` decides which Scheduled session is the next one. */
 const groupSelect = (now: Date) =>
   ({
     id: true,
@@ -42,6 +47,8 @@ const groupSelect = (now: Date) =>
     isActive: true,
     instructor: { select: { id: true, name: true } },
     slots: {
+      // A retired slot is history (US-10): it is not part of the schedule any more.
+      where: { retiredAt: null },
       select: { weekday: true, startTime: true, durationMin: true },
       orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
     },
@@ -110,6 +117,93 @@ export class GroupRepository {
   /** The group in the current academy, or null (unknown id or another academy). */
   findById(id: string): Promise<GroupRow | null> {
     return this.txHost.tx.group.findFirst({ where: { id }, select: groupSelect(this.clock.now()) });
+  }
+
+  /**
+   * Locks the group row until the end of the transaction, so two edits of the same group (or an
+   * edit and the daily generation) run one after the other and never interleave their session
+   * changes. Call it first in a @Transactional() edit. Raw SQL: it filters academy_id itself.
+   */
+  async lock(id: string): Promise<void> {
+    await this.txHost.tx.$queryRaw`
+      SELECT id FROM groups
+      WHERE id = ${id}::uuid AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+      FOR UPDATE`;
+  }
+
+  /**
+   * Changes the details given; the search text follows the name and the level. Call findById
+   * first (it proves the group is in this academy).
+   */
+  async update(
+    id: string,
+    changes: { name?: string; level?: string; instructorId?: string; isActive?: boolean },
+  ): Promise<void> {
+    const data: Prisma.GroupUncheckedUpdateInput = { ...changes };
+    if (changes.name !== undefined || changes.level !== undefined) {
+      const current = await this.txHost.tx.group.findFirstOrThrow({
+        where: { id },
+        select: { name: true, level: true },
+      });
+      data.searchText = normalizeSearchText(
+        `${changes.name ?? current.name} ${changes.level ?? current.level}`,
+      );
+    }
+    await this.txHost.tx.group.update({ where: { id }, data });
+  }
+
+  /** Every slot of the group, retired ones included: the schedule editor matches against all. */
+  async findAllSlots(groupId: string): Promise<SlotRecord[]> {
+    const slots = await this.txHost.tx.scheduleSlot.findMany({
+      where: { groupId },
+      select: { id: true, weekday: true, startTime: true, durationMin: true, retiredAt: true },
+      orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
+    });
+    return slots.map((slot) => ({
+      id: slot.id,
+      weekday: slot.weekday,
+      startTime: timeToString(slot.startTime),
+      durationMin: slot.durationMin,
+      retired: slot.retiredAt !== null,
+    }));
+  }
+
+  async addSlots(groupId: string, slots: readonly ScheduleSlot[]): Promise<void> {
+    if (slots.length === 0) return;
+    const academyId = this.tenant.requireAcademyId();
+    await this.txHost.tx.scheduleSlot.createMany({
+      data: slots.map((slot) => ({
+        academyId,
+        groupId,
+        weekday: slot.weekday,
+        startTime: stringToTime(slot.startTime),
+        durationMin: slot.durationMin,
+      })),
+    });
+  }
+
+  /** A retired slot that comes back in the schedule is used again (no second row for it). */
+  async reviveSlots(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.txHost.tx.scheduleSlot.updateMany({
+      where: { id: { in: [...ids] } },
+      data: { retiredAt: null },
+    });
+  }
+
+  /** Slots that sessions still point at stop generating but stay as history. */
+  async retireSlots(ids: readonly string[], at: Date): Promise<void> {
+    if (ids.length === 0) return;
+    await this.txHost.tx.scheduleSlot.updateMany({
+      where: { id: { in: [...ids] } },
+      data: { retiredAt: at },
+    });
+  }
+
+  /** Only for slots nothing points at (the database refuses otherwise). */
+  async deleteSlots(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.txHost.tx.scheduleSlot.deleteMany({ where: { id: { in: [...ids] } } });
   }
 
   /**

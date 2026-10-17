@@ -1,5 +1,6 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { EditGroupPage } from '@/pages/groups/EditGroupPage';
 import { GroupPage } from '@/pages/groups/GroupPage';
 import { GroupsPage } from '@/pages/groups/GroupsPage';
 import { NewGroupPage } from '@/pages/groups/NewGroupPage';
@@ -28,6 +29,7 @@ import { RequirePermission } from './RequirePermission';
  *       /change-password   any signed-in user; the only screen during a temporary password
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
+ *       RequirePermission groups.update        /groups/:id/edit
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission instructors.read     /instructors, /instructors/:id
@@ -76,6 +78,10 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="groups.create" />,
             children: [{ path: '/groups/new', element: <NewGroupPage /> }],
+          },
+          {
+            element: <RequirePermission permission="groups.update" />,
+            children: [{ path: '/groups/:id/edit', element: <EditGroupPage /> }],
           },
           {
             element: <RequirePermission permission="students.read" />,

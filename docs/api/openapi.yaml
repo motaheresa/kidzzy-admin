@@ -763,6 +763,12 @@ paths:
       tags:
         - Groups
       summary: Edit group details
+      description:
+        Only the fields sent change. With scope own (an instructor), only the group they teach can be edited, and
+        sending instructorId is 403; the other fields are allowed. A new instructor must be assignable (422
+        INSTRUCTOR_NOT_ASSIGNABLE); only the sessions still ahead and Scheduled take the new instructor. Setting
+        isActive to false removes the generated sessions still ahead and Scheduled (Held and Cancelled stay); setting
+        it back to true generates them again.
       operationId: updateGroup
       x-permission: groups.update
       x-story: US-10
@@ -790,12 +796,17 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/GroupRefused'
   /groups/{id}/schedule:
     put:
       tags:
         - Groups
       summary: Replace the weekly schedule; regenerates future Scheduled sessions
+      description:
+        In one transaction. A slot that did not change keeps its sessions. A slot that left loses its future
+        Scheduled sessions; if Held, Cancelled or past sessions still point at it, it is retired (kept as history,
+        no longer part of the schedule) instead of deleted. New slots get their sessions. Held and Cancelled
+        sessions never change. An inactive group only stores the slots. Same scope rule as updateGroup.
       operationId: replaceGroupSchedule
       x-permission: groups.update
       x-story: US-10
@@ -822,6 +833,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/GroupRefused'
   /groups/{id}/enrollments:
     get:
       tags:
@@ -2755,11 +2768,16 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 100
         level:
           type: string
+          minLength: 1
+          maxLength: 100
         instructorId:
           type: string
           format: uuid
+          description: Needs scope any
         isActive:
           type: boolean
       additionalProperties: false
@@ -2771,6 +2789,8 @@ components:
           items:
             $ref: '#/components/schemas/ScheduleSlot'
           minItems: 1
+          maxItems: 14
+          description: Two slots of the same weekday must not overlap (SCHEDULE_OVERLAP)
       additionalProperties: false
       required:
         - schedule
