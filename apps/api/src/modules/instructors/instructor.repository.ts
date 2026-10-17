@@ -105,6 +105,28 @@ export class InstructorRepository {
   }
 
   /**
+   * True when the user is an ACTIVE instructor of the current academy: the only users a group
+   * can be given to (US-07). An admin, a deactivated instructor, an unknown id or another
+   * academy's user all answer false.
+   */
+  async findAssignable(id: string): Promise<boolean> {
+    const found = await this.txHost.tx.user.findFirst({
+      where: { id, isActive: true, ...HOLDS_INSTRUCTOR_ROLE },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
+  /** The instructor's active groups, by name: the groups list of their detail screen. */
+  findGroupRefs(instructorId: string): Promise<{ id: string; name: string }[]> {
+    return this.txHost.tx.group.findMany({
+      where: { instructorId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
    * Creates the user and gives it the Instructor role. The role is looked up through the scoped
    * client, so only this academy's role can ever be attached.
    * A duplicate email or phone in the academy gives 409 EMAIL_TAKEN / PHONE_TAKEN.

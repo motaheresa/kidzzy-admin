@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './common/config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
+import { GroupsModule } from './modules/groups/groups.module';
 import { HealthModule } from './modules/health/health.module';
 import { InstructorsModule } from './modules/instructors/instructors.module';
 import { StudentsModule } from './modules/students/students.module';
@@ -18,6 +19,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     HealthModule,
     InstructorsModule,
     StudentsModule,
+    GroupsModule,
   ],
 })
 export class AppModule {}
