@@ -103,7 +103,8 @@ describe('Groups (e2e)', () => {
         schedule: [slot(2, '16:00'), slot(6, '16:00')],
         studentCount: 0,
         heldCount: 0,
-        nextSessionAt: null,
+        // Sessions are generated with the group (SCRUM-22): the next one is ahead.
+        nextSessionAt: expect.any(String) as string,
       });
       const row = await prisma.unscoped.group.findUniqueOrThrow({
         where: { id: (res.body as Group).id },
