@@ -55,7 +55,7 @@ Run lint, typecheck and the tests before saying a change is done.
 - Time: timestamps are UTC, but a schedule's time is a local wall-clock time in the academy's IANA zone, and Egypt has daylight saving time. Turn a local date and time into an instant with `occurrenceInstant` (Luxon), never with a fixed offset. "Today" comes from the injectable `Clock`, so tests fix it (`createTestApp({ now })`).
 - Changing a group's sessions (US-10): an edit that rebuilds sessions runs in one `@Transactional()` and starts with `GroupRepository.lock` (`SELECT … FOR UPDATE` on the group row), so two edits never interleave. It touches only sessions that are still ahead AND Scheduled (`SessionRegeneration`); Held and Cancelled sessions never change. A slot that sessions still point at is retired (`retired_at`), not deleted, and a retired slot that comes back is revived.
 - A reference that may be null stays a composite foreign key through a mirror column: `sessions.slot_id` with `slot_academy_id`, set together by a CHECK and equal to `academy_id`.
-- Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only`.
+- Constraints Prisma cannot express (check constraints, partial unique indexes) go as custom SQL at the end of the migration, created with `prisma migrate dev --create-only` (mind the folder-name rule in "Workflow").
 - A new tenant table also gets `@@unique([id, academyId])`. A table that points at it uses a composite foreign key, `(x_id, academy_id)` referencing `x(id, academy_id)`, so a row can never reference another academy's record (SCRUM-57). `students` is the first table built this way.
 - Every email or phone that is written or looked up goes through `normalizeEmail` / `normalizePhone` (`src/common/normalize`); the database rejects any other form. Never match them with `mode: 'insensitive'`: Prisma sends it as `ILIKE`, where `%` and `_` are wildcards.
 
@@ -197,6 +197,7 @@ Work is tracked in Jira project `SCRUM`; full rules are in `CONTRIBUTING.md`.
 - Commits: Conventional Commits with a scope from `commitlint.config.mjs` and the Jira key at the end, for example `feat(groups): create a group with a weekly schedule (SCRUM-20)`.
 - One story per pull request, using the template in `.github/pull_request_template.md`.
 - A schema change adds a Prisma migration in the same pull request. Never edit an applied migration; add a new one.
+- **Migration folder names decide the order** Prisma applies them in (`YYYYMMDDHHMMSS_name`, sorted as text). Some were named by hand with future timestamps; the latest is `20261018100000_slot_retirement`, so a migration generated now would sort BEFORE it and break a fresh database. Never pick a timestamp by hand. Until the real clock passes the latest folder, name a new migration with a timestamp just after it (for example `20261018100100_<name>`), and check that `Get-ChildItem apps/api/prisma/migrations` lists it last. Once the real time is past the latest folder, `prisma migrate dev --create-only` names it correctly again.
 - To change an accepted ADR, add a new ADR that amends or supersedes it.
 
 ## Working with the developer
