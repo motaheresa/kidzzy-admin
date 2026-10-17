@@ -556,6 +556,9 @@ paths:
       tags:
         - Students
       summary: Group history of a student
+      description:
+        Every enrollment of the student, the latest first. Scope own (an instructor) needs the student to be in a group
+        the caller teaches.
       operationId: listStudentEnrollments
       x-permission: students.read
       x-story: US-09
@@ -589,6 +592,11 @@ paths:
       tags:
         - Students
       summary: Transfer a student to another group
+      description:
+        One transaction. With effectiveDate D, the open enrollment ends on D - 1 and the new one starts on D, so a day
+        never belongs to two enrollments. D may not be before the day the student joined the current group. The plan
+        and the cycles belong to the student, so the cycle in progress and its plan are untouched (BR-11). Answers
+        the new enrollment.
       operationId: transferStudent
       x-permission: enrollments.manage
       x-story: US-09
@@ -616,7 +624,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/TransferConflict'
+        '422':
+          $ref: '#/components/responses/TransferRefused'
   /students/{id}/attendance:
     get:
       tags:
@@ -2228,6 +2238,20 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    TransferConflict:
+      description:
+        The student is not in a group (NO_ACTIVE_ENROLLMENT), the target is the group they are in (SAME_GROUP), or the
+        target group is inactive (GROUP_INACTIVE)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TransferRefused:
+      description: The effective date is before the day the student joined the current group (ENROLLMENT_DATE_INVALID)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     EnrollRefused:
       description:
         The student is not an active student of the academy (STUDENT_NOT_ENROLLABLE), the starting point is not less
@@ -2676,7 +2700,7 @@ components:
         effectiveDate:
           type: string
           format: date
-          description: Academy-local date
+          description: Academy-local date, the first day in the new group
       additionalProperties: false
       required:
         - toGroupId

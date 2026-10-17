@@ -7,13 +7,17 @@ import { GroupRepository, type GroupRow } from '../groups/group.repository';
 import { PaymentCycleRepository } from '../payments/payment-cycle.repository';
 import { PaymentPlanRepository } from '../payments/payment-plan.repository';
 import { toDecimal } from '../prisma/money';
+import { dateToString } from '../sessions/dates';
+import { addDays } from '../sessions/occurrences';
 import { StudentRepository } from '../students/student.repository';
 import type { EnrollStudentDto } from './dto/enroll-student.dto';
+import type { TransferStudentDto } from './dto/transfer-student.dto';
 import { alreadyEnrolled, EnrollmentRepository } from './enrollment.repository';
 import { toEnrollment } from './enrollment.mapper';
 
 /**
- * A student joins a group with a payment plan (US-08) and a starting point (US-36).
+ * A student joins a group with a payment plan (US-08) and a starting point (US-36), moves to
+ * another group (US-09) and has a group history.
  *
  * The plan and the cycles belong to the student, not to the enrollment (BR-11). So:
  * - a student enrolled for the first time gets plan version 1 and cycle 1, which counts from the
@@ -85,6 +89,76 @@ export class EnrollmentsService {
       startDate: dto.startDate,
     });
     return toEnrollment(enrollment);
+  }
+
+  /**
+   * POST /students/{id}/transfer (US-09, BR-11), in one transaction: the open enrollment ends and
+   * a new one opens in the target group. With effectiveDate D, the old one ends on D - 1 and the
+   * new one starts on D, so a day never belongs to two enrollments. The plan and the cycles are
+   * the student's, so they are not touched: the cycle in progress keeps its id, its counter and
+   * its plan (AC-04); the target group only counts sessions held from D on (US-22).
+   * D may not be before the day the old enrollment started.
+   */
+  @Transactional()
+  async transfer(studentId: string, dto: TransferStudentDto): Promise<Enrollment> {
+    await this.students.lock(studentId);
+    const student = await this.students.findById(studentId);
+    if (!student) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such student');
+    }
+    const target = await this.findGroupOrThrow(dto.toGroupId);
+
+    const open = student.enrollments[0];
+    if (!open) {
+      throw new AppException(
+        ErrorCode.NoActiveEnrollment,
+        HttpStatus.CONFLICT,
+        'The student is not in a group',
+      );
+    }
+    if (open.group.id === target.id) {
+      throw new AppException(
+        ErrorCode.SameGroup,
+        HttpStatus.CONFLICT,
+        'The student is already in this group',
+      );
+    }
+    if (!target.isActive) {
+      throw new AppException(ErrorCode.GroupInactive, HttpStatus.CONFLICT, 'The group is inactive');
+    }
+    if (dto.effectiveDate < dateToString(open.startDate)) {
+      throw new AppException(
+        ErrorCode.EnrollmentDateInvalid,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'The date cannot be before the student joined the current group',
+      );
+    }
+
+    // The old one first: the partial unique index allows one open enrollment per student.
+    await this.enrollments.closeOpen(studentId, addDays(dto.effectiveDate, -1));
+    const enrollment = await this.enrollments.create({
+      studentId,
+      groupId: target.id,
+      startDate: dto.effectiveDate,
+    });
+    // TODO(US-35): audit log, the student moved between groups.
+    return toEnrollment(enrollment);
+  }
+
+  /**
+   * GET /students/{id}/enrollments: the student's group history, the latest first. Scope `own`:
+   * only a student in a group the caller teaches, like reading the student (403 otherwise).
+   */
+  async listForStudent(studentId: string): Promise<Enrollment[]> {
+    const student = await this.students.findById(studentId);
+    if (!student) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such student');
+    }
+    this.access.ensureOwner(
+      this.access.scopeFor('students.read'),
+      student.enrollments[0]?.group.instructorId ?? null,
+    );
+    return (await this.enrollments.listForStudent(studentId)).map(toEnrollment);
   }
 
   /** A first enrollment: plan version 1 and cycle 1 from the starting point (BR-14, AC-10). */

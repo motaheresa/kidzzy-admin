@@ -17,6 +17,7 @@ import { EditStudentPage } from '@/pages/students/EditStudentPage';
 import { NewStudentPage } from '@/pages/students/NewStudentPage';
 import { StudentPage } from '@/pages/students/StudentPage';
 import { StudentsPage } from '@/pages/students/StudentsPage';
+import { TransferStudentPage } from '@/pages/students/TransferStudentPage';
 import { ProtectedLayout } from './layouts/ProtectedLayout';
 import { PublicLayout } from './layouts/PublicLayout';
 import { RootLayout } from './layouts/RootLayout';
@@ -31,7 +32,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
  *       RequirePermission groups.update        /groups/:id/edit
- *       RequirePermission enrollments.manage   /groups/:id/enroll
+ *       RequirePermission enrollments.manage   /groups/:id/enroll, /students/:id/transfer
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission instructors.read     /instructors, /instructors/:id
@@ -87,7 +88,10 @@ export const routes: RouteObject[] = [
           },
           {
             element: <RequirePermission permission="enrollments.manage" />,
-            children: [{ path: '/groups/:id/enroll', element: <EnrollStudentPage /> }],
+            children: [
+              { path: '/groups/:id/enroll', element: <EnrollStudentPage /> },
+              { path: '/students/:id/transfer', element: <TransferStudentPage /> },
+            ],
           },
           {
             element: <RequirePermission permission="students.read" />,
