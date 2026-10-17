@@ -217,16 +217,19 @@ model Group {
 
 /// One weekly meeting of a group: a weekday, a start time in the academy's timezone and a length.
 model ScheduleSlot {
-  id          String   @id @default(uuid()) @db.Uuid
-  academyId   String   @map("academy_id") @db.Uuid
-  groupId     String   @map("group_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  academyId   String    @map("academy_id") @db.Uuid
+  groupId     String    @map("group_id") @db.Uuid
   /// 0 = Sunday … 6 = Saturday.
-  weekday     Int      @db.SmallInt
+  weekday     Int       @db.SmallInt
   /// Local time in the academy's timezone ("16:00").
-  startTime   DateTime @map("start_time") @db.Time(0)
-  durationMin Int      @map("duration_min") @db.SmallInt
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  startTime   DateTime  @map("start_time") @db.Time(0)
+  durationMin Int       @map("duration_min") @db.SmallInt
+  /// Set when the schedule changes while sessions (Held or Cancelled) still point at the slot: it
+  /// stops generating and leaves the group's schedule but stays as history. Null = in use.
+  retiredAt   DateTime? @map("retired_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   academy  Academy   @relation(fields: [academyId], references: [id], onDelete: Restrict)
   group    Group     @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
