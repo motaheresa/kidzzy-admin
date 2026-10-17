@@ -655,6 +655,7 @@ paths:
       tags:
         - Groups
       summary: List groups
+      description: With scope own (an instructor) only the groups they teach are listed; an instructorId of someone else finds none.
       operationId: listGroups
       x-permission: groups.read
       x-story: US-07
@@ -677,6 +678,10 @@ paths:
           required: false
           schema:
             type: string
+            maxLength: 100
+          description:
+            Part of the name or the level, whatever the Arabic letter forms, diacritics and case; % and _ match
+            themselves
       responses:
         '200':
           description: OK
@@ -728,7 +733,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/GroupRefused'
   /groups/{id}:
     get:
       tags:
@@ -2184,6 +2189,14 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    GroupRefused:
+      description:
+        Two slots overlap on a weekday, or a slot ends after midnight (SCHEDULE_OVERLAP), or the instructor is not an
+        active instructor of the academy (INSTRUCTOR_NOT_ASSIGNABLE)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     PasswordChangeRequired:
       description: A temporary password must be changed first (PASSWORD_CHANGE_REQUIRED)
       content:
@@ -2636,11 +2649,14 @@ components:
           description: 0 = Sunday
         startTime:
           type: string
-          pattern: ^\d{2}:\d{2}$
+          pattern: ^([01]\d|2[0-3]):[0-5]\d$
           example: '16:00'
+          description: Academy-local time, 00:00 to 23:59
         durationMin:
           type: integer
           minimum: 15
+          maximum: 240
+          description: A slot must end by midnight
       additionalProperties: false
       required:
         - weekday
@@ -2699,16 +2715,22 @@ components:
         - schedule
         - studentCount
         - heldCount
+        - nextSessionAt
     GroupCreate:
       type: object
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 100
         level:
           type: string
+          minLength: 1
+          maxLength: 100
         instructorId:
           type: string
           format: uuid
+          description: Must be an active instructor of the academy (INSTRUCTOR_NOT_ASSIGNABLE otherwise)
         startDate:
           type: string
           format: date
@@ -2718,6 +2740,8 @@ components:
           items:
             $ref: '#/components/schemas/ScheduleSlot'
           minItems: 1
+          maxItems: 14
+          description: Two slots of the same weekday must not overlap (SCHEDULE_OVERLAP)
       additionalProperties: false
       required:
         - name
