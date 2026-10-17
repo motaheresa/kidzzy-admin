@@ -4,10 +4,9 @@ import { sortSlots, timeToString } from './schedule';
 
 /**
  * openapi.yaml: Group. Built field by field, so a new column never leaks into the API.
- * TODO(US-08): studentCount from the open enrollments. TODO(SCRUM-22): heldCount and
- * nextSessionAt from the sessions.
+ * TODO(US-08): studentCount from the open enrollments.
  */
-export function toGroup(row: GroupRow, extras: Pick<Group, 'heldCount' | 'nextSessionAt'>): Group {
+export function toGroup(row: GroupRow): Group {
   return {
     id: row.id,
     name: row.name,
@@ -23,6 +22,7 @@ export function toGroup(row: GroupRow, extras: Pick<Group, 'heldCount' | 'nextSe
       })),
     ),
     studentCount: 0,
-    ...extras,
+    heldCount: row._count.sessions,
+    nextSessionAt: row.sessions[0]?.scheduledAt.toISOString() ?? null,
   };
 }

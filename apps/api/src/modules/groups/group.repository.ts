@@ -6,6 +6,7 @@ import type { PageWindow } from '../../common/pagination/page';
 import { escapeLike } from '../../common/search/escape-like';
 import { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
+import { Clock } from '../sessions/clock';
 import { TenantContext } from '../tenancy/tenant-context';
 import { stringToTime } from './schedule';
 
@@ -18,6 +19,10 @@ export interface GroupRow {
   isActive: boolean;
   instructor: { id: string; name: string };
   slots: { weekday: number; startTime: Date; durationMin: number }[];
+  /** Held sessions of the group. */
+  _count: { sessions: number };
+  /** At most one: the earliest Scheduled session still ahead. */
+  sessions: { scheduledAt: Date }[];
 }
 
 export interface GroupFilter {
@@ -26,18 +31,28 @@ export interface GroupFilter {
   instructorId?: string;
 }
 
-const GROUP_SELECT = {
-  id: true,
-  name: true,
-  level: true,
-  startDate: true,
-  isActive: true,
-  instructor: { select: { id: true, name: true } },
-  slots: {
-    select: { weekday: true, startTime: true, durationMin: true },
-    orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
-  },
-} as const satisfies Prisma.GroupSelect;
+/** What a group row holds. 
+ow decides which Scheduled session is the next one. */
+const groupSelect = (now: Date) =>
+  ({
+    id: true,
+    name: true,
+    level: true,
+    startDate: true,
+    isActive: true,
+    instructor: { select: { id: true, name: true } },
+    slots: {
+      select: { weekday: true, startTime: true, durationMin: true },
+      orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
+    },
+    _count: { select: { sessions: { where: { status: 'held' } } } },
+    sessions: {
+      where: { status: 'scheduled', scheduledAt: { gt: now } },
+      select: { scheduledAt: true },
+      orderBy: { scheduledAt: 'asc' },
+      take: 1,
+    },
+  }) as const satisfies Prisma.GroupSelect;
 
 /**
  * Reads and writes groups with their weekly slots (US-07). Queries go through `txHost.tx` (the
@@ -49,6 +64,7 @@ export class GroupRepository {
   constructor(
     private readonly txHost: TransactionHost<TenantTransactionalAdapter>,
     private readonly tenant: TenantContext,
+    private readonly clock: Clock,
   ) {}
 
   /**
@@ -82,7 +98,7 @@ export class GroupRepository {
 
     const rows = await this.txHost.tx.group.findMany({
       where: { id: { in: ids.map(({ id }) => id) } },
-      select: GROUP_SELECT,
+      select: groupSelect(this.clock.now()),
     });
     const byId = new Map(rows.map((row) => [row.id, row]));
     return {
@@ -93,7 +109,7 @@ export class GroupRepository {
 
   /** The group in the current academy, or null (unknown id or another academy). */
   findById(id: string): Promise<GroupRow | null> {
-    return this.txHost.tx.group.findFirst({ where: { id }, select: GROUP_SELECT });
+    return this.txHost.tx.group.findFirst({ where: { id }, select: groupSelect(this.clock.now()) });
   }
 
   /**
@@ -131,7 +147,7 @@ export class GroupRepository {
     });
     return this.txHost.tx.group.findFirstOrThrow({
       where: { id: group.id },
-      select: GROUP_SELECT,
+      select: groupSelect(this.clock.now()),
     });
   }
 }

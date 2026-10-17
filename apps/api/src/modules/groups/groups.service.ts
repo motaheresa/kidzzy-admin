@@ -5,6 +5,7 @@ import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
 import { AccessContext } from '../auth/access-context';
 import { InstructorRepository } from '../instructors/instructor.repository';
+import { SessionGenerator } from '../sessions/session-generator';
 import type { CreateGroupDto } from './dto/create-group.dto';
 import type { ListGroupsQueryDto } from './dto/list-groups.query';
 import { toGroup } from './group.mapper';
@@ -23,6 +24,7 @@ export class GroupsService {
   constructor(
     private readonly groups: GroupRepository,
     private readonly instructors: InstructorRepository,
+    private readonly generator: SessionGenerator,
     private readonly access: AccessContext,
   ) {}
 
@@ -40,13 +42,13 @@ export class GroupsService {
       { search: query.search || undefined, isActive: query.isActive, instructorId },
       pageWindow(query),
     );
-    return toPage(rows.map(withExtras), query, total);
+    return toPage(rows.map(toGroup), query, total);
   }
 
   async get(id: string): Promise<Group> {
     const group = await this.findOrThrow(id);
     this.access.ensureOwner(this.access.scopeFor('groups.read'), group.instructor.id);
-    return withExtras(group);
+    return toGroup(group);
   }
 
   /** The group and its slots in one transaction. */
@@ -56,15 +58,17 @@ export class GroupsService {
       throw notAssignable();
     }
     assertScheduleIsValid(dto.schedule);
-    return withExtras(
-      await this.groups.create({
-        name: dto.name,
-        level: dto.level,
-        instructorId: dto.instructorId,
-        startDate: dto.startDate,
-        slots: dto.schedule,
-      }),
-    );
+    const created = await this.groups.create({
+      name: dto.name,
+      level: dto.level,
+      instructorId: dto.instructorId,
+      startDate: dto.startDate,
+      slots: dto.schedule,
+    });
+    // The first sessions land with the group, in the same transaction (AC: sessions come from
+    // the schedule). The daily job tops the horizon up afterwards.
+    await this.generator.generateForGroup(created.id);
+    return toGroup(await this.findOrThrow(created.id));
   }
 
   private async findOrThrow(id: string): Promise<GroupRow> {
@@ -74,11 +78,6 @@ export class GroupsService {
     }
     return group;
   }
-}
-
-/** TODO(SCRUM-22): heldCount and nextSessionAt come from the sessions. */
-function withExtras(row: GroupRow): Group {
-  return toGroup(row, { heldCount: 0, nextSessionAt: null });
 }
 
 function notAssignable(): AppException {

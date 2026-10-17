@@ -19,6 +19,23 @@ describe('validateEnv', () => {
     expect(env.COOKIE_SECURE).toBe(false); // not true, as implicit conversion would give
   });
 
+  it('reads SESSION_GENERATION_WEEKS as a number, 4 when unset', () => {
+    expect(validateEnv({ ...valid }).SESSION_GENERATION_WEEKS).toBe(4);
+    expect(validateEnv({ ...valid, SESSION_GENERATION_WEEKS: '8' }).SESSION_GENERATION_WEEKS).toBe(
+      8,
+    );
+  });
+
+  it.each([
+    ['0', /at least 1/],
+    ['27', /at most 26/],
+    ['2.5', /whole number/],
+    ['four', /whole number/],
+    ['', /whole number/],
+  ])('refuses SESSION_GENERATION_WEEKS=%j', (value, message) => {
+    expect(() => validateEnv({ ...valid, SESSION_GENERATION_WEEKS: value })).toThrow(message);
+  });
+
   it('keeps other variables, so ConfigService still reads them', () => {
     expect(validateEnv({ ...valid, SEED_ADMIN_NAME: 'Admin' })).toMatchObject({
       SEED_ADMIN_NAME: 'Admin',
