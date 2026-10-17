@@ -8,7 +8,7 @@ export const STUDENTS_PAGE_SIZE = 20;
 
 const path = (id: string) => `/students/${encodeURIComponent(id)}`;
 
-/** GET /students: one page, with the active filter when set. */
+/** GET /students: one page, with the search and the active filter when set. */
 export function listStudents(
   params: StudentListParams,
   signal?: AbortSignal,
@@ -17,6 +17,7 @@ export function listStudents(
     page: String(params.page),
     pageSize: String(STUDENTS_PAGE_SIZE),
   });
+  if (params.search) query.set('search', params.search);
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive));
   return http.get<Page<Student>>(`/students?${query.toString()}`, { signal });
 }

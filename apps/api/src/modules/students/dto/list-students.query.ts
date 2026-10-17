@@ -1,13 +1,19 @@
-import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { PageQueryDto } from '../../../common/pagination/page-query.dto';
-import { ToBoolean } from '../../../common/validation/transforms';
+import { ToBoolean, Trim } from '../../../common/validation/transforms';
 
-/**
- * GET /students query (openapi.yaml: listStudents).
- * TODO(SCRUM-19, US-06): `search` (name or code). Until then it is an unknown property, so a
- * request that sends it gets 400 instead of a list that silently ignores it.
- */
+/** GET /students query (openapi.yaml: listStudents). */
 export class ListStudentsQueryDto extends PageQueryDto {
+  /**
+   * Part of the name (in its search form: Arabic letter forms, diacritics and case do not
+   * matter) or part of the code; an exact code comes first (US-06). Empty means no search.
+   */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+
   /** Students currently enrolled in this group. */
   @IsOptional()
   @IsUUID()

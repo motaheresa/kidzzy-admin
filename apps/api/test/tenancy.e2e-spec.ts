@@ -23,8 +23,10 @@ describe('Tenancy (e2e)', () => {
   let academyA: string;
   let academyB: string;
 
+  // ASCII lowercase names, so the search form (name_search) is the name itself.
   const user = (name: string) => ({
     name,
+    nameSearch: name,
     email: `${name}-${randomUUID()}@test.local`,
     passwordHash: 'x',
   });
@@ -118,7 +120,7 @@ describe('Tenancy (e2e)', () => {
   it('enforces email or phone at the database level', async () => {
     await expect(
       prisma.unscoped.user.create({
-        data: { academyId: academyA, name: 'nobody', passwordHash: 'x' },
+        data: { academyId: academyA, name: 'nobody', nameSearch: 'nobody', passwordHash: 'x' },
       }),
     ).rejects.toThrow(/users_email_or_phone_check/);
   });
@@ -128,7 +130,7 @@ describe('Tenancy (e2e)', () => {
     async (email) => {
       await expect(
         prisma.unscoped.user.create({
-          data: { academyId: academyA, name: 'raw', email, passwordHash: 'x' },
+          data: { academyId: academyA, name: 'raw', nameSearch: 'raw', email, passwordHash: 'x' },
         }),
       ).rejects.toThrow(/users_email_normalized_check/);
     },
@@ -139,7 +141,7 @@ describe('Tenancy (e2e)', () => {
     async (phone) => {
       await expect(
         prisma.unscoped.user.create({
-          data: { academyId: academyA, name: 'raw', phone, passwordHash: 'x' },
+          data: { academyId: academyA, name: 'raw', nameSearch: 'raw', phone, passwordHash: 'x' },
         }),
       ).rejects.toThrow(/users_phone_format_check/);
     },
@@ -150,6 +152,7 @@ describe('Tenancy (e2e)', () => {
       data: {
         academyId: academyA,
         name: 'clean',
+        nameSearch: 'clean',
         email: `clean-${run}@test.local`,
         phone: `+2010${String(run).slice(-8)}`,
         passwordHash: 'x',

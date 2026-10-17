@@ -9,6 +9,7 @@ import { seedAccess } from '../prisma/seed/access.seed';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
+import { normalizeSearchText } from '../src/common/normalize/search-text';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /**
@@ -74,6 +75,7 @@ export async function createUser(
       academyId,
       name: user.name,
       // Stored the way the app stores them, exactly like a real write
+      nameSearch: normalizeSearchText(user.name),
       email: user.email === undefined ? null : normalizeEmail(user.email),
       phone: user.phone === undefined ? null : normalizePhone(user.phone),
       passwordHash: await hash(user.password),

@@ -194,14 +194,12 @@ describe('Students (e2e)', () => {
       });
     });
 
-    it.each([
-      [{ groupId: 'nope' }],
-      [{ isActive: 'yes' }],
-      [{ pageSize: 101 }],
-      [{ search: 'kc' }],
-    ])('refuses the query %j (400)', async (query) => {
-      await request(server()).get(api('/students')).query(query).set(as(adminToken)).expect(400);
-    });
+    it.each([[{ groupId: 'nope' }], [{ isActive: 'yes' }], [{ pageSize: 101 }]])(
+      'refuses the query %j (400)',
+      async (query) => {
+        await request(server()).get(api('/students')).query(query).set(as(adminToken)).expect(400);
+      },
+    );
 
     it('gets one student, and 404 for another academy’s or an unknown id', async () => {
       const res = await request(server())
@@ -312,8 +310,10 @@ describe('Students (e2e)', () => {
   describe('database checks (they hold whoever writes the row)', () => {
     const insert = (code: string, phone: string, age: number | null = null) =>
       prisma.unscoped.$executeRaw`
-        INSERT INTO students (id, academy_id, code, name, parent_name, parent_phone, age, updated_at)
-        VALUES (${randomUUID()}::uuid, ${academyId}::uuid, ${code}, 'raw', 'raw', ${phone}, ${age}, now())`;
+        INSERT INTO students
+          (id, academy_id, code, name, name_search, parent_name, parent_phone, age, updated_at)
+        VALUES (${randomUUID()}::uuid, ${academyId}::uuid, ${code}, 'raw', 'raw', 'raw', ${phone},
+          ${age}, now())`;
 
     it.each([
       ['a lowercase code', 'kc-raw', '01012345678', null],

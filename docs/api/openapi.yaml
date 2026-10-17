@@ -180,7 +180,9 @@ paths:
           schema:
             type: string
             maxLength: 100
-          description: Part of the name, email or phone; % and _ match themselves
+          description:
+            Part of the name (whatever the Arabic letter forms, diacritics and case, as in listStudents), of the email or
+            of the phone's digits; % and _ match themselves
         - name: isActive
           in: query
           required: false
@@ -393,7 +395,11 @@ paths:
           required: false
           schema:
             type: string
-          description: Name or code
+            maxLength: 100
+          description:
+            Part of the name or of the code; an exact code match is listed first. Names match whatever the Arabic letter
+            forms (أ إ آ / ا, ة / ه, ى / ي), diacritics, tatweel, Latin case and Arabic-Indic digits; % and _ match
+            themselves.
         - name: groupId
           in: query
           required: false

@@ -32,7 +32,7 @@ export class StudentsService {
     if (scope === 'own' || query.groupId !== undefined) return toPage([], query, 0);
 
     const { rows, total } = await this.students.list(
-      { isActive: query.isActive },
+      { isActive: query.isActive, search: query.search || undefined },
       pageWindow(query),
     );
     return toPage(rows.map(toStudent), query, total);
