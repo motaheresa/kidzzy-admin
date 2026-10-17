@@ -26,6 +26,15 @@ export function listGroups(params: GroupListParams, signal?: AbortSignal): Promi
   return http.get<Page<Group>>(`/groups?${query.toString()}`, { signal });
 }
 
+/** The most groups a picker shows (the API's largest page). */
+export const GROUP_OPTIONS_SIZE = 100;
+
+/** GET /groups?isActive=true: the active groups, for a picker (the target of a transfer). */
+export function listGroupOptions(signal?: AbortSignal): Promise<Page<Group>> {
+  const query = new URLSearchParams({ isActive: 'true', pageSize: String(GROUP_OPTIONS_SIZE) });
+  return http.get<Page<Group>>(`/groups?${query.toString()}`, { signal });
+}
+
 /** GET /groups/{id} */
 export function getGroup(id: string, signal?: AbortSignal): Promise<Group> {
   return http.get<Group>(path(id), { signal });

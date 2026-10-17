@@ -1,5 +1,5 @@
 import { useApiQuery } from '@/lib/query';
-import { getGroup, listGroups } from '../api/groups.api';
+import { getGroup, listGroupOptions, listGroups } from '../api/groups.api';
 import { groupKeys } from '../api/groups.keys';
 import type { GroupListParams } from '../types';
 
@@ -12,6 +12,18 @@ export function useGroups(params: GroupListParams) {
     queryKey: groupKeys.list(params),
     queryFn: ({ signal }) => listGroups(params, signal),
     placeholderData: (previous) => previous,
+    meta: { errorHandling: 'local' },
+  });
+}
+
+/**
+ * The active groups, for a choice list (the target of a transfer). Other features reach it
+ * through the feature's index. The form shows its own loading and error state.
+ */
+export function useGroupOptions() {
+  return useApiQuery({
+    queryKey: groupKeys.options(),
+    queryFn: ({ signal }) => listGroupOptions(signal),
     meta: { errorHandling: 'local' },
   });
 }

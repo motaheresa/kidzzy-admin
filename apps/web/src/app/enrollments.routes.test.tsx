@@ -242,3 +242,99 @@ describe('the student profile', () => {
     expect(screen.getByText('شغالة')).toBeInTheDocument();
   });
 });
+
+describe('group history and transfer (US-09)', () => {
+  const groupB: Group = { ...group, id: '9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d', name: 'جروب B' };
+  const open: Enrollment = { ...enrollment, endDate: null };
+  const old: Enrollment = {
+    ...enrollment,
+    id: 'e0',
+    group: { id: groupB.id, name: groupB.name },
+    startDate: '2026-09-01',
+    endDate: '2026-10-09',
+  };
+  const studentHandlers = (enrollments: Enrollment[]): Record<string, Handler> => ({
+    [`GET /students/${mona.id}`]: () =>
+      json(200, { ...mona, currentGroup: { id: group.id, name: group.name } }),
+    [`GET /students/${mona.id}/enrollments`]: () => json(200, { data: enrollments }),
+  });
+
+  it('shows the groups the student was in, with the days, and the transfer button', async () => {
+    api(admin, studentHandlers([open, old]));
+    renderAt(`/students/${mona.id}`);
+    expect(await screen.findByRole('link', { name: 'جروب B' })).toHaveAttribute(
+      'href',
+      `/groups/${groupB.id}`,
+    );
+    expect(screen.getByText('لحد دلوقتي')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'نقل لجروب تاني' })).toHaveAttribute(
+      'href',
+      `/students/${mona.id}/transfer`,
+    );
+  });
+
+  it('offers no transfer button to an instructor', async () => {
+    api(instructorUser, studentHandlers([open]));
+    renderAt(`/students/${mona.id}`);
+    expect(await screen.findByText('لحد دلوقتي')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'نقل لجروب تاني' })).not.toBeInTheDocument();
+  });
+
+  it('offers no transfer button to a student who left every group', async () => {
+    api(admin, studentHandlers([old]));
+    renderAt(`/students/${mona.id}`);
+    expect(await screen.findByRole('link', { name: 'جروب B' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'نقل لجروب تاني' })).not.toBeInTheDocument();
+  });
+
+  it('sends the new group and the first day, and keeps the old group out of the choices', async () => {
+    api(admin, {
+      ...studentHandlers([open]),
+      'GET /groups': () => json(200, page([group, groupB])),
+      [`POST /students/${mona.id}/transfer`]: () =>
+        json(200, { ...open, id: 'e2', group: { id: groupB.id, name: groupB.name } }),
+    });
+    const router = renderAt(`/students/${mona.id}/transfer`);
+    const user = userEvent.setup();
+
+    const picker = await screen.findByLabelText('الجروب الجديد');
+    expect(await within(picker).findByRole('option', { name: /جروب A/ })).toBeDisabled();
+    await user.selectOptions(picker, within(picker).getByRole('option', { name: /جروب B/ }));
+    await user.clear(screen.getByLabelText('اول يوم في الجروب الجديد'));
+    await user.type(screen.getByLabelText('اول يوم في الجروب الجديد'), '2026-10-20');
+    await user.click(screen.getByRole('button', { name: 'نقل الطالب' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/students/${mona.id}`));
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({
+      toGroupId: groupB.id,
+      effectiveDate: '2026-10-20',
+    });
+  });
+
+  it('shows ENROLLMENT_DATE_INVALID under the date', async () => {
+    api(admin, {
+      ...studentHandlers([open]),
+      'GET /groups': () => json(200, page([group, groupB])),
+      [`POST /students/${mona.id}/transfer`]: () => problem(422, 'ENROLLMENT_DATE_INVALID'),
+    });
+    renderAt(`/students/${mona.id}/transfer`);
+    const user = userEvent.setup();
+    const picker = await screen.findByLabelText('الجروب الجديد');
+    await user.selectOptions(picker, await within(picker).findByRole('option', { name: /جروب B/ }));
+    await user.click(screen.getByRole('button', { name: 'نقل الطالب' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('اول يوم في الجروب الجديد')).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      ),
+    );
+  });
+
+  it('shows the forbidden page to an instructor opening the transfer screen', async () => {
+    api(instructorUser, studentHandlers([open]));
+    renderAt(`/students/${mona.id}/transfer`);
+    expect(
+      await screen.findByRole('heading', { name: 'مش مسموح لك تفتح الصفحة دي' }),
+    ).toBeInTheDocument();
+  });
+});

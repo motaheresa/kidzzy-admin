@@ -64,6 +64,8 @@ export const ErrorCode = {
   StudentAbsent: 'STUDENT_ABSENT',
   StudentNotEnrollable: 'STUDENT_NOT_ENROLLABLE',
   GroupInactive: 'GROUP_INACTIVE',
+  NoActiveEnrollment: 'NO_ACTIVE_ENROLLMENT',
+  SameGroup: 'SAME_GROUP',
   EnrollmentDateInvalid: 'ENROLLMENT_DATE_INVALID',
   CycleNotDue: 'CYCLE_NOT_DUE',
   CycleAlreadyPaid: 'CYCLE_ALREADY_PAID',
@@ -218,6 +220,13 @@ export interface PaymentCycle {
 export interface PlanInput {
   sessionsPerCycle: number;
   amount: string;
+}
+
+/** POST /students/{id}/transfer body (openapi.yaml: TransferRequest). */
+export interface TransferRequest {
+  toGroupId: string;
+  /** Academy-local date, YYYY-MM-DD: the first day in the new group. */
+  effectiveDate: string;
 }
 
 /** POST /groups/{id}/enrollments body (openapi.yaml: EnrollRequest). */
