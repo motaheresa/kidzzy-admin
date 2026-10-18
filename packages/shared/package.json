@@ -23,6 +23,6 @@
     "test": "echo \"no tests in shared\""
   },
   "devDependencies": {
-    "typescript": "~5.8.3"
+    "typescript": "~7.0.2"
   }
 }
