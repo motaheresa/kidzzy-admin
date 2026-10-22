@@ -21,6 +21,13 @@ set -euo pipefail
 # A future pnpm bump through corepack must never wait for a download prompt.
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
+# No terminal in an SSH session run by the workflow. When node_modules was made with other settings
+# (the hand install before the first deploy, another pnpm or store), pnpm wants to remove and
+# recreate it and asks first; with no TTY it aborts with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY.
+# CI=true is what pnpm itself asks for: it replaces node_modules without asking. The install is
+# still --frozen-lockfile, so it can only produce what pnpm-lock.yaml says.
+export CI=true
+
 # DEPLOY_ROOT, NVM_NODE_ROOT and AAPANEL_NODE_HOME exist for the tests; production uses the defaults.
 ROOT="${DEPLOY_ROOT:-/www/wwwroot/kidzzy-admin}"
 PUBLIC_HEALTH_URL=https://app.kidzzy-coders.com/api/v1/health

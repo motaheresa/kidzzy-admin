@@ -49,6 +49,13 @@ trap cleanup EXIT
 # shellcheck source=SCRIPTDIR/deploy.sh
 source "$script"
 
+# ── Nothing in the deploy may wait for an answer: there is no terminal in the SSH session ──────
+# Sourcing the script exports these itself, so this reads the script text: they must stay exported.
+grep -qx 'export CI=true' "$script" ||
+  fail "deploy.sh must export CI=true, or pnpm aborts when it has to replace node_modules"
+grep -qx 'export COREPACK_ENABLE_DOWNLOAD_PROMPT=0' "$script" ||
+  fail "deploy.sh must stop corepack from prompting for a download"
+
 # ── The Node major comes from .nvmrc, however it is written ───────────────────────────────────
 for value in "22" "v22.14.0" "22.14" "lts/*" ""; do
   expected=""
