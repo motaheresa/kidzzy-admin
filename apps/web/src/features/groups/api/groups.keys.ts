@@ -8,4 +8,5 @@ export const groupKeys = {
   list: (params: GroupListParams) => [...groupKeys.lists(), params] as const,
   details: () => [...groupKeys.all, 'detail'] as const,
   detail: (id: string) => [...groupKeys.details(), id] as const,
+  options: () => [...groupKeys.lists(), 'options'] as const,
 };

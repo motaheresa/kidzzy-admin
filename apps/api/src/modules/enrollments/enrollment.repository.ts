@@ -41,6 +41,23 @@ export class EnrollmentRepository {
     });
   }
 
+  /** All of the student's enrollments, the latest first (their group history). */
+  listForStudent(studentId: string): Promise<EnrollmentRow[]> {
+    return this.txHost.tx.enrollment.findMany({
+      where: { studentId },
+      select: ENROLLMENT_SELECT,
+      orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  /** Sets the last day of the student's open enrollment. Call it before opening the next one. */
+  async closeOpen(studentId: string, endDate: string): Promise<void> {
+    await this.txHost.tx.enrollment.updateMany({
+      where: { studentId, endDate: null },
+      data: { endDate: stringToDate(endDate) },
+    });
+  }
+
   /** The last day of the student's latest closed enrollment (YYYY-MM-DD), or null. */
   async findLastEndDate(studentId: string): Promise<string | null> {
     const last = await this.txHost.tx.enrollment.findFirst({
