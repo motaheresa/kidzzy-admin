@@ -20,6 +20,6 @@ Local development uses a native PostgreSQL 16 install, running as a Windows serv
 
 ## Consequences
 
-- Local, CI and production all run PostgreSQL 16 without containers on the developer's side, so behavior matches across them.
+- Local development and CI run PostgreSQL 16 without containers on the developer's side. Production is PostgreSQL 18 on the VPS (ADR-0014).
 - Each developer installs PostgreSQL once; the README has the steps.
 - If Redis or another service is added later, this decision is revisited.

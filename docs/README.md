@@ -15,5 +15,6 @@ In this repository:
 
 - [`adr/`](adr): one file per architecture decision. To change a decision, add a new ADR that supersedes the old one; never rewrite an accepted ADR.
 - [`api/openapi.yaml`](api/openapi.yaml): the API contract (OpenAPI 3.1). CI lints it on every pull request.
+- [`deployment.md`](deployment.md): how a push to `main` is published to the VPS, and how to roll it back.
 
 Backlog: Jira project `SCRUM` (sprints) and Linear project "Academy Management System V1".

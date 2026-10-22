@@ -1,6 +1,6 @@
 # ADR-0009: Deployment on the existing InterServer server with Webuzo
 
-- Status: Accepted, amended by [ADR-0010](0010-local-development-without-docker.md)
+- Status: Superseded by [ADR-0014](0014-deployment-aapanel.md). The local-development amendment in [ADR-0010](0010-local-development-without-docker.md) still stands.
 - Date: 2026-10-14
 
 ## Context
