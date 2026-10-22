@@ -32,7 +32,7 @@ The `deploy` user already owns the clone and the PM2 process. These are the piec
 
   The first `main` push after that uses `pm2 restart`. If the process does not exist, the deploy fails on purpose.
 
-Create a GitHub environment named `production` and add yourself as a required reviewer. That is the approval gate: the deploy job waits until you approve it. Put the four secrets on that environment, not only on the repository. A secret that exists only on the environment is invisible to a job that does not name it.
+Create a GitHub environment named `production` and add yourself as a required reviewer. That is the approval gate: the deploy job waits until you approve it. The four secrets can stay repository secrets: a job that names an environment also reads the repository's secrets, and an environment secret with the same name would win over the repository one. For a stronger gate, move `SSH_PRIVATE_KEY` to the environment: repository secrets are readable by any workflow in the repository, while an environment secret is only handed to the job after the required reviewer approves. If you keep "Prevent self-review" off, you can approve the deploys your own merge starts; with it on and you as the only reviewer, the deploy would wait forever.
 
 | Secret            | Value                                                                             |
 | ----------------- | --------------------------------------------------------------------------------- |
