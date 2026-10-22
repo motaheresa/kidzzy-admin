@@ -1,4 +1,13 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import type { HeldResult, Page, Session } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
 import { ListSessionsQueryDto } from './dto/list-sessions.query';
@@ -26,6 +35,7 @@ export class SessionsController {
 
   @RequirePermission('sessions.update')
   @Post(':id/held')
+  @HttpCode(HttpStatus.OK)
   markHeld(@Param('id', ParseUUIDPipe) id: string): Promise<HeldResult> {
     return this.sessions.markHeld(id);
   }
