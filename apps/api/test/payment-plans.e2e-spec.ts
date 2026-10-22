@@ -287,7 +287,7 @@ describe('Payment plans (e2e)', () => {
       await list({ studentId: student.id }, otherAdminToken).expect(404);
     });
 
-    it('an instructor has no plan until US-21: the list is empty', async () => {
+    it('an instructor with no plan has an empty list', async () => {
       const res = await list({ instructorId: ana }).expect(200);
       expect(res.body).toEqual({ data: [] });
     });

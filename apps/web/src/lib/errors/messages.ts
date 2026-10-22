@@ -37,7 +37,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   ENROLLMENT_DATE_INVALID: 'تاريخ البداية لازم يكون بعد آخر يوم للطالب في جروبه اللي فات',
   CYCLE_NOT_DUE: 'الدورة دي لسه ما استحقتش الدفع',
   CYCLE_ALREADY_PAID: 'الدورة دي اتدفعت بالفعل',
-  STARTING_POINT_LOCKED: 'نقطة البداية لاول دورة بس، والطالب ده عنده دورة بالفعل',
+  STARTING_POINT_LOCKED: 'نقطة البداية لاول دورة بس، وعنده دورة بالفعل',
   STARTING_POINT_OUT_OF_RANGE: 'نقطة البداية لازم تكون اقل من عدد سيشنات الدورة',
   AMOUNT_MISMATCH: 'المبلغ مش مطابق لمبلغ الخطة',
   RATE_LIMITED: 'محاولات كثيرة، جرب تاني بعد دقيقة',

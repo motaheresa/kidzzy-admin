@@ -10,6 +10,7 @@ import { EditInstructorPage } from '@/pages/instructors/EditInstructorPage';
 import { InstructorPage } from '@/pages/instructors/InstructorPage';
 import { InstructorsPage } from '@/pages/instructors/InstructorsPage';
 import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
+import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
@@ -36,7 +37,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission enrollments.manage   /groups/:id/enroll, /students/:id/transfer
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
- *       RequirePermission payments.manage      /students/:id/plan
+ *       RequirePermission payments.manage      /students/:id/plan, /instructors/:id/plan
  *       RequirePermission instructors.read     /instructors, /instructors/:id
  *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
  *     NotFoundPage     *
@@ -90,7 +91,10 @@ export const routes: RouteObject[] = [
           },
           {
             element: <RequirePermission permission="payments.manage" />,
-            children: [{ path: '/students/:id/plan', element: <ChangeStudentPlanPage /> }],
+            children: [
+              { path: '/students/:id/plan', element: <ChangeStudentPlanPage /> },
+              { path: '/instructors/:id/plan', element: <SetInstructorPlanPage /> },
+            ],
           },
           {
             element: <RequirePermission permission="enrollments.manage" />,
