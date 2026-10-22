@@ -14,12 +14,13 @@ import {
 import { usePermissions, useSession } from '@/features/auth';
 import { formatTime, zonedDayRange } from '@/lib/format';
 import { useSessions } from '../hooks/useSessions';
+import { MarkHeldButton } from './MarkHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
 /**
  * Today's sessions of the caller's groups (US-12), in the academy's timezone.
  * Shown only to someone who holds sessions.read; the API still enforces that.
- * Marking held, cancelling and rescheduling arrive with their own stories.
+ * A session that can be marked Held shows that action beside its link.
  */
 export function TodaySessions() {
   const { can } = usePermissions();
@@ -59,10 +60,13 @@ function TodaySessionsList({ timeZone }: { timeZone: string }) {
         ) : (
           <ul className="grid gap-2">
             {sessions.data.data.map((session) => (
-              <li key={session.id}>
+              <li
+                key={session.id}
+                className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
+              >
                 <Link
                   to={`/sessions/${session.id}`}
-                  className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 transition-colors duration-fast ease-out hover:bg-muted"
+                  className="flex min-h-11 flex-1 flex-wrap items-center justify-between gap-3 rounded-md transition-colors duration-fast ease-out hover:bg-muted"
                 >
                   <span className="font-medium">{session.group.name}</span>
                   <span className="numeric text-sm text-muted-foreground">
@@ -70,6 +74,7 @@ function TodaySessionsList({ timeZone }: { timeZone: string }) {
                   </span>
                   <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
                 </Link>
+                <MarkHeldButton session={session} />
               </li>
             ))}
           </ul>

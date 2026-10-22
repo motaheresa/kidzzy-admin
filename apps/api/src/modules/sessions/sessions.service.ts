@@ -1,8 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { ErrorCode, type Page, type Session } from '@kidzzy/shared';
+import { Transactional } from '@nestjs-cls/transactional';
+import { ErrorCode, type HeldResult, type Page, type Session } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
 import { AccessContext } from '../auth/access-context';
+import { Clock } from './clock';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
 import { toSession } from './session.mapper';
 import { SessionRepository, type SessionRow } from './session.repository';
@@ -32,6 +34,7 @@ export class SessionsService {
   constructor(
     private readonly sessions: SessionRepository,
     private readonly access: AccessContext,
+    private readonly clock: Clock,
   ) {}
 
   async list(query: ListSessionsQueryDto): Promise<Page<Session>> {
@@ -88,6 +91,104 @@ export class SessionsService {
     if (this.access.scopeFor('sessions.read') !== 'own') return true;
     const caller = this.access.userId;
     return row.group.instructorId === caller || row.instructorId === caller;
+  }
+
+  /**
+   * Marks a Scheduled session Held (US-13) and gives it the next number in its group.
+   *
+   * Writing is stricter than reading. Scope `own` may mark Held only when `sessions.instructor_id`
+   * is the caller, not merely because they are the group's current instructor. After an instructor
+   * change, an unrecorded session stays on the previous instructor: the new one is 403 on it.
+   * Scope `any` (the admin) may mark any session of the academy.
+   *
+   * The group row is locked for the rest of the transaction, so a second mark of the same group
+   * waits and then sees this write. Marking Held never renumbers sessions that are already Held.
+   * Undo (SCRUM-41, BR-13) is what will renumber later.
+   *
+   * The admin session report (FR-26) is a later notification, not part of this write.
+   */
+  @Transactional()
+  async markHeld(id: string): Promise<HeldResult> {
+    const first = await this.sessions.findById(id);
+    if (!first) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    // Before the lock, so a caller who is not allowed does not wait on it.
+    this.ensureMayMark(first);
+
+    await this.sessions.lockGroup(first.group.id);
+
+    const row = await this.sessions.findById(id);
+    if (!row) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    // The instructor on the session can change while this request waited for the lock.
+    this.ensureMayMark(row);
+
+    if (row.status !== 'scheduled') {
+      throw new AppException(
+        ErrorCode.SessionNotScheduled,
+        HttpStatus.CONFLICT,
+        'Only a scheduled session can be marked Held',
+      );
+    }
+    const now = this.clock.now();
+    if (row.scheduledAt > now) {
+      throw new AppException(
+        ErrorCode.SessionNotStarted,
+        HttpStatus.CONFLICT,
+        'The session has not started',
+      );
+    }
+    await this.ensureOrder(row);
+
+    const sessionNumber = await this.sessions.nextSessionNumber(row.group.id);
+    await this.sessions.markHeld(id, sessionNumber, this.access.userId, now);
+    const held = await this.sessions.findById(id);
+    if (!held) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+
+    // TODO(SCRUM-38): count this Held session into the open payment cycles.
+    // TODO(US-35): write the audit log for this status change.
+    return { ...toSession(held), cyclesUpdated: [] };
+  }
+
+  /** Scope `own` writes only a session whose instructor is the caller. Scope `any` passes. */
+  private ensureMayMark(row: SessionRow): void {
+    const scope = this.access.scopeFor('sessions.update');
+    if (scope === 'own' && row.instructorId !== this.access.userId) {
+      throw new AppException(ErrorCode.Forbidden, HttpStatus.FORBIDDEN, 'Not allowed');
+    }
+  }
+
+  /**
+   * Same group only. Scope `own` cannot skip an earlier session that is still Scheduled.
+   * Scope `any` can (the admin unlock, until a missed session can be cancelled, SCRUM-27):
+   * that earlier session stays Scheduled, so it is not numbered and will not enter a cycle.
+   * Both scopes refuse when a Held session of the group is strictly later in time, so this
+   * one cannot take a higher number than a session that happens after it. Equal times do not
+   * count as earlier or later.
+   */
+  private async ensureOrder(row: SessionRow): Promise<void> {
+    const scope = this.access.scopeFor('sessions.update');
+    if (
+      scope === 'own' &&
+      (await this.sessions.countEarlierScheduled(row.group.id, row.scheduledAt)) > 0
+    ) {
+      throw new AppException(
+        ErrorCode.SessionOutOfOrder,
+        HttpStatus.CONFLICT,
+        'An earlier session of this group is still scheduled',
+      );
+    }
+    if ((await this.sessions.countLaterHeld(row.group.id, row.scheduledAt)) > 0) {
+      throw new AppException(
+        ErrorCode.SessionOutOfOrder,
+        HttpStatus.CONFLICT,
+        'This session is earlier than a session already marked Held',
+      );
+    }
   }
 
   /** `from` inclusive, `to` exclusive, so a range that contains nothing is a bad request. */

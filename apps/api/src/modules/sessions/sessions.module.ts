@@ -9,7 +9,8 @@ import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 
 /**
- * Sessions: generation from the weekly schedules (US-11) and reading them (US-12).
+ * Sessions: generation from the weekly schedules (US-11), reading them (US-12) and marking
+ * one Held (US-13).
  * The repository stays inside this module; groups already import it, so it does not
  * import GroupRepository back.
  */

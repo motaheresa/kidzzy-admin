@@ -4,7 +4,7 @@ import type { SessionRow } from './session.repository';
 /**
  * openapi.yaml: Session. Built field by field.
  * instructorId is the instructor on the session (who taught it, or who will), which can differ
- * from the group's current instructor.
+ * from the group's current instructor. status_changed_* stay in the database and off this response.
  */
 export function toSession(row: SessionRow): Session {
   return {

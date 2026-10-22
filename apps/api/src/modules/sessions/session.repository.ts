@@ -204,6 +204,66 @@ export class SessionRepository {
     return this.txHost.tx.session.findUnique({ where: { id }, select: SESSION_SELECT });
   }
 
+  /**
+   * Locks the group row until this transaction commits, so two Held marks of the same group
+   * run one after the other. The order check and the next number then see the earlier write.
+   * Raw SQL is not tenant-scoped, so academy_id is filtered here. Same shape as GroupRepository.lock.
+   */
+  async lockGroup(groupId: string): Promise<void> {
+    await this.txHost.tx.$queryRaw`
+      SELECT id FROM groups
+      WHERE id = ${groupId}::uuid AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+      FOR UPDATE`;
+  }
+
+  /**
+   * Sessions of this group that are still Scheduled and strictly earlier than `scheduledAt`.
+   * An equal time does not count, so two sessions at the same instant do not block each other.
+   */
+  async countEarlierScheduled(groupId: string, scheduledAt: Date): Promise<number> {
+    return this.txHost.tx.session.count({
+      where: { groupId, status: 'scheduled', scheduledAt: { lt: scheduledAt } },
+    });
+  }
+
+  /** Held sessions of this group whose time is strictly later. Equal times do not count. */
+  async countLaterHeld(groupId: string, scheduledAt: Date): Promise<number> {
+    return this.txHost.tx.session.count({
+      where: { groupId, status: 'held', scheduledAt: { gt: scheduledAt } },
+    });
+  }
+
+  /** The next number for the group: one more than the highest Held number, or 1 when none. */
+  async nextSessionNumber(groupId: string): Promise<number> {
+    const aggregate = await this.txHost.tx.session.aggregate({
+      where: { groupId },
+      _max: { sessionNumber: true },
+    });
+    return (aggregate._max.sessionNumber ?? 0) + 1;
+  }
+
+  /**
+   * Marks the session Held with its number and who changed the status. Does not renumber any
+   * other row. The academy mirror equals this academy, matching the check constraint.
+   */
+  async markHeld(
+    id: string,
+    sessionNumber: number,
+    changedById: string,
+    changedAt: Date,
+  ): Promise<void> {
+    await this.txHost.tx.session.update({
+      where: { id },
+      data: {
+        status: 'held',
+        sessionNumber,
+        statusChangedById: changedById,
+        statusChangedByAcademyId: this.tenant.requireAcademyId(),
+        statusChangedAt: changedAt,
+      },
+    });
+  }
+
   private where(filter: SessionListFilter): Prisma.SessionWhereInput {
     return {
       ...(filter.from || filter.to

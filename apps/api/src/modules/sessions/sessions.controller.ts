@@ -1,11 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import type { Page, Session } from '@kidzzy/shared';
+import { Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import type { HeldResult, Page, Session } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
 import { ListSessionsQueryDto } from './dto/list-sessions.query';
 import { SessionsService } from './sessions.service';
 
 /**
- * /sessions (US-12). HTTP only: the DTO in, a service call, the mapped response out.
+ * /sessions (US-12, US-13). HTTP only: the DTO in, a service call, the mapped response out.
  * Each route's permission matches its x-permission in openapi.yaml.
  */
 @Controller('sessions')
@@ -22,5 +22,11 @@ export class SessionsController {
   @Get(':id')
   get(@Param('id', ParseUUIDPipe) id: string): Promise<Session> {
     return this.sessions.get(id);
+  }
+
+  @RequirePermission('sessions.update')
+  @Post(':id/held')
+  markHeld(@Param('id', ParseUUIDPipe) id: string): Promise<HeldResult> {
+    return this.sessions.markHeld(id);
   }
 }
