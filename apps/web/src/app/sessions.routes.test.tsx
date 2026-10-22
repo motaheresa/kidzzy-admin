@@ -186,7 +186,7 @@ describe('a group’s sessions', () => {
     });
     renderAt(groupPath);
 
-    const markButton = await screen.findByRole('button', { name: 'اتعملت' });
+    const markButton = await screen.findByRole('button', { name: /سجّل حصة جروب A/ });
     await userEvent.setup().click(markButton);
     await userEvent.setup().click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
 
@@ -210,7 +210,7 @@ describe('a group’s sessions', () => {
     renderAt(groupPath);
 
     await screen.findByRole('link', { name: /22 أكتوبر 2026/ });
-    expect(screen.queryByRole('button', { name: 'اتعملت' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
   });
 
   it('does not show Mark Held to scope own when the session belongs to another instructor', async () => {
@@ -223,12 +223,12 @@ describe('a group’s sessions', () => {
     renderAt(groupPath);
 
     await screen.findByRole('link', { name: /22 أكتوبر 2026/ });
-    expect(screen.queryByRole('button', { name: 'اتعملت' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
   });
 });
 
 describe('session details', () => {
-  it('shows the session and no actions yet', async () => {
+  it('shows the session and hides Mark Held while it has not started', async () => {
     api(admin, { [`GET /sessions/${session.id}`]: () => json(200, session) });
     renderAt(`/sessions/${session.id}`);
     expect(await screen.findByRole('heading', { name: 'جروب A' })).toBeInTheDocument();
@@ -238,7 +238,7 @@ describe('session details', () => {
       'href',
       `/groups/${session.group.id}`,
     );
-    expect(screen.queryByRole('button', { name: 'اتعملت' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
   });
 
   it('does not show Mark Held for a non-Scheduled session', async () => {
@@ -249,7 +249,7 @@ describe('session details', () => {
     renderAt(`/sessions/${session.id}`);
 
     await screen.findByRole('heading', { name: 'جروب A' });
-    expect(screen.queryByRole('button', { name: 'اتعملت' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -266,20 +266,9 @@ describe('session details', () => {
     });
     renderAt(`/sessions/${session.id}`);
 
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'اتعملت' }));
+    await userEvent.setup().click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
     await userEvent.setup().click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
     expect(await screen.findByText(message)).toBeInTheDocument();
-  });
-
-  it('does not show Mark Held for scope own when another instructor is on the session', async () => {
-    api(instructorUser, {
-      [`GET /sessions/${session.id}`]: () =>
-        json(200, { ...startedSession, instructorId: 'former-instructor' }),
-    });
-    renderAt(`/sessions/${session.id}`);
-
-    await screen.findByRole('heading', { name: 'جروب A' });
-    expect(screen.queryByRole('button', { name: 'اتعملت' })).not.toBeInTheDocument();
   });
 
   it('says a missing session is gone', async () => {

@@ -37,7 +37,11 @@ export function MarkHeldButton({ session }: { session: Session }) {
         setOpen(next);
         if (!next) mark.reset();
       }}
-      trigger={<Button variant="outline">اتعملت</Button>}
+      trigger={
+        <Button variant="outline" aria-label={`سجّل حصة ${session.group.name} اتعملت`}>
+          سجّلها اتعملت
+        </Button>
+      }
       title="تسجّل الحصة إنها اتعملت؟"
       description="الأدمن بس هو اللي يقدر يرجع التسجيل ده."
       confirmLabel="ايوه، سجّلها"

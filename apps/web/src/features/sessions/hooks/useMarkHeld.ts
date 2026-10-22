@@ -6,14 +6,15 @@ import { sessionKeys } from '../api/sessions.keys';
 
 /**
  * Marks one session Held. The screen shows the error. The detail takes the new session at once,
- * and the session lists plus the group (held count and next session) are refreshed.
+ * and the session lists plus the group (held count and next session) are refreshed in the
+ * background, so the confirm dialog closes without waiting for them.
  */
 export function useMarkHeld(id: string) {
   const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: () => markSessionHeld(id),
     meta: { errorHandling: 'local' },
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       const session: Session = {
         id: result.id,
         group: result.group,
@@ -27,7 +28,7 @@ export function useMarkHeld(id: string) {
         cancelReason: result.cancelReason,
       };
       queryClient.setQueryData(sessionKeys.detail(session.id), session);
-      await Promise.all([
+      void Promise.all([
         queryClient.invalidateQueries({ queryKey: sessionKeys.lists() }),
         queryClient.invalidateQueries({ queryKey: groupKeys.detail(session.group.id) }),
         queryClient.invalidateQueries({ queryKey: groupKeys.lists() }),
