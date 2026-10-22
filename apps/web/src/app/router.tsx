@@ -13,6 +13,7 @@ import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
+import { ChangeStudentPlanPage } from '@/pages/students/ChangeStudentPlanPage';
 import { EditStudentPage } from '@/pages/students/EditStudentPage';
 import { NewStudentPage } from '@/pages/students/NewStudentPage';
 import { StudentPage } from '@/pages/students/StudentPage';
@@ -35,6 +36,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission enrollments.manage   /groups/:id/enroll, /students/:id/transfer
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
+ *       RequirePermission payments.manage      /students/:id/plan
  *       RequirePermission instructors.read     /instructors, /instructors/:id
  *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
  *     NotFoundPage     *
@@ -85,6 +87,10 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="groups.update" />,
             children: [{ path: '/groups/:id/edit', element: <EditGroupPage /> }],
+          },
+          {
+            element: <RequirePermission permission="payments.manage" />,
+            children: [{ path: '/students/:id/plan', element: <ChangeStudentPlanPage /> }],
           },
           {
             element: <RequirePermission permission="enrollments.manage" />,

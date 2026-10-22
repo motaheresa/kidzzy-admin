@@ -1503,6 +1503,9 @@ paths:
       tags:
         - Payments
       summary: Plan versions of a student or instructor
+      description:
+        The versions of ONE payee, the first first. Send exactly one of studentId and instructorId (400 otherwise).
+        Scope own (an instructor) reads only their own plan; a student's plans are 403.
       operationId: listPaymentPlans
       x-permission: payments.read
       x-story: US-20
@@ -1545,6 +1548,10 @@ paths:
       tags:
         - Payments
       summary: New plan version for a student, from the next cycle
+      description:
+        Adds the next version with effectiveFromCycle = the number of the cycle in progress + 1 (BR-10), so the cycle
+        in progress keeps its plan. A student who was never enrolled has no plan to change (STUDENT_HAS_NO_PLAN), and
+        the same sessionsPerCycle and amount as the latest version changes nothing (PLAN_UNCHANGED).
       operationId: createStudentPlan
       x-permission: payments.manage
       x-story: US-20
@@ -1571,6 +1578,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/PlanChangeRefused'
   /instructors/{id}/payment-plans:
     post:
       tags:
@@ -2248,6 +2257,14 @@ components:
             $ref: '#/components/schemas/Problem'
     TransferRefused:
       description: The effective date is before the day the student joined the current group (ENROLLMENT_DATE_INVALID)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PlanChangeRefused:
+      description:
+        The student has no plan yet (STUDENT_HAS_NO_PLAN), or the plan is the same as the latest version
+        (PLAN_UNCHANGED)
       content:
         application/problem+json:
           schema:
