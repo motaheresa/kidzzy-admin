@@ -129,6 +129,21 @@ export interface GroupRef {
   name: string;
 }
 
+/** One session of a group (openapi.yaml: Session). */
+export interface Session {
+  id: string;
+  group: GroupRef;
+  instructorId: string;
+  /** ISO 8601, UTC */
+  scheduledAt: string;
+  durationMin: number;
+  status: SessionStatus;
+  sessionNumber: number | null;
+  isMakeup: boolean;
+  compensatesSessionId: string | null;
+  cancelReason: string | null;
+}
+
 /** An instructor account (openapi.yaml: Instructor). */
 export interface Instructor {
   id: string;

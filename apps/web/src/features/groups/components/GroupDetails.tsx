@@ -20,8 +20,8 @@ import { GroupStatusBadge } from './GroupStatusBadge';
 
 /**
  * One group's screen (wireframe "Admin · Group"): name, level, instructor and start date, then
- * the weekly schedule and the numbers. The page puts the group's students under it (enrollments
- * feature); the sessions arrive with their story.
+ * the weekly schedule and the numbers. The page puts the group's students (enrollments) and
+ * its sessions (sessions feature) under it.
  * An instructor who opens another instructor's group gets the API's 403 here (AC-08).
  */
 export function GroupDetails({ id }: { id: string }) {

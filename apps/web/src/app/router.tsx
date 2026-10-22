@@ -14,6 +14,7 @@ import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
+import { SessionPage } from '@/pages/sessions/SessionPage';
 import { ChangeStudentPlanPage } from '@/pages/students/ChangeStudentPlanPage';
 import { EditStudentPage } from '@/pages/students/EditStudentPage';
 import { NewStudentPage } from '@/pages/students/NewStudentPage';
@@ -31,6 +32,7 @@ import { RequirePermission } from './RequirePermission';
  *     PublicLayout     /login        signed-in users are sent home
  *     ProtectedLayout  /             signed-out users are sent to /login?returnTo=…
  *       /change-password   any signed-in user; the only screen during a temporary password
+ *       RequirePermission sessions.read        /sessions/:id
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
  *       RequirePermission groups.update        /groups/:id/edit
@@ -72,6 +74,10 @@ export const routes: RouteObject[] = [
         element: <ProtectedLayout />,
         children: [
           { path: '/', element: <HomePage /> },
+          {
+            element: <RequirePermission permission="sessions.read" />,
+            children: [{ path: '/sessions/:id', element: <SessionPage /> }],
+          },
           // Every signed-in user may change their password: no RequirePermission (US-02).
           { path: '/change-password', element: <ChangePasswordPage /> },
           {

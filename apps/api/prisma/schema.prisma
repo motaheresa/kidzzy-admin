@@ -68,7 +68,9 @@ model User {
   roles            UserRole[]
   refreshTokens    RefreshToken[]
   groups           Group[]
-  sessions         Session[]
+  sessions         Session[] @relation("SessionInstructor")
+  /// Sessions this user marked held or cancelled (ERD status_changed_by).
+  sessionStatusChanges Session[] @relation("SessionStatusChange")
   instructorPlans  PaymentPlan[]
   instructorCycles PaymentCycle[]
 
@@ -307,20 +309,33 @@ model Session {
   status         SessionStatus @default(scheduled)
   sessionNumber  Int?          @map("session_number")
   isMakeup       Boolean       @default(false) @map("is_makeup")
+  /// The cancelled session a make-up replaces. Null for a generated session and for an extra.
+  /// compensatesAcademyId mirrors academyId whenever the id is set (optional composite foreign key).
+  compensatesSessionId     String?   @map("compensates_session_id") @db.Uuid
+  compensatesAcademyId     String?   @map("compensates_academy_id") @db.Uuid
   cancelReason   String?       @map("cancel_reason")
+  /// Who marked it held or cancelled, and when. Null while it is still scheduled.
+  statusChangedById        String?   @map("status_changed_by") @db.Uuid
+  statusChangedByAcademyId String?   @map("status_changed_by_academy_id") @db.Uuid
+  statusChangedAt          DateTime? @map("status_changed_at") @db.Timestamptz(3)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   academy    Academy       @relation(fields: [academyId], references: [id], onDelete: Restrict)
   group      Group         @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
-  instructor User          @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor User          @relation("SessionInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  statusChangedBy User?    @relation("SessionStatusChange", fields: [statusChangedById, statusChangedByAcademyId], references: [id, academyId], onDelete: Restrict)
   slot       ScheduleSlot? @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
+  compensates Session?     @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
+  makeups    Session[]     @relation("SessionCompensation")
 
   /// Generation inserts with ON CONFLICT DO NOTHING against this: running twice, or the job and a
   /// request at once, never duplicates a day (AC). Rows with a null slot never conflict.
   @@unique([slotId, occurrenceDate])
   /// BR-03: a number is unique per group. Rows with a null number never conflict.
   @@unique([groupId, sessionNumber])
+  /// BR-04: a cancelled session has at most one make-up. Nulls are the sessions that compensate nothing.
+  @@unique([compensatesSessionId], map: "sessions_one_makeup_key", where: raw("compensates_session_id IS NOT NULL"))
   /// Composite key for tenant-safe foreign keys (later: attendance, cycle_sessions).
   @@unique([id, academyId])
   @@index([groupId, scheduledAt])

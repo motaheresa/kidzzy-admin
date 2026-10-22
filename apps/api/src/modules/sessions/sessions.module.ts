@@ -5,16 +5,24 @@ import { SessionRegeneration } from './session-regeneration';
 import { SessionGenerationJob } from './session-generation.job';
 import { SessionGenerator } from './session-generator';
 import { SessionRepository } from './session.repository';
+import { SessionsController } from './sessions.controller';
+import { SessionsService } from './sessions.service';
 
-/** Sessions (US-11): their generation from the weekly schedules and what an edit of a group does to them. */
+/**
+ * Sessions: generation from the weekly schedules (US-11) and reading them (US-12).
+ * The repository stays inside this module; groups already import it, so it does not
+ * import GroupRepository back.
+ */
 @Module({
   imports: [AcademiesModule],
+  controllers: [SessionsController],
   providers: [
     Clock,
     SessionRepository,
     SessionGenerator,
     SessionRegeneration,
     SessionGenerationJob,
+    SessionsService,
   ],
   exports: [Clock, SessionGenerator, SessionRegeneration],
 })
