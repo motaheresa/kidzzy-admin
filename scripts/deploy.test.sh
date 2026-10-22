@@ -96,6 +96,20 @@ for name in pm2 curl rsync; do
   printf '#!/usr/bin/env bash\nexit 0\n' >"${tools}/${name}"
 done
 chmod +x "${tools}"/*
+
+# A PATH that holds only the stubs and thin wrappers of the system tools the script uses, so "a tool
+# is missing" means the same on every machine: the runner has git, curl and rsync in /usr/bin, and
+# those must not leak into a test about them being absent.
+sysbin="${tmp}/sysbin"
+mkdir -p "$sysbin"
+for name in bash head sort tail id date dirname; do
+  # The single quotes are on purpose: "$@" must reach the wrapper unexpanded.
+  # shellcheck disable=SC2016
+  printf '#!%s
+exec "%s" "$@"
+' "$(command -v bash)" "$(command -v "$name")" >"${sysbin}/${name}"
+  chmod +x "${sysbin}/${name}"
+done
 printf '22\n' >"${tmp}/repo/.nvmrc"
 
 # Runs `deploy.sh preflight` the way the workflow does (NVMRC_VALUE from the commit's .nvmrc), in
@@ -103,7 +117,7 @@ printf '22\n' >"${tmp}/repo/.nvmrc"
 run_preflight() {
   : >"$gitlog"
   if out="$(
-    env -i HOME="${tmp}/home" PATH="${tools}:${EXTRA_PATH:-}:/usr/bin:/bin" \
+    env -i HOME="${tmp}/home" PATH="${tools}:${EXTRA_PATH:-}:${sysbin}" \
       DEPLOY_ROOT="${tmp}/repo" NVM_NODE_ROOT="${tmp}/home/.nvm/versions/node" \
       AAPANEL_NODE_HOME="${tmp}/aapanel" NVMRC_VALUE="${NVMRC_FOR_TEST-22}" \
       DEPLOY_NODE_BIN="${DEPLOY_NODE_BIN_FOR_TEST:-}" \
@@ -186,7 +200,7 @@ printf '22\n' >"${tmp}/repo/.nvmrc"
 # 9. The way the workflow runs it: the script arrives on stdin (git show | bash -s).
 : >"$gitlog"
 if out="$(
-  env -i HOME="${tmp}/home" PATH="${tools}:/usr/bin:/bin" DEPLOY_ROOT="${tmp}/repo" \
+  env -i HOME="${tmp}/home" PATH="${tools}:${sysbin}" DEPLOY_ROOT="${tmp}/repo" \
     NVM_NODE_ROOT="${tmp}/home/.nvm/versions/node" AAPANEL_NODE_HOME="${tmp}/aapanel" \
     NVMRC_VALUE="v22.14.0" bash -s -- preflight "$sha" <"$script" 2>&1
 )"; then
