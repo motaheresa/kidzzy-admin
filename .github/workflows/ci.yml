@@ -164,7 +164,7 @@ jobs:
           rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             release/packages/shared/dist/ "${dest}:${remote}/packages/shared/dist/"
           # Checkout first so this commit's script exists, then the script checks the sha again.
-          ssh "${ssh_base[@]}" "$dest" "set -euo pipefail; cd /www/wwwroot/kidzzy-admin; git fetch origin main; git checkout --detach '${sha}'; bash scripts/deploy.sh '${sha}'"
+          ssh "${ssh_base[@]}" "$dest" "set -euo pipefail; cd /www/wwwroot/kidzzy-admin; git update-index -q --refresh; git diff-index --quiet HEAD -- || { echo 'tracked files were changed on the server; refusing to deploy' >&2; exit 1; }; git fetch origin main; git checkout --detach '${sha}'; bash scripts/deploy.sh '${sha}'"
 
   commits:
     name: commit messages

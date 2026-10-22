@@ -23,23 +23,67 @@ log() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
-# Newest aaPanel Node bin, or empty when that tree is absent.
+# The Node major the repository asks for: the first line of .nvmrc ("22" or "v22.14.0").
+# Prints nothing when the file is missing or has no number.
+node_major() {
+  local value
+  value="$(head -n 1 "$1" 2>/dev/null || true)"
+  value="${value//[$'\r ']/}"
+  value="${value#v}"
+  value="${value%%.*}"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$value"
+  fi
+}
+
+# The newest aaPanel Node bin of that major (v22.* for 22), or empty when none matches.
+# A newer major installed next to it is never picked: the repository decides the version.
 # Non-interactive SSH does not read .bashrc, so the caller prepends this to PATH.
 aapanel_node_bin() {
-  local home="$1"
+  local home="$1" major="$2"
   if [[ ! -d "$home" ]]; then
     return 0
   fi
-  find "$home" -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -n 1
+  find "$home" -mindepth 2 -maxdepth 2 -type d -name bin -path "${home}/v${major}.*/bin" |
+    sort -V | tail -n 1
 }
 
 prepend_aapanel_node() {
-  local node_bin
-  node_bin="$(aapanel_node_bin "$AAPANEL_NODE_HOME")"
-  if [[ -n "$node_bin" ]]; then
-    PATH="${node_bin}:${PATH}"
-    export PATH
-    log "PATH prepended with ${node_bin}"
+  local major="$1" node_bin
+  # No aaPanel Node tree at all (a dev machine, or Node installed another way): leave PATH alone.
+  # require_commands and assert_node_major still check what `node` resolves to.
+  if [[ ! -d "$AAPANEL_NODE_HOME" ]]; then
+    return 0
+  fi
+  node_bin="$(aapanel_node_bin "$AAPANEL_NODE_HOME" "$major")"
+  if [[ -z "$node_bin" ]]; then
+    log "no Node ${major} under ${AAPANEL_NODE_HOME} (.nvmrc asks for ${major}); install it in aaPanel"
+    exit 1
+  fi
+  PATH="${node_bin}:${PATH}"
+  export PATH
+  log "PATH prepended with ${node_bin}"
+}
+
+# Whatever `node` resolves to must be the major .nvmrc asks for.
+assert_node_major() {
+  local major="$1" actual
+  actual="$(node -p 'process.versions.node.split(".")[0]')"
+  if [[ "$actual" != "$major" ]]; then
+    log "node is v${actual} but .nvmrc asks for ${major}"
+    exit 1
+  fi
+}
+
+# Refuses to deploy over a hand edit: any change to a tracked file, staged or not. Untracked
+# files (aaPanel's .user.ini, logs) are ignored on purpose, and so are ignored ones (.env, dist).
+assert_clean_tree() {
+  local repo="$1"
+  git -C "$repo" update-index -q --refresh || true
+  if ! git -C "$repo" diff-index --quiet HEAD --; then
+    log "tracked files were changed on the server; refusing to deploy:"
+    git -C "$repo" status --short --untracked-files=no >&2
+    exit 1
   fi
 }
 
@@ -138,21 +182,32 @@ main() {
     exit 1
   fi
 
-  prepend_aapanel_node
+  # The workflow checked out this commit before starting this script, so .nvmrc is the one of
+  # the commit being deployed.
+  local major
+  major="$(node_major "${ROOT}/.nvmrc")"
+  if [[ -z "$major" ]]; then
+    log "cannot read the Node major from ${ROOT}/.nvmrc"
+    exit 1
+  fi
+  prepend_aapanel_node "$major"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "dry-run: require commands: git node pnpm pm2 curl rsync"
+    log "dry-run: require commands: git node pnpm pm2 curl rsync (node ${major})"
   else
     require_commands
+    assert_node_major "$major"
   fi
 
   cd "$ROOT"
   if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "dry-run: refuse when tracked files were changed on the server"
     log "dry-run: git fetch origin main && git checkout --detach ${sha}"
     log "dry-run: pnpm install --frozen-lockfile --ignore-scripts"
     log "dry-run: pnpm rebuild @prisma/engines prisma @node-rs/argon2"
     log "dry-run: prisma migrate deploy"
   else
-    # A dirty tracked file stops the deploy instead of being thrown away.
+    # A hand edit of a tracked file stops the deploy instead of being carried along or lost.
+    assert_clean_tree "$ROOT"
     git fetch origin main
     git checkout --detach "$sha"
     if [[ "$(git rev-parse HEAD)" != "$sha" ]]; then
