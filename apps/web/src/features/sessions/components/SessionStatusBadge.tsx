@@ -1,0 +1,28 @@
+import { SessionStatus, type SessionStatus as SessionStatusValue } from '@kidzzy/shared';
+import { Badge } from '@/components/ui';
+
+const STATUS_LABEL: Record<
+  SessionStatusValue,
+  { label: string; variant: 'brand' | 'success' | 'danger' }
+> = {
+  [SessionStatus.Scheduled]: { label: 'مجدولة', variant: 'brand' },
+  [SessionStatus.Held]: { label: 'اتعملت', variant: 'success' },
+  [SessionStatus.Cancelled]: { label: 'اتلغت', variant: 'danger' },
+};
+
+/** The session's status, and a second badge when it is a make-up. */
+export function SessionStatusBadge({
+  status,
+  isMakeup,
+}: {
+  status: SessionStatusValue;
+  isMakeup?: boolean;
+}) {
+  const item = STATUS_LABEL[status];
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <Badge variant={item.variant}>{item.label}</Badge>
+      {isMakeup && <Badge variant="accent">تعويضية</Badge>}
+    </span>
+  );
+}

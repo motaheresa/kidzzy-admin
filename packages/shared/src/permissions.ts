@@ -2,7 +2,8 @@
 //
 // A key is resource.action:scope.
 // - any: every record in the academy.
-// - own: only records of groups the user teaches, or the user's own payments. The guard
+// - own: only records of groups the user teaches (for sessions also the sessions the user taught,
+//   see ADR-0006), or the user's own payments. The guard
 //   checks the key; the service then checks ownership and answers 403 FORBIDDEN otherwise.
 
 export const PERMISSIONS = {

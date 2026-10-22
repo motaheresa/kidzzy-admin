@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatMoney, formatNumber, localToday } from '.';
+import { formatDate, formatMoney, formatNumber, localToday, zonedDayRange } from '.';
 
 const ARABIC_INDIC_DIGITS = /[٠-٩۰-۹]/;
 
@@ -26,5 +26,33 @@ describe('format', () => {
   it("gives today's date in the academy's timezone", () => {
     // 23:30 UTC on Oct 16 is already Oct 17 in Cairo (UTC+3 until the end of October).
     expect(localToday('Africa/Cairo', new Date('2026-10-16T23:30:00Z'))).toBe('2026-10-17');
+  });
+
+  it('bounds a Cairo day by local midnight, including the 25-hour day when DST ends', () => {
+    // Thursday 2026-10-29 is still UTC+3. Friday 2026-10-30 is UTC+2: DST ends at midnight.
+    expect(zonedDayRange('Africa/Cairo', new Date('2026-10-22T10:00:00.000Z'))).toEqual({
+      from: '2026-10-21T21:00:00.000Z',
+      to: '2026-10-22T21:00:00.000Z',
+    });
+    expect(zonedDayRange('Africa/Cairo', new Date('2026-10-29T12:00:00.000Z'))).toEqual({
+      from: '2026-10-28T21:00:00.000Z',
+      to: '2026-10-29T22:00:00.000Z',
+    });
+    expect(zonedDayRange('Africa/Cairo', new Date('2026-10-30T12:00:00.000Z'))).toEqual({
+      from: '2026-10-29T22:00:00.000Z',
+      to: '2026-10-30T22:00:00.000Z',
+    });
+  });
+
+  it('bounds the 23-hour day when DST starts in Cairo', () => {
+    // Friday 2027-04-30: local midnight jumps to 01:00, so the day is 23 hours (UTC+2 then UTC+3).
+    expect(zonedDayRange('Africa/Cairo', new Date('2027-04-29T12:00:00.000Z'))).toEqual({
+      from: '2027-04-28T22:00:00.000Z',
+      to: '2027-04-29T22:00:00.000Z',
+    });
+    expect(zonedDayRange('Africa/Cairo', new Date('2027-04-30T12:00:00.000Z'))).toEqual({
+      from: '2027-04-29T22:00:00.000Z',
+      to: '2027-04-30T21:00:00.000Z',
+    });
   });
 });

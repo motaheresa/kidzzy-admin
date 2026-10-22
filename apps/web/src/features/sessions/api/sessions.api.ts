@@ -1,0 +1,29 @@
+import { http } from '@/lib/http';
+import type { Page, Session, SessionListParams } from '../types';
+
+// The session read endpoints (openapi.yaml, tag Sessions). Components never call them; the hooks do.
+
+export const SESSIONS_PAGE_SIZE = 20;
+
+const path = (id: string) => `/sessions/${encodeURIComponent(id)}`;
+
+/** GET /sessions: one page, earliest first, with the filters that are set. */
+export function listSessions(
+  params: SessionListParams,
+  signal?: AbortSignal,
+): Promise<Page<Session>> {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize ?? SESSIONS_PAGE_SIZE),
+  });
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+  if (params.groupId) query.set('groupId', params.groupId);
+  if (params.status) query.set('status', params.status);
+  return http.get<Page<Session>>(`/sessions?${query.toString()}`, { signal });
+}
+
+/** GET /sessions/{id} */
+export function getSession(id: string, signal?: AbortSignal): Promise<Session> {
+  return http.get<Session>(path(id), { signal });
+}

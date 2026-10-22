@@ -154,6 +154,7 @@ ADR-0013 has the reasons. Permission keys are `resource.action:scope` (`packages
   }
   ```
 
+- **Sessions are the exception to "the groups the caller teaches"**: scope `own` sees a session when the caller is the group's current instructor OR the instructor on the session (`SessionsService.canSeeSession`, and the same OR in `SessionRepository`). A former instructor keeps the sessions they taught. Start any session story from that rule (ADR-0006, amendment of 2026-10-22).
 - Not theirs (same academy, scope `own`) is **403**. Another academy's record is **404**, because the tenant scope never finds it.
 - **The web app only hides or shows.** `usePermissions().can()` / `scopeFor()` and the `RequirePermission` route wrapper (`apps/web/src/app`) never protect data. The API enforces every permission, and its 403 goes through the error layer.
 - Tests of a permissioned endpoint use real users of the seeded Admin and Instructor roles; mechanism tests use `test/support/access-test.controller.ts` through `createTestApp({ extraControllers })`.

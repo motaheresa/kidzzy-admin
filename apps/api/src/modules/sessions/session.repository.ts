@@ -1,9 +1,39 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
+import type { SessionStatus } from '@kidzzy/shared';
+import type { PageWindow } from '../../common/pagination/page';
+import { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
 import { stringToDate } from './dates';
 import type { PlannedSession, SlotRule } from './occurrences';
+
+/**
+ * What GET /sessions can filter by. visibleToInstructorId keeps a session when that person is
+ * the group's current instructor OR the instructor on the session.
+ */
+export interface SessionListFilter {
+  from?: Date;
+  to?: Date;
+  groupId?: string;
+  visibleToInstructorId?: string;
+  status?: SessionStatus;
+}
+
+const SESSION_SELECT = {
+  id: true,
+  instructorId: true,
+  scheduledAt: true,
+  durationMin: true,
+  status: true,
+  sessionNumber: true,
+  isMakeup: true,
+  compensatesSessionId: true,
+  cancelReason: true,
+  group: { select: { id: true, name: true, instructorId: true } },
+} as const satisfies Prisma.SessionSelect;
+
+export type SessionRow = Prisma.SessionGetPayload<{ select: typeof SESSION_SELECT }>;
 
 /** An active group with its active slots: what generation needs. */
 export interface GroupToGenerate {
@@ -127,5 +157,73 @@ export class SessionRepository {
       skipDuplicates: true,
     });
     return count;
+  }
+
+  /** The group's current instructor, or null when this academy has no such group. */
+  async findGroup(groupId: string): Promise<{ instructorId: string } | null> {
+    return this.txHost.tx.group.findUnique({
+      where: { id: groupId },
+      select: { instructorId: true },
+    });
+  }
+
+  /** True when this instructor is on at least one session of the group (they taught or will teach it). */
+  async instructorHasSession(groupId: string, instructorId: string): Promise<boolean> {
+    const found = await this.txHost.tx.session.findFirst({
+      where: { groupId, instructorId },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
+  /**
+   * One page of sessions, earliest first. `from` is inclusive and `to` exclusive.
+   * visibleToInstructorId keeps a row when they currently teach the group or they are the
+   * instructor on that session, so a past session stays visible to whoever taught it.
+   */
+  async list(
+    filter: SessionListFilter,
+    window: PageWindow,
+  ): Promise<{ rows: SessionRow[]; total: number }> {
+    const where = this.where(filter);
+    const [rows, total] = await Promise.all([
+      this.txHost.tx.session.findMany({
+        where,
+        select: SESSION_SELECT,
+        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+        skip: window.skip,
+        take: window.take,
+      }),
+      this.txHost.tx.session.count({ where }),
+    ]);
+    return { rows, total };
+  }
+
+  /** One session, or null when this academy has none with that id. */
+  async findById(id: string): Promise<SessionRow | null> {
+    return this.txHost.tx.session.findUnique({ where: { id }, select: SESSION_SELECT });
+  }
+
+  private where(filter: SessionListFilter): Prisma.SessionWhereInput {
+    return {
+      ...(filter.from || filter.to
+        ? {
+            scheduledAt: {
+              ...(filter.from ? { gte: filter.from } : {}),
+              ...(filter.to ? { lt: filter.to } : {}),
+            },
+          }
+        : {}),
+      ...(filter.groupId ? { groupId: filter.groupId } : {}),
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.visibleToInstructorId
+        ? {
+            OR: [
+              { instructorId: filter.visibleToInstructorId },
+              { group: { instructorId: filter.visibleToInstructorId } },
+            ],
+          }
+        : {}),
+    };
   }
 }

@@ -966,6 +966,12 @@ paths:
       tags:
         - Sessions
       summary: List sessions
+      description: >
+        Scope own (an instructor) includes a session when the caller is the group's current instructor or the
+        instructor on the session. With groupId, that scope is 403 only when neither is true for any session of the
+        group; otherwise the same filter applies, so a former instructor gets only the sessions they taught there.
+        Scope any with instructorId=X returns exactly the sessions X would see. from >= to is 400. An unknown groupId
+        is 404.
       operationId: listSessions
       x-permission: sessions.read
       x-story: US-12
@@ -978,26 +984,32 @@ paths:
           schema:
             type: string
             format: date-time
-            description: ISO 8601, UTC
+            description: ISO 8601, UTC. Inclusive. When both from and to are set, from >= to is 400.
         - name: to
           in: query
           required: false
           schema:
             type: string
             format: date-time
-            description: ISO 8601, UTC
+            description: ISO 8601, UTC. Exclusive. When both from and to are set, from >= to is 400.
         - name: groupId
           in: query
           required: false
           schema:
             type: string
             format: uuid
+            description: >
+              Sessions of this group. Unknown in this academy is 404. Scope own is 403 when the caller is neither the
+              group's current instructor nor the instructor on any of its sessions.
         - name: instructorId
           in: query
           required: false
           schema:
             type: string
             format: uuid
+            description: >
+              Scope own: must be the caller, otherwise 403. Scope any: returns exactly the sessions this instructor
+              would see (current instructor of the group, or the instructor on the session).
         - name: status
           in: query
           required: false
@@ -1037,11 +1049,16 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /sessions/{id}:
     get:
       tags:
         - Sessions
       summary: Get a session
+      description: >
+        404 when this academy has no such session. 403 for scope own when the caller is neither the group's current
+        instructor nor the instructor on the session (who taught it, or who will teach it).
       operationId: getSession
       x-permission: sessions.read
       x-story: US-13
@@ -2964,6 +2981,9 @@ components:
         instructorId:
           type: string
           format: uuid
+          description: >
+            The instructor on the session: who taught it, or who will teach it. Can differ from the group's current
+            instructor.
         scheduledAt:
           type: string
           format: date-time

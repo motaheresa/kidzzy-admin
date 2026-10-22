@@ -1,8 +1,8 @@
-import { LayoutDashboardIcon } from 'lucide-react';
-import { EmptyState, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
 import { CurrentUserCard, LogoutButton } from '@/features/auth';
+import { TodaySessions } from '@/features/sessions';
 
-/** Home: who is signed in, until the real screens arrive. Composition only. */
+/** Home: who is signed in, and today's sessions for whoever may read them (US-12). */
 export function HomePage() {
   return (
     <div className="flex flex-col gap-6">
@@ -12,11 +12,7 @@ export function HomePage() {
         actions={<LogoutButton />}
       />
       <CurrentUserCard />
-      <EmptyState
-        icon={<LayoutDashboardIcon aria-hidden="true" />}
-        title="الشاشات الجاية في الطريق"
-        description="الجروبات والحصص والمدفوعات هتظهر هنا قريب."
-      />
+      <TodaySessions />
     </div>
   );
 }
