@@ -64,6 +64,8 @@ printf '%s\n' "v22.14.0" >"${tmp}/nvmrc"
 make_node() {
   local dir="$1" major="$2"
   mkdir -p "${dir}/bin"
+  # The single quotes are on purpose: the stub's own $-expressions must reach it unexpanded.
+  # shellcheck disable=SC2016
   printf '#!/usr/bin/env bash\nif [[ "${1:-}" == "-p" ]]; then echo %s; else echo v%s.0.0; fi\n' \
     "$major" "$major" >"${dir}/bin/node"
   chmod +x "${dir}/bin/node"
@@ -86,6 +88,8 @@ mkdir -p "${tmp}/versions/v22.99.0/bin" # no executable node in it: skipped
 tools="${tmp}/tools"
 mkdir -p "$tools" "${tmp}/repo"
 gitlog="${tmp}/git.log"
+# The single quotes are on purpose: the stub's own $-expressions must reach it unexpanded.
+# shellcheck disable=SC2016
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"%s"\n' "$gitlog" >"${tools}/git"
 printf '#!/usr/bin/env bash\necho 10.28.0\n' >"${tools}/pnpm"
 for name in pm2 curl rsync; do
