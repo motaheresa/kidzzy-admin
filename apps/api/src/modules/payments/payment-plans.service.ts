@@ -7,6 +7,7 @@ import { InstructorRepository } from '../instructors/instructor.repository';
 import { toDecimal } from '../prisma/money';
 import { StudentRepository } from '../students/student.repository';
 import type { ListPaymentPlansQueryDto } from './dto/list-payment-plans.query';
+import type { InstructorPlanDto } from './dto/instructor-plan.dto';
 import type { PlanInputDto } from './dto/plan-input.dto';
 import { PaymentCycleRepository } from './payment-cycle.repository';
 import { toPaymentPlan } from './payment-plan.mapper';
@@ -89,6 +90,72 @@ export class PaymentPlansService {
       effectiveFromCycle: open.cycleNumber + 1,
     });
     // TODO(US-35): audit log, the student's plan changed (NFR-06).
+    return toPaymentPlan(created);
+  }
+
+  /**
+   * POST /instructors/{id}/payment-plans (US-21): the instructor's first plan is version 1 with
+   * cycle 1 counting from the starting point (BR-14, 0..N-1). A later plan is the next version
+   * from the cycle after the one in progress, like a student's (BR-10); the starting point only
+   * exists for the first cycle, so a later one with a starting point is refused (422). One
+   * transaction, the user row locked first. Counting held sessions is US-22.
+   */
+  @Transactional()
+  async setInstructorPlan(instructorId: string, dto: InstructorPlanDto): Promise<PaymentPlan> {
+    await this.instructors.lock(instructorId);
+    await this.findInstructorOrThrow(instructorId);
+
+    const amount = toDecimal(dto.amount);
+    const openingCount = dto.openingCount ?? 0;
+    const latest = await this.plans.findLatestForInstructor(instructorId);
+
+    if (!latest) {
+      if (openingCount >= dto.sessionsPerCycle) {
+        throw new AppException(
+          ErrorCode.StartingPointOutOfRange,
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'The starting point must be less than the sessions per cycle',
+        );
+      }
+      const first = await this.plans.createForInstructor({
+        instructorId,
+        version: 1,
+        sessionsPerCycle: dto.sessionsPerCycle,
+        amount,
+        effectiveFromCycle: 1,
+      });
+      await this.cycles.createFirstForInstructor(instructorId, first, openingCount);
+      // TODO(US-35): audit log, the instructor's plan was set (NFR-06).
+      return toPaymentPlan(first);
+    }
+
+    if (openingCount !== 0) {
+      throw new AppException(
+        ErrorCode.StartingPointLocked,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'The starting point only applies to the first plan',
+      );
+    }
+    const open = await this.cycles.findOpenForInstructor(instructorId);
+    if (!open) {
+      // BR-08 always opens the next cycle, so an instructor with a plan has one in progress.
+      throw new Error(`Instructor ${instructorId} has a plan but no cycle in progress`);
+    }
+    if (latest.sessionsPerCycle === dto.sessionsPerCycle && latest.amount.equals(amount)) {
+      throw new AppException(
+        ErrorCode.PlanUnchanged,
+        HttpStatus.CONFLICT,
+        'The plan is already the latest version',
+      );
+    }
+    const created = await this.plans.createForInstructor({
+      instructorId,
+      version: latest.version + 1,
+      sessionsPerCycle: dto.sessionsPerCycle,
+      amount,
+      effectiveFromCycle: open.cycleNumber + 1,
+    });
+    // TODO(US-35): audit log, the instructor's plan changed (NFR-06).
     return toPaymentPlan(created);
   }
 

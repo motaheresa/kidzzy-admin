@@ -18,33 +18,38 @@ import {
 } from '@/components/ui';
 import { usePermissions } from '@/features/auth';
 import { formatMoney, formatNumber } from '@/lib/format';
-import { useStudentPlans } from '../hooks/useStudentPlans';
+import { usePlans } from '../hooks/usePlans';
+import type { Payee } from '../types';
 
 /**
- * A student's plan versions (US-20), the first first, each with the cycle it applies from. A
+ * A payee's plan versions (US-20, US-21), the first first, each with the cycle it applies from. A
  * change adds a version from the next cycle; the cycle in progress keeps the plan it started
  * with. Only whoever reads every plan sees it (an instructor's payments.read is their own plan),
- * and whoever holds payments.manage gets the change button.
+ * and whoever holds payments.manage gets the button: "set" for an instructor with no plan yet
+ * (a student's first plan is set when they are enrolled), "change" otherwise.
  */
-export function PlanHistory({ studentId }: { studentId: string }) {
+export function PlanHistory({ payee }: { payee: Payee }) {
   const { scopeFor } = usePermissions();
   // The query lives in the inner component, so a caller who may not read it never sends it.
-  return scopeFor('payments.read') === 'any' ? <PlanVersions studentId={studentId} /> : null;
+  return scopeFor('payments.read') === 'any' ? <PlanVersions payee={payee} /> : null;
 }
 
-function PlanVersions({ studentId }: { studentId: string }) {
+function PlanVersions({ payee }: { payee: Payee }) {
   const { can } = usePermissions();
-  const plans = useStudentPlans(studentId);
+  const plans = usePlans(payee);
+  const isStudent = payee.type === 'student';
+  const hasPlan = (plans.data?.length ?? 0) > 0;
+  const canSet = can('payments.manage') && plans.data !== undefined && (hasPlan || !isStudent);
 
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>خطة الدفع</CardTitle>
-        {can('payments.manage') && plans.data && plans.data.length > 0 && (
+        {canSet && (
           <Button asChild variant="outline">
-            <Link to={`/students/${studentId}/plan`}>
+            <Link to={`/${isStudent ? 'students' : 'instructors'}/${payee.id}/plan`}>
               <PencilIcon aria-hidden="true" />
-              تغيير الخطة
+              {hasPlan ? 'تغيير الخطة' : 'تحديد الخطة'}
             </Link>
           </Button>
         )}
@@ -63,7 +68,11 @@ function PlanVersions({ studentId }: { studentId: string }) {
           <EmptyState
             icon={<WalletIcon aria-hidden="true" />}
             title="مفيش خطة دفع لسه"
-            description="الخطة بتتحدد لما الطالب يتسجل في جروب."
+            description={
+              isStudent
+                ? 'الخطة بتتحدد لما الطالب يتسجل في جروب.'
+                : 'حدد عدد السيشنات والمبلغ اللي بيتدفع للمدرس في كل دورة.'
+            }
             className="py-6"
           />
         ) : (

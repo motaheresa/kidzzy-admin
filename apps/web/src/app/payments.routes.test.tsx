@@ -1,4 +1,4 @@
-import type { Me, PaymentPlan, Student } from '@kidzzy/shared';
+import type { InstructorDetail, Me, PaymentPlan, Student } from '@kidzzy/shared';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -22,6 +22,7 @@ const admin: Me = {
     'payments.manage:any',
     'enrollments.manage:any',
     'groups.read:any',
+    'instructors.read:any',
   ],
   mustChangePassword: false,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
@@ -176,6 +177,113 @@ describe('changing the plan', () => {
   it('shows the forbidden page to an instructor opening the change screen', async () => {
     api(instructorUser, studentHandlers([v1]));
     renderAt(`/students/${mona.id}/plan`);
+    expect(
+      await screen.findByRole('heading', { name: 'مش مسموح لك تفتح الصفحة دي' }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('an instructor’s plan (US-21)', () => {
+  const ana: InstructorDetail = {
+    id: '2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a',
+    name: 'Ana',
+    email: 'ana@test.local',
+    phone: null,
+    isActive: true,
+    createdAt: '2026-10-16T08:30:00.000Z',
+    groups: [],
+  };
+  const anaPlan: PaymentPlan = {
+    ...v1,
+    id: 'p9',
+    payeeType: 'instructor',
+    payeeId: ana.id,
+    sessionsPerCycle: 8,
+    amount: '2400.00',
+  };
+  const instructorHandlers = (plans: PaymentPlan[]): Record<string, Handler> => ({
+    [`GET /instructors/${ana.id}`]: () => json(200, ana),
+    'GET /payment-plans': () => json(200, { data: plans }),
+  });
+
+  it('offers to set the plan when there is none, and asks for the instructor’s plan by instructorId', async () => {
+    api(admin, instructorHandlers([]));
+    renderAt(`/instructors/${ana.id}`);
+    expect(await screen.findByText('مفيش خطة دفع لسه')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'تحديد الخطة' })).toHaveAttribute(
+      'href',
+      `/instructors/${ana.id}/plan`,
+    );
+    const request = calls.find((c) => c.url.pathname.endsWith('/payment-plans'));
+    expect(request?.url.searchParams.get('instructorId')).toBe(ana.id);
+    expect(request?.url.searchParams.has('studentId')).toBe(false);
+  });
+
+  it('the first plan asks for the starting point and sends it with the amount as a string', async () => {
+    api(admin, {
+      ...instructorHandlers([]),
+      [`POST /instructors/${ana.id}/payment-plans`]: () => json(201, anaPlan),
+    });
+    const router = renderAt(`/instructors/${ana.id}/plan`);
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/ده اول خطة للمدرس/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '8');
+    await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '2400');
+    await user.clear(screen.getByLabelText('نقطة البداية'));
+    await user.type(screen.getByLabelText('نقطة البداية'), '2');
+    await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/instructors/${ana.id}`));
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({
+      sessionsPerCycle: 8,
+      amount: '2400.00',
+      openingCount: 2,
+    });
+  });
+
+  it('a later plan has no starting point, shows the versions, and sends none', async () => {
+    api(admin, {
+      ...instructorHandlers([anaPlan]),
+      [`POST /instructors/${ana.id}/payment-plans`]: () =>
+        json(201, { ...anaPlan, id: 'p10', effectiveFromCycle: 2 }),
+    });
+    renderAt(`/instructors/${ana.id}/plan`);
+    const user = userEvent.setup();
+    expect(await screen.findByText(/الخطة الحالية/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('نقطة البداية')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '12');
+    await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '3500');
+    await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({
+      sessionsPerCycle: 12,
+      amount: '3500.00',
+    });
+  });
+
+  it('shows STARTING_POINT_OUT_OF_RANGE under the starting point', async () => {
+    api(admin, {
+      ...instructorHandlers([]),
+      [`POST /instructors/${ana.id}/payment-plans`]: () =>
+        problem(422, 'STARTING_POINT_OUT_OF_RANGE'),
+    });
+    renderAt(`/instructors/${ana.id}/plan`);
+    const user = userEvent.setup();
+    await screen.findByText(/ده اول خطة للمدرس/);
+    await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '8');
+    await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '2400');
+    await user.clear(screen.getByLabelText('نقطة البداية'));
+    await user.type(screen.getByLabelText('نقطة البداية'), '8');
+    await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('نقطة البداية')).toHaveAttribute('aria-invalid', 'true'),
+    );
+  });
+
+  it('shows the forbidden page to an instructor opening the plan screen', async () => {
+    api(instructorUser, instructorHandlers([anaPlan]));
+    renderAt(`/instructors/${ana.id}/plan`);
     expect(
       await screen.findByRole('heading', { name: 'مش مسموح لك تفتح الصفحة دي' }),
     ).toBeInTheDocument();

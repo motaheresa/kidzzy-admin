@@ -96,6 +96,18 @@ export class InstructorRepository {
     };
   }
 
+  /**
+   * Locks the user row until the end of the transaction, so two changes of the same instructor's
+   * plan run one after the other and get consecutive versions. Call it first in a
+   * @Transactional() method. Raw SQL: it filters academy_id itself.
+   */
+  async lock(id: string): Promise<void> {
+    await this.txHost.tx.$queryRaw`
+      SELECT id FROM users
+      WHERE id = ${id}::uuid AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+      FOR UPDATE`;
+  }
+
   /** The instructor in the current academy, or null (unknown id, an admin, another academy). */
   findById(id: string): Promise<InstructorRow | null> {
     return this.txHost.tx.user.findFirst({

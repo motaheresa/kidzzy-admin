@@ -9,7 +9,7 @@ export function StudentPage() {
   return (
     <div key={id} className="flex flex-col gap-6">
       <StudentProfile id={id} />
-      <PlanHistory studentId={id} />
+      <PlanHistory payee={{ type: 'student', id }} />
       <StudentGroupHistory studentId={id} />
     </div>
   );

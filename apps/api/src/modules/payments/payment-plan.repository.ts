@@ -59,6 +59,39 @@ export class PaymentPlanRepository {
     });
   }
 
+  /** The instructor's highest version, or null when they never had a plan. */
+  findLatestForInstructor(instructorId: string): Promise<PlanRow | null> {
+    return this.txHost.tx.paymentPlan.findFirst({
+      where: { instructorId },
+      orderBy: { version: 'desc' },
+      select: PLAN_SELECT,
+    });
+  }
+
+  /** Inserts a version of an instructor's plan. The caller picks the version and the first cycle. */
+  createForInstructor(input: {
+    instructorId: string;
+    version: number;
+    sessionsPerCycle: number;
+    amount: Prisma.Decimal;
+    effectiveFromCycle: number;
+  }): Promise<PlanRow> {
+    const academyId = this.tenant.requireAcademyId();
+    return this.txHost.tx.paymentPlan.create({
+      data: {
+        academyId,
+        payeeType: 'instructor',
+        instructorId: input.instructorId,
+        instructorAcademyId: academyId,
+        version: input.version,
+        sessionsPerCycle: input.sessionsPerCycle,
+        amount: input.amount,
+        effectiveFromCycle: input.effectiveFromCycle,
+      },
+      select: PLAN_SELECT,
+    });
+  }
+
   /** Inserts a version of a student's plan. The caller picks the version and the first cycle. */
   createForStudent(input: {
     studentId: string;

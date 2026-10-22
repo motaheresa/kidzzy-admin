@@ -1,12 +1,14 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import type { PaymentPlan } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
+import { InstructorPlanDto } from './dto/instructor-plan.dto';
 import { ListPaymentPlansQueryDto } from './dto/list-payment-plans.query';
 import { PlanInputDto } from './dto/plan-input.dto';
 import { PaymentPlansService } from './payment-plans.service';
 
 /**
- * /payment-plans and /students/{id}/payment-plans (US-20). HTTP only: the DTO in, a service
+ * /payment-plans, /students/{id}/payment-plans (US-20) and /instructors/{id}/payment-plans
+ * (US-21). HTTP only: the DTO in, a service
  * call, the mapped response out. Each route's permission matches its x-permission in
  * openapi.yaml.
  */
@@ -27,5 +29,14 @@ export class PaymentPlansController {
     @Body() dto: PlanInputDto,
   ): Promise<PaymentPlan> {
     return this.plans.changeStudentPlan(studentId, dto);
+  }
+
+  @RequirePermission('payments.manage')
+  @Post('instructors/:id/payment-plans')
+  setInstructorPlan(
+    @Param('id', ParseUUIDPipe) instructorId: string,
+    @Body() dto: InstructorPlanDto,
+  ): Promise<PaymentPlan> {
+    return this.plans.setInstructorPlan(instructorId, dto);
   }
 }

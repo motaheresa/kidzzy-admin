@@ -45,6 +45,40 @@ export class PaymentCycleRepository {
     });
   }
 
+  /** The instructor's cycle in progress (at most one, by a partial unique index), or null. */
+  findOpenForInstructor(instructorId: string): Promise<PaymentCycleRow | null> {
+    return this.txHost.tx.paymentCycle.findFirst({
+      where: { instructorId, status: 'in_progress' },
+      select: CYCLE_SELECT,
+    });
+  }
+
+  /**
+   * The instructor's first cycle under plan version 1: cycle 1, counting from the starting point
+   * (BR-14). The caller checks 0 <= openingCount < N; a check constraint holds it too.
+   */
+  async createFirstForInstructor(
+    instructorId: string,
+    plan: PlanRow,
+    openingCount: number,
+  ): Promise<PaymentCycleRow> {
+    const academyId = this.tenant.requireAcademyId();
+    return this.txHost.tx.paymentCycle.create({
+      data: {
+        academyId,
+        payeeType: 'instructor',
+        instructorId,
+        instructorAcademyId: academyId,
+        planId: plan.id,
+        sessionsPerCycle: plan.sessionsPerCycle,
+        cycleNumber: 1,
+        openingCount,
+        sessionsCounted: openingCount,
+      },
+      select: CYCLE_SELECT,
+    });
+  }
+
   /** True when the student has any cycle, whatever its status. */
   async studentHasCycles(studentId: string): Promise<boolean> {
     return (await this.txHost.tx.paymentCycle.count({ where: { studentId } })) > 0;
