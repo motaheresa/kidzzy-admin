@@ -2,8 +2,9 @@ import type { Session } from '@kidzzy/shared';
 import type { SessionRow } from './session.repository';
 
 /**
- * openapi.yaml: Session. Built field by field, so who changed the status (and when) never
- * leaks into the API. Those columns are for the write stories.
+ * openapi.yaml: Session. Built field by field.
+ * instructorId is the instructor on the session (who taught it, or who will), which can differ
+ * from the group's current instructor.
  */
 export function toSession(row: SessionRow): Session {
   return {

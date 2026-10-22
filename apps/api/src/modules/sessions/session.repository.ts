@@ -8,12 +8,15 @@ import { TenantContext } from '../tenancy/tenant-context';
 import { stringToDate } from './dates';
 import type { PlannedSession, SlotRule } from './occurrences';
 
-/** What GET /sessions can filter by. instructorId is the group's current instructor. */
+/**
+ * What GET /sessions can filter by. visibleToInstructorId keeps a session when that person is
+ * the group's current instructor OR the instructor on the session.
+ */
 export interface SessionListFilter {
   from?: Date;
   to?: Date;
   groupId?: string;
-  instructorId?: string;
+  visibleToInstructorId?: string;
   status?: SessionStatus;
 }
 
@@ -164,10 +167,19 @@ export class SessionRepository {
     });
   }
 
+  /** True when this instructor is on at least one session of the group (they taught or will teach it). */
+  async instructorHasSession(groupId: string, instructorId: string): Promise<boolean> {
+    const found = await this.txHost.tx.session.findFirst({
+      where: { groupId, instructorId },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
   /**
    * One page of sessions, earliest first. `from` is inclusive and `to` exclusive.
-   * instructorId filters by the group the caller currently teaches, not the copied
-   * sessions.instructor_id (a later change of instructor must not hide the session).
+   * visibleToInstructorId keeps a row when they currently teach the group or they are the
+   * instructor on that session, so a past session stays visible to whoever taught it.
    */
   async list(
     filter: SessionListFilter,
@@ -204,7 +216,14 @@ export class SessionRepository {
         : {}),
       ...(filter.groupId ? { groupId: filter.groupId } : {}),
       ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.instructorId ? { group: { instructorId: filter.instructorId } } : {}),
+      ...(filter.visibleToInstructorId
+        ? {
+            OR: [
+              { instructorId: filter.visibleToInstructorId },
+              { group: { instructorId: filter.visibleToInstructorId } },
+            ],
+          }
+        : {}),
     };
   }
 }

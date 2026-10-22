@@ -69,8 +69,6 @@ model User {
   refreshTokens    RefreshToken[]
   groups           Group[]
   sessions         Session[] @relation("SessionInstructor")
-  /// Sessions this user marked held or cancelled (ERD status_changed_by).
-  sessionStatusChanges Session[] @relation("SessionStatusChange")
   instructorPlans  PaymentPlan[]
   instructorCycles PaymentCycle[]
 
@@ -295,7 +293,9 @@ model Session {
   id             String        @id @default(uuid()) @db.Uuid
   academyId      String        @map("academy_id") @db.Uuid
   groupId        String        @map("group_id") @db.Uuid
-  /// Copied from the group when generated, so a later instructor change keeps history correct.
+  /// The instructor on this session: who taught it, or who will teach it. Copied from the group
+  /// when the session is generated, then updated only for sessions still ahead when the group's
+  /// instructor changes. It can differ from the group's current instructor.
   instructorId   String        @map("instructor_id") @db.Uuid
   /// Null for make-up and extra sessions. slotAcademyId mirrors academyId whenever slotId is set:
   /// an optional composite foreign key needs its own nullable column (see the migration).
@@ -311,20 +311,15 @@ model Session {
   isMakeup       Boolean       @default(false) @map("is_makeup")
   /// The cancelled session a make-up replaces. Null for a generated session and for an extra.
   /// compensatesAcademyId mirrors academyId whenever the id is set (optional composite foreign key).
-  compensatesSessionId     String?   @map("compensates_session_id") @db.Uuid
-  compensatesAcademyId     String?   @map("compensates_academy_id") @db.Uuid
+  compensatesSessionId String? @map("compensates_session_id") @db.Uuid
+  compensatesAcademyId String? @map("compensates_academy_id") @db.Uuid
   cancelReason   String?       @map("cancel_reason")
-  /// Who marked it held or cancelled, and when. Null while it is still scheduled.
-  statusChangedById        String?   @map("status_changed_by") @db.Uuid
-  statusChangedByAcademyId String?   @map("status_changed_by_academy_id") @db.Uuid
-  statusChangedAt          DateTime? @map("status_changed_at") @db.Timestamptz(3)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   academy    Academy       @relation(fields: [academyId], references: [id], onDelete: Restrict)
   group      Group         @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
   instructor User          @relation("SessionInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
-  statusChangedBy User?    @relation("SessionStatusChange", fields: [statusChangedById, statusChangedByAcademyId], references: [id, academyId], onDelete: Restrict)
   slot       ScheduleSlot? @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
   compensates Session?     @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
   makeups    Session[]     @relation("SessionCompensation")

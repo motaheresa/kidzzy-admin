@@ -18,9 +18,11 @@ describe('Reading sessions (e2e)', () => {
   let academyId: string;
   let otherAcademyId: string;
   let ana: string;
+  let bassem: string;
   let adminToken: string;
   let anaToken: string;
   let bassemToken: string;
+  let noorToken: string;
   let otherToken: string;
   let groupId: string;
   let todayId: string;
@@ -60,9 +62,15 @@ describe('Reading sessions (e2e)', () => {
       password,
       role: SystemRole.Instructor,
     });
-    await createUser(prisma, academyId, {
+    bassem = await createUser(prisma, academyId, {
       name: 'bassem',
       email: mail('bassem'),
+      password,
+      role: SystemRole.Instructor,
+    });
+    await createUser(prisma, academyId, {
+      name: 'noor',
+      email: mail('noor'),
       password,
       role: SystemRole.Instructor,
     });
@@ -83,6 +91,7 @@ describe('Reading sessions (e2e)', () => {
     adminToken = await login(mail('admin'));
     anaToken = await login(mail('ana'));
     bassemToken = await login(mail('bassem'));
+    noorToken = await login(mail('noor'));
     otherToken = await login(mail('other'));
 
     const created = await request(server())
@@ -153,14 +162,27 @@ describe('Reading sessions (e2e)', () => {
     });
   }
 
-  it('returns one session, and hides who changed its status', async () => {
+  it('returns one session and only the Session fields', async () => {
     const res = await request(server())
       .get(api(`/sessions/${todayId}`))
       .set(as(adminToken))
       .expect(200);
     expectSession(res.body as Session);
-    expect(res.body).not.toHaveProperty('statusChangedAt');
-    expect(res.body).not.toHaveProperty('statusChangedById');
+    expect(Object.keys(res.body as object).sort()).toEqual(
+      [
+        'cancelReason',
+        'compensatesSessionId',
+        'durationMin',
+        'group',
+        'id',
+        'instructorId',
+        'isMakeup',
+        'scheduledAt',
+        'sessionNumber',
+        'status',
+      ].sort(),
+    );
+    expect(Object.keys((res.body as Session).group).sort()).toEqual(['id', 'name']);
   });
 
   function listed(res: { body: unknown }): Session[] {
@@ -281,5 +303,117 @@ describe('Reading sessions (e2e)', () => {
       .query({ sort: 'name' })
       .set(as(adminToken))
       .expect(400);
+  });
+
+  it('after an instructor change, each instructor sees the sessions the OR rule gives them', async () => {
+    const created = await request(server())
+      .post(api('/groups'))
+      .set(as(adminToken))
+      .send({
+        name: 'Group Reassigned',
+        level: 'Scratch 1',
+        instructorId: ana,
+        startDate: '2026-10-01',
+        schedule: [{ weekday: 4, startTime: '17:00', durationMin: 60 }],
+      })
+      .expect(201);
+    const reassignedId = (created.body as Group).id;
+    const before = await prisma.unscoped.session.findMany({
+      where: { groupId: reassignedId },
+      orderBy: { scheduledAt: 'asc' },
+    });
+    expect(before.length).toBeGreaterThan(1);
+    const past = before[0];
+    if (!past) throw new Error('expected a generated session');
+    // Generation only creates sessions still ahead of the fixed clock, so this row is moved
+    // before "now" to stand for a session that was already taught.
+    await prisma.unscoped.session.update({
+      where: { id: past.id },
+      data: { scheduledAt: new Date('2026-10-15T14:00:00.000Z') },
+    });
+
+    await request(server())
+      .patch(api(`/groups/${reassignedId}`))
+      .set(as(adminToken))
+      .send({ instructorId: bassem })
+      .expect(200);
+
+    const after = await prisma.unscoped.session.findMany({
+      where: { groupId: reassignedId },
+      orderBy: { scheduledAt: 'asc' },
+    });
+    const pastRow = after.find((row) => row.id === past.id);
+    const future = after.filter((row) => row.id !== past.id);
+    expect(pastRow?.instructorId).toBe(ana);
+    expect(future.length).toBeGreaterThan(0);
+    expect(future.every((row) => row.instructorId === bassem)).toBe(true);
+    const futureId = future[0]?.id;
+    if (!futureId) throw new Error('expected a future session');
+
+    const anaGroup = await request(server())
+      .get(api('/sessions'))
+      .query({ groupId: reassignedId, pageSize: 100 })
+      .set(as(anaToken))
+      .expect(200);
+    expect(listed(anaGroup).map((row) => row.id)).toEqual([past.id]);
+    await request(server())
+      .get(api(`/sessions/${past.id}`))
+      .set(as(anaToken))
+      .expect(200);
+    await request(server())
+      .get(api(`/sessions/${futureId}`))
+      .set(as(anaToken))
+      .expect(403);
+
+    const bassemGroup = await request(server())
+      .get(api('/sessions'))
+      .query({ groupId: reassignedId, pageSize: 100 })
+      .set(as(bassemToken))
+      .expect(200);
+    expect(
+      listed(bassemGroup)
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(after.map((row) => row.id).sort());
+    await request(server())
+      .get(api(`/sessions/${past.id}`))
+      .set(as(bassemToken))
+      .expect(200);
+    await request(server())
+      .get(api(`/sessions/${futureId}`))
+      .set(as(bassemToken))
+      .expect(200);
+
+    await request(server())
+      .get(api(`/sessions/${futureId}`))
+      .set(as(noorToken))
+      .expect(403);
+    await request(server())
+      .get(api('/sessions'))
+      .query({ groupId: reassignedId })
+      .set(as(noorToken))
+      .expect(403);
+
+    const anaSees = await request(server())
+      .get(api('/sessions'))
+      .query({ pageSize: 100 })
+      .set(as(anaToken))
+      .expect(200);
+    const adminAsAna = await request(server())
+      .get(api('/sessions'))
+      .query({ instructorId: ana, pageSize: 100 })
+      .set(as(adminToken))
+      .expect(200);
+    expect(
+      listed(adminAsAna)
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(
+      listed(anaSees)
+        .map((row) => row.id)
+        .sort(),
+    );
+    expect(listed(adminAsAna).some((row) => row.id === past.id)).toBe(true);
+    expect(listed(adminAsAna).some((row) => row.id === futureId)).toBe(false);
   });
 });

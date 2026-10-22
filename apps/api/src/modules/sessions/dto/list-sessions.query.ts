@@ -20,7 +20,10 @@ export class ListSessionsQueryDto extends PageQueryDto {
   @IsUUID()
   groupId?: string;
 
-  /** The group's current instructor. */
+  /**
+   * Scope `any`: returns exactly the sessions this instructor would see (they teach the group
+   * now, or they are the instructor on the session). Scope `own`: must be the caller.
+   */
   @IsOptional()
   @IsUUID()
   instructorId?: string;

@@ -43,4 +43,16 @@ describe('format', () => {
       to: '2026-10-30T22:00:00.000Z',
     });
   });
+
+  it('bounds the 23-hour day when DST starts in Cairo', () => {
+    // Friday 2027-04-30: local midnight jumps to 01:00, so the day is 23 hours (UTC+2 then UTC+3).
+    expect(zonedDayRange('Africa/Cairo', new Date('2027-04-29T12:00:00.000Z'))).toEqual({
+      from: '2027-04-28T22:00:00.000Z',
+      to: '2027-04-29T22:00:00.000Z',
+    });
+    expect(zonedDayRange('Africa/Cairo', new Date('2027-04-30T12:00:00.000Z'))).toEqual({
+      from: '2027-04-29T22:00:00.000Z',
+      to: '2027-04-30T21:00:00.000Z',
+    });
+  });
 });
