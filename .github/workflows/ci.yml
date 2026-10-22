@@ -139,7 +139,9 @@ jobs:
       - name: Publish the build and run deploy.sh
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
+          # SSH_USER is not a secret ("deploy"), and as a secret GitHub masks every "deploy" in the
+          # logs. The repository variable wins; the secret stays as the fallback until it is removed.
+          SSH_USER: ${{ vars.SSH_USER || secrets.SSH_USER }}
         run: |
           set -euo pipefail
           test -f release/apps/api/dist/main.js
@@ -147,15 +149,18 @@ jobs:
           test -f release/apps/web/dist/sw.js
           test -f release/packages/shared/dist/cjs/index.js
           if [[ -z "${SSH_HOST}" || -z "${SSH_USER}" ]]; then
-            echo "SSH_HOST and SSH_USER secrets are required" >&2
+            echo "SSH_HOST and SSH_USER (repository variable or secret) are required" >&2
             exit 1
           fi
           dest="${SSH_USER}@${SSH_HOST}"
           sha="${GITHUB_SHA}"
           remote="/tmp/kidzzy-release/${sha}"
           ssh_base=(-i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          # rsync over SSH runs rsync on the server too. Fail before copying if it is missing.
-          ssh "${ssh_base[@]}" "$dest" "command -v rsync >/dev/null"
+          # Nothing on the server changes until the tools and the working tree pass the preflight:
+          # node (the .nvmrc major), pnpm, pm2, git, curl and rsync (the runner's rsync starts one on
+          # the server too), a known commit and no hand-edited tracked file. This commit's script is
+          # streamed from git, so it runs before any checkout. The fetch only updates refs.
+          ssh "${ssh_base[@]}" "$dest" "set -euo pipefail; cd /www/wwwroot/kidzzy-admin; git fetch origin main; git show '${sha}:scripts/deploy.sh' | NVMRC_VALUE=\"\$(git show '${sha}:.nvmrc')\" bash -s -- preflight '${sha}'"
           ssh "${ssh_base[@]}" "$dest" "mkdir -p '${remote}/apps/api/dist' '${remote}/apps/web/dist' '${remote}/packages/shared/dist'"
           rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             release/apps/api/dist/ "${dest}:${remote}/apps/api/dist/"
@@ -163,8 +168,8 @@ jobs:
             release/apps/web/dist/ "${dest}:${remote}/apps/web/dist/"
           rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             release/packages/shared/dist/ "${dest}:${remote}/packages/shared/dist/"
-          # Checkout first so this commit's script exists, then the script checks the sha again.
-          ssh "${ssh_base[@]}" "$dest" "set -euo pipefail; cd /www/wwwroot/kidzzy-admin; git update-index -q --refresh; git diff-index --quiet HEAD -- || { echo 'tracked files were changed on the server; refusing to deploy' >&2; exit 1; }; git fetch origin main; git checkout --detach '${sha}'; bash scripts/deploy.sh '${sha}'"
+          # The preflight passed, so check out this commit and run its script, which checks again.
+          ssh "${ssh_base[@]}" "$dest" "set -euo pipefail; cd /www/wwwroot/kidzzy-admin; git checkout --detach '${sha}'; bash scripts/deploy.sh '${sha}'"
 
   commits:
     name: commit messages

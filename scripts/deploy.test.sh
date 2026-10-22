@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# Order of deploy.sh --dry-run, which aaPanel Node bin is chosen, and the clean-tree check.
+# deploy.sh: the order of --dry-run, where Node comes from (DEPLOY_NODE_BIN, nvm, aaPanel), the
+# preflight that stops before any git command when a tool is missing, and the clean-tree check.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script="${root}/scripts/deploy.sh"
 sha="0123456789abcdef0123456789abcdef01234567"
-out="$(bash "${root}/scripts/deploy.sh" --dry-run "$sha")"
+
+fail() {
+  printf '%s\n' "$1" >&2
+  exit 1
+}
+
+# ── The order of the steps ────────────────────────────────────────────────────────────────────
+out="$(bash "$script" --dry-run "$sha")"
 
 order=(
   "pnpm install --frozen-lockfile --ignore-scripts"
@@ -32,60 +41,175 @@ for step in "${order[@]}"; do
 done
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-# shellcheck source=SCRIPTDIR/deploy.sh
-source "${root}/scripts/deploy.sh"
-
-fail() {
-  printf '%s
-' "$1" >&2
-  exit 1
+cleanup() {
+  chmod -R u+rwx "$tmp" 2>/dev/null || true
+  rm -rf "$tmp"
 }
+trap cleanup EXIT
+# shellcheck source=SCRIPTDIR/deploy.sh
+source "$script"
 
-# The Node major comes from .nvmrc, however it is written.
-for pair in "22:22" "v22.14.0:22" "22.14:22" "lts/*:" ""; do
-  printf '%s
-' "${pair%%:*}" >"${tmp}/nvmrc"
-  [[ -z "${pair%%:*}" ]] && : >"${tmp}/nvmrc"
-  got="$(node_major "${tmp}/nvmrc")"
-  [[ "$got" == "${pair#*:}" ]] || fail "node_major '${pair%%:*}': expected '${pair#*:}', got '${got}'"
+# ── The Node major comes from .nvmrc, however it is written ───────────────────────────────────
+for value in "22" "v22.14.0" "22.14" "lts/*" ""; do
+  expected=""
+  [[ "$value" == "lts/*" || -z "$value" ]] || expected="22"
+  got="$(parse_node_major "$value")"
+  [[ "$got" == "$expected" ]] || fail "parse_node_major '${value}': expected '${expected}', got '${got}'"
 done
+printf '%s\n' "v22.14.0" >"${tmp}/nvmrc"
+[[ "$(node_major "${tmp}/nvmrc")" == "22" ]] || fail "node_major of a file with v22.14.0 should be 22"
 [[ -z "$(node_major "${tmp}/missing")" ]] || fail "node_major of a missing file should be empty"
 
-# The Node bin is the newest of the asked major, never a newer major installed next to it.
-mkdir -p "${tmp}/nodejs/v20.0.0/bin" "${tmp}/nodejs/v22.3.0/bin" "${tmp}/nodejs/v22.14.0/bin"   "${tmp}/nodejs/v24.1.0/bin"
-bin="$(aapanel_node_bin "${tmp}/nodejs" 22)"
-[[ "$bin" == "${tmp}/nodejs/v22.14.0/bin" ]] || fail "expected the newest v22 bin, got '${bin}'"
-bin="$(aapanel_node_bin "${tmp}/nodejs" 24)"
-[[ "$bin" == "${tmp}/nodejs/v24.1.0/bin" ]] || fail "expected the v24 bin, got '${bin}'"
-[[ -z "$(aapanel_node_bin "${tmp}/nodejs" 18)" ]] || fail "no Node 18 is installed: expected empty"
-[[ -z "$(aapanel_node_bin "${tmp}/absent" 22)" ]] || fail "an absent tree should give empty"
+# A fake Node install: <dir>/bin/node answers `-p` with its major and --version with it too.
+make_node() {
+  local dir="$1" major="$2"
+  mkdir -p "${dir}/bin"
+  printf '#!/usr/bin/env bash\nif [[ "${1:-}" == "-p" ]]; then echo %s; else echo v%s.0.0; fi\n' \
+    "$major" "$major" >"${dir}/bin/node"
+  chmod +x "${dir}/bin/node"
+}
 
-# Hand edits of tracked files stop the deploy; untracked and ignored files do not.
-repo="${tmp}/repo"
+# ── The newest bin of the asked major, never another major, never a dir without node ─────────
+make_node "${tmp}/versions/v20.0.0" 20
+make_node "${tmp}/versions/v22.3.0" 22
+make_node "${tmp}/versions/v22.14.0" 22
+make_node "${tmp}/versions/v24.1.0" 24
+mkdir -p "${tmp}/versions/v22.99.0/bin" # no executable node in it: skipped
+[[ "$(newest_node_bin "${tmp}/versions" 22)" == "${tmp}/versions/v22.14.0/bin" ]] ||
+  fail "expected the newest v22 bin"
+[[ "$(newest_node_bin "${tmp}/versions" 24)" == "${tmp}/versions/v24.1.0/bin" ]] ||
+  fail "expected the v24 bin"
+[[ -z "$(newest_node_bin "${tmp}/versions" 18)" ]] || fail "no Node 18 is installed: expected empty"
+[[ -z "$(newest_node_bin "${tmp}/absent" 22)" ]] || fail "an absent root should give empty"
+
+# ── The preflight: tools first, no git command until they all pass ────────────────────────────
+tools="${tmp}/tools"
+mkdir -p "$tools" "${tmp}/repo"
+gitlog="${tmp}/git.log"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"%s"\n' "$gitlog" >"${tools}/git"
+printf '#!/usr/bin/env bash\necho 10.28.0\n' >"${tools}/pnpm"
+for name in pm2 curl rsync; do
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${tools}/${name}"
+done
+chmod +x "${tools}"/*
+printf '22\n' >"${tmp}/repo/.nvmrc"
+
+# Runs `deploy.sh preflight` the way the workflow does (NVMRC_VALUE from the commit's .nvmrc), in
+# a clean environment: only the stub tools and the system utilities are on PATH. Sets $out, $rc.
+run_preflight() {
+  : >"$gitlog"
+  if out="$(
+    env -i HOME="${tmp}/home" PATH="${tools}:${EXTRA_PATH:-}:/usr/bin:/bin" \
+      DEPLOY_ROOT="${tmp}/repo" NVM_NODE_ROOT="${tmp}/home/.nvm/versions/node" \
+      AAPANEL_NODE_HOME="${tmp}/aapanel" NVMRC_VALUE="${NVMRC_FOR_TEST-22}" \
+      DEPLOY_NODE_BIN="${DEPLOY_NODE_BIN_FOR_TEST:-}" \
+      bash "$script" preflight "$sha" 2>&1
+  )"; then
+    rc=0
+  else
+    rc=$?
+  fi
+}
+
+# 1. Node only in the deploy user's nvm; aaPanel's tree is there but this user cannot enter it.
+make_node "${tmp}/home/.nvm/versions/node/v22.3.0" 22
+make_node "${tmp}/home/.nvm/versions/node/v22.14.0" 22
+make_node "${tmp}/home/.nvm/versions/node/v24.1.0" 24
+make_node "${tmp}/aapanel/v22.9.0" 22
+chmod 000 "${tmp}/aapanel"
+run_preflight
+[[ "$rc" -eq 0 ]] || fail "preflight with Node in nvm should pass (rc=${rc}): ${out}"
+[[ "$out" == *"from nvm: ${tmp}/home/.nvm/versions/node/v22.14.0/bin"* ]] ||
+  fail "should say it chose the newest nvm Node: ${out}"
+[[ "$out" != *"Permission denied"* ]] || fail "an unreadable aaPanel tree must be skipped quietly: ${out}"
+grep -q 'cat-file' "$gitlog" || fail "preflight should check that the commit is known"
+if grep -qE 'fetch|checkout|reset|clean|pull' "$gitlog"; then
+  fail "preflight must not change the repository: $(cat "$gitlog")"
+fi
+
+# 2. No nvm, aaPanel unreadable: not fatal, node comes from PATH. Where chmod is not enforced (git
+# bash on Windows) the tree stays readable, so it is removed instead: the same "nothing to use".
+rm -rf "${tmp}/home/.nvm"
+if [[ -r "${tmp}/aapanel" ]]; then
+  chmod 755 "${tmp}/aapanel"
+  rm -rf "${tmp}/aapanel"
+fi
+mkdir -p "${tmp}/pathnode"
+make_node "${tmp}/pathnode" 22
+EXTRA_PATH="${tmp}/pathnode/bin" run_preflight
+[[ "$rc" -eq 0 ]] || fail "preflight with node on PATH should pass (rc=${rc}): ${out}"
+[[ "$out" == *"using node from PATH"* ]] || fail "should say it uses node from PATH: ${out}"
+
+# 3. DEPLOY_NODE_BIN wins over nvm and aaPanel.
+make_node "${tmp}/home/.nvm/versions/node/v22.14.0" 22
+make_node "${tmp}/custom" 22
+DEPLOY_NODE_BIN_FOR_TEST="${tmp}/custom/bin" run_preflight
+[[ "$rc" -eq 0 && "$out" == *"from DEPLOY_NODE_BIN: ${tmp}/custom/bin"* ]] ||
+  fail "DEPLOY_NODE_BIN should be used (rc=${rc}): ${out}"
+
+# 4. A DEPLOY_NODE_BIN without node is a typo: stop, before any git command.
+DEPLOY_NODE_BIN_FOR_TEST="${tmp}/nowhere/bin" run_preflight
+[[ "$rc" -ne 0 && "$out" == *"has no executable node"* ]] || fail "a bad DEPLOY_NODE_BIN should stop: ${out}"
+[[ ! -s "$gitlog" ]] || fail "no git command may run before the tools pass: $(cat "$gitlog")"
+
+# 5. A missing tool stops before any git command runs.
+for missing in pm2 pnpm git curl rsync; do
+  mv "${tools}/${missing}" "${tools}/${missing}.off"
+  run_preflight
+  mv "${tools}/${missing}.off" "${tools}/${missing}"
+  [[ "$rc" -ne 0 && "$out" == *"missing command: ${missing}"* ]] ||
+    fail "a missing ${missing} should stop the preflight (rc=${rc}): ${out}"
+  [[ ! -s "$gitlog" ]] || fail "no git command may run when ${missing} is missing: $(cat "$gitlog")"
+done
+
+# 6. A Node of the wrong major stops before any git command runs.
+make_node "${tmp}/old" 24
+DEPLOY_NODE_BIN_FOR_TEST="${tmp}/old/bin" run_preflight
+[[ "$rc" -ne 0 && "$out" == *"node is v24 but .nvmrc asks for 22"* ]] ||
+  fail "a wrong Node major should stop (rc=${rc}): ${out}"
+[[ ! -s "$gitlog" ]] || fail "no git command may run on a wrong Node major: $(cat "$gitlog")"
+
+# 7. The commit's .nvmrc decides, not the checkout that is still the old commit.
+NVMRC_FOR_TEST="v24.0.0" run_preflight
+[[ "$rc" -ne 0 ]] || fail "a .nvmrc of 24 with Node 22 installed should stop: ${out}"
+
+# 8. No .nvmrc at all stops with a clear line.
+rm "${tmp}/repo/.nvmrc"
+NVMRC_FOR_TEST="" run_preflight
+[[ "$rc" -ne 0 && "$out" == *"cannot read the Node major"* ]] || fail "a missing .nvmrc should stop: ${out}"
+printf '22\n' >"${tmp}/repo/.nvmrc"
+
+# 9. The way the workflow runs it: the script arrives on stdin (git show | bash -s).
+: >"$gitlog"
+if out="$(
+  env -i HOME="${tmp}/home" PATH="${tools}:/usr/bin:/bin" DEPLOY_ROOT="${tmp}/repo" \
+    NVM_NODE_ROOT="${tmp}/home/.nvm/versions/node" AAPANEL_NODE_HOME="${tmp}/aapanel" \
+    NVMRC_VALUE="v22.14.0" bash -s -- preflight "$sha" <"$script" 2>&1
+)"; then
+  rc=0
+else
+  rc=$?
+fi
+[[ "$rc" -eq 0 && "$out" == *"preflight ok for ${sha}"* ]] || fail "preflight from stdin failed (rc=${rc}): ${out}"
+
+# ── Hand edits of tracked files stop the deploy; untracked and ignored files do not ───────────
+repo="${tmp}/gitrepo"
 git init -q "$repo"
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name test
-printf 'one
-' >"${repo}/tracked.txt"
-printf 'ignored.txt
-' >"${repo}/.gitignore"
+printf 'one\n' >"${repo}/tracked.txt"
+printf 'ignored.txt\n' >"${repo}/.gitignore"
 git -C "$repo" add .
 git -C "$repo" commit -q -m init
 (assert_clean_tree "$repo") >/dev/null || fail "a clean tree should pass"
-printf 'x
-' >"${repo}/untracked.txt"
-printf 'x
-' >"${repo}/ignored.txt"
+printf 'x\n' >"${repo}/untracked.txt"
+printf 'x\n' >"${repo}/ignored.txt"
 (assert_clean_tree "$repo") >/dev/null || fail "untracked and ignored files should pass"
-printf 'two
-' >"${repo}/tracked.txt"
+printf 'two\n' >"${repo}/tracked.txt"
 if (assert_clean_tree "$repo") >/dev/null 2>&1; then fail "a changed tracked file should stop the deploy"; fi
 git -C "$repo" checkout -q -- tracked.txt
-printf 'staged
-' >"${repo}/tracked.txt"
+printf 'staged\n' >"${repo}/tracked.txt"
 git -C "$repo" add tracked.txt
 if (assert_clean_tree "$repo") >/dev/null 2>&1; then fail "a staged change should stop the deploy"; fi
 
-printf '%s
-' "deploy.sh dry-run order, Node selection and clean-tree check ok"
+printf '%s\n' "deploy.sh dry-run order, Node selection, preflight and clean-tree check ok"
