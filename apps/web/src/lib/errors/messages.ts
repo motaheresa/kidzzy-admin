@@ -30,6 +30,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   STUDENT_ABSENT: 'مينفعش تقيّم طالب غايب',
   STUDENT_NOT_ENROLLABLE: 'الطالب ده مش نشط، اختار طالب تاني',
   GROUP_INACTIVE: 'الجروب ده متوقف، اختار جروب شغال',
+  STUDENT_HAS_NO_PLAN: 'الطالب ده مالوش خطة لسه، سجله في جروب الاول',
+  PLAN_UNCHANGED: 'دي نفس الخطة الحالية، غير العدد او المبلغ',
   NO_ACTIVE_ENROLLMENT: 'الطالب ده مش في جروب دلوقتي',
   SAME_GROUP: 'الطالب ده في الجروب ده بالفعل، اختار جروب تاني',
   ENROLLMENT_DATE_INVALID: 'تاريخ البداية لازم يكون بعد آخر يوم للطالب في جروبه اللي فات',

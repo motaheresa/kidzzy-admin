@@ -64,6 +64,8 @@ export const ErrorCode = {
   StudentAbsent: 'STUDENT_ABSENT',
   StudentNotEnrollable: 'STUDENT_NOT_ENROLLABLE',
   GroupInactive: 'GROUP_INACTIVE',
+  StudentHasNoPlan: 'STUDENT_HAS_NO_PLAN',
+  PlanUnchanged: 'PLAN_UNCHANGED',
   NoActiveEnrollment: 'NO_ACTIVE_ENROLLMENT',
   SameGroup: 'SAME_GROUP',
   EnrollmentDateInvalid: 'ENROLLMENT_DATE_INVALID',
@@ -214,6 +216,19 @@ export interface PaymentCycle {
   dueAt: string | null;
   /** ISO 8601, UTC */
   paidAt: string | null;
+}
+
+/** A plan version of a student or instructor (openapi.yaml: PaymentPlan). amount: "1500.00". */
+export interface PaymentPlan {
+  id: string;
+  payeeType: PayeeType;
+  payeeId: string;
+  sessionsPerCycle: number;
+  amount: string;
+  /** The first cycle number this version applies to. */
+  effectiveFromCycle: number;
+  /** ISO 8601, UTC */
+  createdAt: string;
 }
 
 /** N sessions per cycle for an amount (openapi.yaml: PlanInput). amount: "1500.00". */

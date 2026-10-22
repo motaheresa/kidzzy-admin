@@ -4,22 +4,20 @@ import type { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
 
-/** A plan version, as the services need it. */
-export interface PlanRow {
-  id: string;
-  version: number;
-  sessionsPerCycle: number;
-  amount: Prisma.Decimal;
-  effectiveFromCycle: number;
-}
-
 const PLAN_SELECT = {
   id: true,
+  payeeType: true,
+  studentId: true,
+  instructorId: true,
   version: true,
   sessionsPerCycle: true,
   amount: true,
   effectiveFromCycle: true,
+  createdAt: true,
 } as const satisfies Prisma.PaymentPlanSelect;
+
+/** A plan version, as the services and the mapper need it. */
+export type PlanRow = Prisma.PaymentPlanGetPayload<{ select: typeof PLAN_SELECT }>;
 
 /**
  * Reads and writes payment plan versions (US-08, US-20, US-21). A version is never changed: a
@@ -39,6 +37,24 @@ export class PaymentPlanRepository {
     return this.txHost.tx.paymentPlan.findFirst({
       where: { studentId },
       orderBy: { version: 'desc' },
+      select: PLAN_SELECT,
+    });
+  }
+
+  /** Every version of the student's plan, the first first. */
+  listForStudent(studentId: string): Promise<PlanRow[]> {
+    return this.txHost.tx.paymentPlan.findMany({
+      where: { studentId },
+      orderBy: { version: 'asc' },
+      select: PLAN_SELECT,
+    });
+  }
+
+  /** Every version of the instructor's plan, the first first. */
+  listForInstructor(instructorId: string): Promise<PlanRow[]> {
+    return this.txHost.tx.paymentPlan.findMany({
+      where: { instructorId },
+      orderBy: { version: 'asc' },
       select: PLAN_SELECT,
     });
   }
