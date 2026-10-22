@@ -53,6 +53,29 @@ Create a GitHub environment named `production` and add yourself as a required re
 | `SSH_PRIVATE_KEY` | The private key, including the `BEGIN` and `END` lines                            |
 | `SSH_KNOWN_HOSTS` | One line from `ssh-keyscan -H <host>` on a machine that already trusts the server |
 
+## The first deploy, the seed, and the order of work
+
+**Migrations.** `prisma migrate deploy` applies every migration the database does not have yet, in the order of the folder names. On a database that never had one, the first deploy that gets past the install applies all of them. `DATABASE_URL` in `apps/api/.env` must point at the production database, with a user that may create tables. After that, each deploy applies only the new ones. A migration that already ran is never edited or renamed: a change is a new migration (the Workflow rule in `CLAUDE.md`).
+
+**Seed, once.** The deploy never seeds. A new database has no academy, no roles and no admin, so nobody can sign in until this is run, as the `deploy` user in an interactive shell (nvm loaded), after the first green deploy:
+
+```bash
+cd /www/wwwroot/kidzzy-admin
+# the deploy installs with --ignore-scripts, so the generated Prisma client may not exist here
+pnpm --filter @kidzzy/api prisma:generate
+# SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD in apps/api/.env give the first admin
+pnpm --filter @kidzzy/api prisma:seed
+```
+
+It creates the permission catalog, the academy (`KidzzyCoders`, `Africa/Cairo`) and its roles, and the admin when both variables are set. It is safe to repeat and never changes an existing user's password. Remove `SEED_ADMIN_PASSWORD` from `.env` afterwards (the file is mode 600, but a password does not need to stay in it). This step has not been run on the real server yet; send the output if it fails.
+
+**Order of work** when several pull requests are open:
+
+1. Merge the one that fixes the deploy first and wait for a green `deploy` job (approve it in GitHub if the `production` environment asks). A feature that carries a migration should not be the first thing a broken deploy has to ship.
+2. Run the seed once (above), then the checks of the next section.
+3. Merge feature pull requests one at a time. Each merge starts a deploy, which waits for approval and for the one before it. A migration runs (step 6) while the previous API is still serving, so it must work for the old code too: add tables, columns and indexes freely; to drop or rename something, do it in two releases (add the new one and ship the code that uses it, then remove the old one in a later migration).
+4. On the development machine, pull `main` and run `pnpm --filter @kidzzy/api prisma:migrate`. If a migration that your database already applied was replaced or renamed on a branch, `prisma migrate status` says "not found locally": repair the development database by hand (the SQL goes in that pull request) before migrating, or reset it. Production never sees that migration, because it was never merged.
+
 ## Nginx
 
 Configured in aaPanel, not in this repository. The site root is `apps/web/dist`. `/api` is proxied to `127.0.0.1:3000`. Every other path falls back to `index.html`, so a refresh on `/students/…` still opens the app. `/sw.js` is served with `Cache-Control: no-cache`, so a new worker is picked up immediately.
