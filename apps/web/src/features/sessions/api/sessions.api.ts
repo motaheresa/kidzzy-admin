@@ -1,3 +1,4 @@
+import type { HeldResult } from '@kidzzy/shared';
 import { http } from '@/lib/http';
 import type { Page, Session, SessionListParams } from '../types';
 
@@ -26,4 +27,9 @@ export function listSessions(
 /** GET /sessions/{id} */
 export function getSession(id: string, signal?: AbortSignal): Promise<Session> {
   return http.get<Session>(path(id), { signal });
+}
+
+/** POST /sessions/{id}/held. cyclesUpdated is empty until cycles are counted. */
+export function markSessionHeld(id: string): Promise<HeldResult> {
+  return http.post<HeldResult>(`${path(id)}/held`);
 }

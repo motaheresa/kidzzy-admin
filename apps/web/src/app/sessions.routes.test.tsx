@@ -17,7 +17,7 @@ const admin: Me = {
   email: 'admin@test.local',
   phone: null,
   roles: ['Admin'],
-  permissions: ['sessions.read:any', 'groups.read:any'],
+  permissions: ['sessions.read:any', 'sessions.update:any', 'groups.read:any'],
   mustChangePassword: false,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
@@ -25,7 +25,11 @@ const instructorUser: Me = {
   ...admin,
   id: 'inst-1',
   roles: ['Instructor'],
-  permissions: ['sessions.read:own', 'groups.read:own'],
+  permissions: ['sessions.read:own', 'sessions.update:own', 'groups.read:own'],
+};
+const readOnlyAdmin: Me = {
+  ...admin,
+  permissions: ['sessions.read:any', 'groups.read:any'],
 };
 const noSessions: Me = { ...admin, permissions: ['groups.read:any'] };
 
@@ -41,6 +45,9 @@ const session: Session = {
   compensatesSessionId: null,
   cancelReason: null,
 };
+
+const startedSession: Session = { ...session, scheduledAt: '2026-10-22T09:00:00.000Z' };
+const heldSession: Session = { ...startedSession, status: 'held', sessionNumber: 1 };
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -79,6 +86,21 @@ function renderAt(path: string) {
 
 function sessionCalls() {
   return calls.filter((call) => call.url.pathname.endsWith('/sessions'));
+}
+
+function groupData() {
+  return {
+    id: session.group.id,
+    name: session.group.name,
+    level: 'Scratch 1',
+    instructor: { id: 'inst-1', name: 'Ana' },
+    startDate: '2026-10-01',
+    isActive: true,
+    schedule: [],
+    studentCount: 0,
+    heldCount: 0,
+    nextSessionAt: null,
+  };
 }
 
 beforeEach(() => {
@@ -131,19 +153,7 @@ describe('a group’s sessions', () => {
     api(admin, {
       'GET /sessions': (url) =>
         json(200, page(url.searchParams.get('status') === 'held' ? [] : [session])),
-      [`GET ${groupPath}`]: () =>
-        json(200, {
-          id: session.group.id,
-          name: session.group.name,
-          level: 'Scratch 1',
-          instructor: { id: 'inst-1', name: 'Ana' },
-          startDate: '2026-10-01',
-          isActive: true,
-          schedule: [],
-          studentCount: 0,
-          heldCount: 0,
-          nextSessionAt: null,
-        }),
+      [`GET ${groupPath}`]: () => json(200, groupData()),
       [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
     });
     const router = renderAt(groupPath);
@@ -158,10 +168,67 @@ describe('a group’s sessions', () => {
     await waitFor(() => expect(sessionCalls().at(-1)?.url.searchParams.get('status')).toBe('held'));
     expect(sessionCalls().at(-1)?.url.searchParams.get('groupId')).toBe(session.group.id);
   });
+
+  it('shows Mark Held on an eligible row and refreshes its status and number after confirmation', async () => {
+    let held = false;
+    let groupFetches = 0;
+    api(admin, {
+      'GET /sessions': () => json(200, page([held ? heldSession : startedSession])),
+      [`GET ${groupPath}`]: () => {
+        groupFetches += 1;
+        return json(200, groupData());
+      },
+      [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
+      [`POST /sessions/${session.id}/held`]: () => {
+        held = true;
+        return json(200, { ...heldSession, cyclesUpdated: [] });
+      },
+    });
+    renderAt(groupPath);
+
+    const markButton = await screen.findByRole('button', { name: /سجّل حصة جروب A/ });
+    await userEvent.setup().click(markButton);
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByText('اتعملت')
+          .some((element) => element.getAttribute('data-slot') === 'badge'),
+      ).toBe(true),
+    );
+    expect(await screen.findByText('1')).toBeInTheDocument();
+    await waitFor(() => expect(groupFetches).toBeGreaterThan(1));
+  });
+
+  it('does not show Mark Held when the caller lacks sessions.update', async () => {
+    api(readOnlyAdmin, {
+      'GET /sessions': () => json(200, page([startedSession])),
+      [`GET ${groupPath}`]: () => json(200, groupData()),
+      [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
+    });
+    renderAt(groupPath);
+
+    await screen.findByRole('link', { name: /22 أكتوبر 2026/ });
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
+  });
+
+  it('does not show Mark Held to scope own when the session belongs to another instructor', async () => {
+    const anotherInstructorSession = { ...startedSession, instructorId: 'former-instructor' };
+    api(instructorUser, {
+      'GET /sessions': () => json(200, page([anotherInstructorSession])),
+      [`GET ${groupPath}`]: () => json(200, groupData()),
+      [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
+    });
+    renderAt(groupPath);
+
+    await screen.findByRole('link', { name: /22 أكتوبر 2026/ });
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
+  });
 });
 
 describe('session details', () => {
-  it('shows the session and no actions yet', async () => {
+  it('shows the session and hides Mark Held while it has not started', async () => {
     api(admin, { [`GET /sessions/${session.id}`]: () => json(200, session) });
     renderAt(`/sessions/${session.id}`);
     expect(await screen.findByRole('heading', { name: 'جروب A' })).toBeInTheDocument();
@@ -171,7 +238,37 @@ describe('session details', () => {
       'href',
       `/groups/${session.group.id}`,
     );
-    expect(screen.queryByRole('button', { name: 'اتعملت' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
+  });
+
+  it('does not show Mark Held for a non-Scheduled session', async () => {
+    api(admin, {
+      [`GET /sessions/${session.id}`]: () =>
+        json(200, { ...heldSession, scheduledAt: '2026-10-21T09:00:00.000Z' }),
+    });
+    renderAt(`/sessions/${session.id}`);
+
+    await screen.findByRole('heading', { name: 'جروب A' });
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['SESSION_NOT_SCHEDULED', 'الحصة دي مش في حالة مجدولة'],
+    ['SESSION_NOT_STARTED', 'ميعاد الحصة لسه مجاش'],
+    [
+      'SESSION_OUT_OF_ORDER',
+      'فيه حصة أقدم لسه مجدولة، أو الحصة دي قبل حصة اتسجلت بالفعل. افتح الجروب وفلتر «مجدولة». لو الحصة مش بتاعتك، الأدمن هو اللي يسجّلها.',
+    ],
+  ])('shows the Arabic message when marking Held returns %s', async (code, message) => {
+    api(admin, {
+      [`GET /sessions/${session.id}`]: () => json(200, startedSession),
+      [`POST /sessions/${session.id}/held`]: () => problem(409, code),
+    });
+    renderAt(`/sessions/${session.id}`);
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
   });
 
   it('says a missing session is gone', async () => {

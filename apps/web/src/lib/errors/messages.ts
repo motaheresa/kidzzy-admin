@@ -24,6 +24,9 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   EMAIL_TAKEN: 'الايميل ده مستخدم لحساب تاني',
   PHONE_TAKEN: 'رقم الموبايل ده مستخدم لحساب تاني',
   SESSION_NOT_SCHEDULED: 'الحصة دي مش في حالة مجدولة',
+  SESSION_NOT_STARTED: 'ميعاد الحصة لسه مجاش',
+  SESSION_OUT_OF_ORDER:
+    'فيه حصة أقدم لسه مجدولة، أو الحصة دي قبل حصة اتسجلت بالفعل. افتح الجروب وفلتر «مجدولة». لو الحصة مش بتاعتك، الأدمن هو اللي يسجّلها.',
   SESSION_NOT_HELD: 'الحصة دي لسه ما اتعملتش',
   STUDENT_ALREADY_ENROLLED: 'الطالب ده مسجل في جروب بالفعل',
   STUDENT_CODE_TAKEN: 'كود الطالب ده مستخدم قبل كده',

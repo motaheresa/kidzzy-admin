@@ -58,6 +58,8 @@ export const ErrorCode = {
   EmailTaken: 'EMAIL_TAKEN',
   PhoneTaken: 'PHONE_TAKEN',
   SessionNotScheduled: 'SESSION_NOT_SCHEDULED',
+  SessionNotStarted: 'SESSION_NOT_STARTED',
+  SessionOutOfOrder: 'SESSION_OUT_OF_ORDER',
   SessionNotHeld: 'SESSION_NOT_HELD',
   StudentAlreadyEnrolled: 'STUDENT_ALREADY_ENROLLED',
   StudentCodeTaken: 'STUDENT_CODE_TAKEN',
@@ -146,6 +148,25 @@ export interface Session {
   isMakeup: boolean;
   compensatesSessionId: string | null;
   cancelReason: string | null;
+}
+
+/**
+ * What marking a session Held returns (openapi.yaml: HeldResult).
+ * cyclesUpdated stays empty until cycles are counted (SCRUM-38).
+ */
+export interface HeldResult extends Session {
+  cyclesUpdated: CycleChange[];
+}
+
+/** One cycle a Held session moved (openapi.yaml: CycleChange). Unused until SCRUM-38. */
+export interface CycleChange {
+  cycleId: string;
+  payeeType: PayeeType;
+  studentId: string | null;
+  instructorId: string | null;
+  sessionsCounted: number;
+  sessionsPerCycle: number;
+  status: CycleStatus;
 }
 
 /** An instructor account (openapi.yaml: Instructor). */

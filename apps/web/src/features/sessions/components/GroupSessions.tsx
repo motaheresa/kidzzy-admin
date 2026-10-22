@@ -24,6 +24,7 @@ import { formatDateTime, formatNumber } from '@/lib/format';
 import { SESSIONS_PAGE_SIZE } from '../api/sessions.api';
 import { useSessionListParams } from '../hooks/useSessionListParams';
 import { useSessions } from '../hooks/useSessions';
+import { MarkHeldButton } from './MarkHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
 const STATUS_FILTERS = [
@@ -104,7 +105,10 @@ export function GroupSessions({ groupId }: { groupId: string }) {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
+                    <span className="flex flex-wrap items-center gap-2">
+                      <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
+                      <MarkHeldButton session={session} />
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}

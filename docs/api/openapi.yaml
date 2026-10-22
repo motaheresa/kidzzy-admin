@@ -1116,7 +1116,34 @@ paths:
     post:
       tags:
         - Sessions
-      summary: Mark a session Held, number it and count cycles
+      summary: Mark a scheduled session Held and give it the next number
+      description: >
+        Marks a Scheduled session Held. sessionNumber becomes one more than the highest number
+        already used in the same group, or 1 when none. Marking Held never renumbers sessions
+        that are already Held. Undo (SCRUM-41, BR-13) is the story that renumbers later Held
+        sessions. cyclesUpdated is always an empty array until cycles are counted (SCRUM-38).
+        The response does not include who changed the status; that is stored on the row.
+
+
+        scheduledAt must be at or before the server clock, otherwise 409 SESSION_NOT_STARTED.
+        A session that is not Scheduled is 409 SESSION_NOT_SCHEDULED (including a second mark).
+
+
+        Order is per group. Scope own is 409 SESSION_OUT_OF_ORDER when another session of the
+        group has a strictly earlier scheduledAt and is still Scheduled. Scope any (the admin)
+        may mark Held anyway: the earlier session stays Scheduled, so it is not numbered and
+        will not enter a payment cycle. Cancelling that missed session is SCRUM-27. Both scopes
+        are 409 SESSION_OUT_OF_ORDER when a Held session of the group has a strictly later
+        scheduledAt, so this session cannot take a higher number than one that happens after it.
+        An equal scheduledAt does not block, so two sessions at the same instant (a make-up, for
+        example) do not block each other. A later reschedule must refuse a move to before the
+        latest Held session of the group.
+
+
+        Scope own may mark Held only when the instructor on the session is the caller. Being the
+        group's current instructor is not enough. After an instructor change, an unrecorded
+        session stays on the previous instructor, and only an admin can record it or use the
+        unlock above.
       operationId: markSessionHeld
       x-permission: sessions.update
       x-story: US-13, US-22
