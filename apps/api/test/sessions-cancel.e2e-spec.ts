@@ -72,11 +72,15 @@ describe('Cancelling sessions (e2e)', () => {
       .set(as(token));
   }
 
-  function cancel(id: string, reason: unknown = 'Instructor ill', token = anaToken) {
+  function cancelWith(id: string, body: object, token = anaToken) {
     return request(server())
       .post(api(`/sessions/${id}/cancel`))
       .set(as(token))
-      .send({ reason });
+      .send(body);
+  }
+
+  function cancel(id: string, reason = 'Instructor ill', token = anaToken) {
+    return cancelWith(id, { reason }, token);
   }
 
   beforeAll(async () => {
@@ -160,7 +164,7 @@ describe('Cancelling sessions (e2e)', () => {
     const [session] = await sessionsOf(group.id);
     if (!session) throw new Error('expected generated session');
 
-    await cancel(session.id, reason)
+    await cancelWith(session.id, reason === undefined ? {} : { reason })
       .expect(400)
       .expect(({ body }) => {
         expect((body as ErrorResponse).code).toBe('VALIDATION_FAILED');
