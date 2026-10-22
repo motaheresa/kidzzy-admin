@@ -7,15 +7,19 @@ Production is the aaPanel VPS in [ADR-0014](adr/0014-deployment-aapanel.md). A p
 1. The `quality` job installs, tests and runs `pnpm build`. It uploads `apps/api/dist`, `apps/web/dist` and `packages/shared/dist`. Those directories are the build the tests ran against.
 2. The `deploy` job runs only on a push to `main`, after `quality`, on a new runner. It connects as the `deploy` user over SSH with strict host-key checking.
 3. It rsyncs the three `dist` directories to `/tmp/kidzzy-release/<sha>/` on the server.
-4. [`scripts/deploy.sh`](../scripts/deploy.sh) checks out that commit in `/www/wwwroot/kidzzy-admin`, runs `pnpm install --frozen-lockfile` (dependencies and the Prisma client, not `pnpm build`), copies the CI `dist` over whatever install produced, runs `prisma migrate deploy`, restarts the PM2 process `kidzzy-api` and requests `GET /api/v1/health`. Any failure, including 30 seconds without `{"status":"ok"}`, fails the job.
+4. [`scripts/deploy.sh`](../scripts/deploy.sh) checks out that commit in `/www/wwwroot/kidzzy-admin`. A non-interactive SSH session does not read `.bashrc`, so the script prepends the newest `/www/server/nodejs/<version>/bin` to `PATH` before it looks for `node`, `pnpm` and `pm2`. It also requires `rsync` on the server, because the runner's rsync starts a remote rsync.
+5. Install is `pnpm install --frozen-lockfile --ignore-scripts`. That skips the root `prepare` script, so the server does not run `tsc` or `prisma generate`. It then runs `pnpm rebuild @prisma/engines prisma @node-rs/argon2`: the query engine, and argon2 because the API loads that native module at startup.
+6. `prisma migrate deploy` runs next, while PM2 is still serving the previous `dist`. If the migration fails, the files on disk are still the ones the process is running.
+7. The three `dist` directories are published with `rsync -a --delete --delay-updates --delete-after`. The live directory is not deleted first, so Nginx never sees a missing `index.html`.
+8. `pm2 restart kidzzy-api`. The job fails unless PM2 reports the process `online` and `https://app.kidzzy-coders.com/api/v1/health` returns `{"status":"ok"}` within 30 seconds. The public URL is what proves Nginx, TLS and the proxy, not only that the process listens on port 3000. The VPS must be able to reach its own site name.
 
-A newer push to `main` waits. It does not cancel a deploy that is already running, and two deploys do not run at once. A new commit on a pull request still cancels that pull request's older run.
+The deploy job uses the GitHub environment `production` and the concurrency group `deploy-production` (`cancel-in-progress: false`). A newer push waits. It does not cancel a deploy that is already running, and two deploys do not run at once. A new commit on a pull request still cancels that pull request's older quality run. The workflow-level group does the same for the rest of the `main` run.
 
 ## One-time server setup
 
 The `deploy` user already owns the clone and the PM2 process. These are the pieces the script assumes, not steps it performs:
 
-- Node 22, pnpm 10 and `pm2` are on the `PATH` of a non-interactive SSH session. A version manager that only loads in an interactive shell will make the job fail with `missing command`.
+- Node is the aaPanel install under `/www/server/nodejs/<version>/bin`. The script prepends the newest of those directories. `pnpm` and `pm2` need to be on that same `bin` (installed with that Node), or already on the default `PATH`. `rsync` must be on the default `PATH` (`/usr/bin/rsync`); the runner checks for it before copying.
 - The clone is `/www/wwwroot/kidzzy-admin`, with `origin` pointing at this repository, and the `deploy` user can `git fetch`.
 - `apps/api/.env` exists, mode `600`, and is never committed. `NODE_ENV=production`, `DATABASE_URL` and `JWT_ACCESS_SECRET` are set there. `COOKIE_SECURE` stays true.
 - PM2 was started once from the API directory, so restarts keep reading that `.env`:
@@ -28,7 +32,7 @@ The `deploy` user already owns the clone and the PM2 process. These are the piec
 
   The first `main` push after that uses `pm2 restart`. If the process does not exist, the deploy fails on purpose.
 
-GitHub repository secrets, set with `gh secret set` and never committed:
+Create a GitHub environment named `production` and add yourself as a required reviewer. That is the approval gate: the deploy job waits until you approve it. Put the four secrets on that environment, not only on the repository. A secret that exists only on the environment is invisible to a job that does not name it.
 
 | Secret            | Value                                                                             |
 | ----------------- | --------------------------------------------------------------------------------- |
@@ -69,13 +73,15 @@ Check on the server after a deploy:
 
 ## Logs
 
-`pm2 logs kidzzy-api` follows the process. The files are `~/.pm2/logs/kidzzy-api-out.log` and `kidzzy-api-error.log`. Nginx's own error log is in the aaPanel site screen.
+`pm2 logs kidzzy-api` follows the process. The files are `~/.pm2/logs/kidzzy-api-out.log` and `kidzzy-api-error.log`. `deploy.sh` writes its own lines to the Actions log with a UTC timestamp (`2026-10-22T08:00:00Z …`). Nginx's own error log is in the aaPanel site screen.
 
 ## Rolling back
 
 `prisma migrate deploy` only applies new migrations. It does not undo one.
 
-To put the previous build back, re-run the successful workflow of that commit in GitHub Actions (Actions, the run, Re-run all jobs). That commit is built again on GitHub and `deploy.sh` checks it out. Do this only when that commit's migrations are already the database's current ones.
+To put the previous build back, re-run the successful workflow of that commit in GitHub Actions (Actions, the run, Re-run all jobs). `quality` builds that commit again and `deploy.sh` checks it out. Do this only when that commit's migrations are already the database's current ones.
+
+The uploaded `dist` artifact is kept for 5 days (`retention-days: 5`). Re-running all jobs does not need that artifact, because `quality` builds again. Re-running only the deploy job fails once the artifact has expired.
 
 Checking out an older commit by hand, without its `dist` from CI, does not roll the running app back: PM2 serves `apps/api/dist`, which is the last CI build copied into place.
 

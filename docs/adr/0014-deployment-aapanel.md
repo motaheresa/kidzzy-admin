@@ -16,8 +16,8 @@ Production is https://app.kidzzy-coders.com on this one VPS.
 - Nginx, configured in aaPanel, serves `apps/web/dist`, proxies `/api` to `127.0.0.1:3000`, falls back to `index.html` for other paths, and sends `/sw.js` with `Cache-Control: no-cache`. The site certificate is Let's Encrypt, issued in aaPanel.
 - PostgreSQL 18 runs on the same machine. Local development and CI stay on PostgreSQL 16 (ADR-0010).
 - The API runs as one PM2 process named `kidzzy-api`, owned by the `deploy` user, with its working directory `apps/api` so it reads `apps/api/.env` (mode 600, never in git). The repository is `/www/wwwroot/kidzzy-admin`.
-- A push to `main` deploys only after the `quality` job is green. GitHub Actions builds once. The deploy job sends that build with rsync and SSH (`StrictHostKeyChecking`), then `scripts/deploy.sh` checks out that commit, runs `pnpm install --frozen-lockfile`, `prisma migrate deploy`, `pm2 restart kidzzy-api` and `GET /api/v1/health`. The server does not run `pnpm build`. A failed step or a failed health check fails the job.
-- Deploys of `main` are not cancelled when a newer commit is pushed, and they do not run in parallel: the workflow waits. Pull request runs still cancel their own older run.
+- A push to `main` deploys only after the `quality` job is green, and only with the GitHub environment `production` (its required reviewer is the approval gate). GitHub Actions builds once. The deploy job sends that build with rsync and SSH (`StrictHostKeyChecking`). `scripts/deploy.sh` checks out that commit, runs `pnpm install --frozen-lockfile --ignore-scripts`, rebuilds only Prisma's engine and argon2, applies migrations, then publishes `dist` and restarts `kidzzy-api`. The server does not run `pnpm build` or the root `prepare` script. The job fails unless PM2 reports `online` and `https://app.kidzzy-coders.com/api/v1/health` returns ok.
+- The deploy job has its own concurrency group `deploy-production` with cancel-in-progress off, so a running deploy is never cancelled and two deploys never run together. Pull request runs still cancel their own older run.
 - How to operate it is `docs/deployment.md`.
 
 ## Alternatives considered
@@ -28,7 +28,7 @@ Production is https://app.kidzzy-coders.com on this one VPS.
 
 ## Consequences
 
-- The four secrets `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY` and `SSH_KNOWN_HOSTS` live in GitHub, not in the repository. Until they exist, the deploy job fails.
+- The four secrets `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY` and `SSH_KNOWN_HOSTS` live on the GitHub environment `production`, not in the repository. The deploy job reads that environment. Until the secrets exist there, the job fails.
 - `prisma migrate deploy` only moves forward. Rolling the code back past a migration needs a database restore, not only an older commit.
 - The daily `pg_dump` to Google Drive from ADR-0009 is not on this VPS yet. This decision does not recreate it.
 - Nginx itself is not in the repository. The required locations are in the runbook and have to be checked on the server.

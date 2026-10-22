@@ -43,6 +43,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the deploy script
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/deploy.sh scripts/deploy.test.sh
+          bash scripts/deploy.test.sh
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -102,6 +109,11 @@ jobs:
     name: deploy
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: quality
+    # Secrets live on this environment. A required reviewer there is the approval gate.
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -142,6 +154,8 @@ jobs:
           sha="${GITHUB_SHA}"
           remote="/tmp/kidzzy-release/${sha}"
           ssh_base=(-i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          # rsync over SSH runs rsync on the server too. Fail before copying if it is missing.
+          ssh "${ssh_base[@]}" "$dest" "command -v rsync >/dev/null"
           ssh "${ssh_base[@]}" "$dest" "mkdir -p '${remote}/apps/api/dist' '${remote}/apps/web/dist' '${remote}/packages/shared/dist'"
           rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             release/apps/api/dist/ "${dest}:${remote}/apps/api/dist/"
