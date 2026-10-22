@@ -109,21 +109,7 @@ export class SessionsService {
    */
   @Transactional()
   async markHeld(id: string): Promise<HeldResult> {
-    const first = await this.sessions.findById(id);
-    if (!first) {
-      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
-    }
-    // Before the lock, so a caller who is not allowed does not wait on it.
-    this.ensureMayMark(first);
-
-    await this.sessions.lockGroup(first.group.id);
-
-    const row = await this.sessions.findById(id);
-    if (!row) {
-      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
-    }
-    // The instructor on the session can change while this request waited for the lock.
-    this.ensureMayMark(row);
+    const row = await this.loadForWrite(id);
 
     if (row.status !== 'scheduled') {
       throw new AppException(
@@ -154,8 +140,56 @@ export class SessionsService {
     return { ...toSession(held), cyclesUpdated: [] };
   }
 
+  /**
+   * Cancels a Scheduled session with a reason (US-14). A Cancelled session gets no number, and
+   * it no longer counts as an earlier Scheduled session, so it unblocks the ones after it.
+   * Allowed before or after its start time. Same write scope and group lock as marking Held.
+   * A Held session is not cancelled here: that is the admin's undo (SCRUM-41).
+   */
+  @Transactional()
+  async cancel(id: string, reason: string): Promise<Session> {
+    const row = await this.loadForWrite(id);
+    if (row.status !== 'scheduled') {
+      throw new AppException(
+        ErrorCode.SessionNotScheduled,
+        HttpStatus.CONFLICT,
+        'Only a scheduled session can be cancelled',
+      );
+    }
+    await this.sessions.markCancelled(id, reason, this.access.userId, this.clock.now());
+    const cancelled = await this.sessions.findById(id);
+    if (!cancelled) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    // TODO(US-35): write the audit log for this status change.
+    return toSession(cancelled);
+  }
+
+  /**
+   * The steps both writes share: load (404 if missing or another academy's), check the write
+   * scope before waiting, lock the group, then load again and check again, because the
+   * instructor on the session or its status can change while this request waited for the lock.
+   */
+  private async loadForWrite(id: string): Promise<SessionRow> {
+    const first = await this.sessions.findById(id);
+    if (!first) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    // Before the lock, so a caller who is not allowed does not wait on it.
+    this.ensureMayWrite(first);
+
+    await this.sessions.lockGroup(first.group.id);
+
+    const row = await this.sessions.findById(id);
+    if (!row) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    this.ensureMayWrite(row);
+    return row;
+  }
+
   /** Scope `own` writes only a session whose instructor is the caller. Scope `any` passes. */
-  private ensureMayMark(row: SessionRow): void {
+  private ensureMayWrite(row: SessionRow): void {
     const scope = this.access.scopeFor('sessions.update');
     if (scope === 'own' && row.instructorId !== this.access.userId) {
       throw new AppException(ErrorCode.Forbidden, HttpStatus.FORBIDDEN, 'Not allowed');

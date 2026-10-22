@@ -14,13 +14,14 @@ import {
 import { usePermissions, useSession } from '@/features/auth';
 import { formatTime, zonedDayRange } from '@/lib/format';
 import { useSessions } from '../hooks/useSessions';
+import { CancelSessionButton } from './CancelSessionButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
 /**
  * Today's sessions of the caller's groups (US-12), in the academy's timezone.
  * Shown only to someone who holds sessions.read; the API still enforces that.
- * A session that can be marked Held shows that action beside its link.
+ * A session that can be marked Held or cancelled shows those actions beside its link.
  */
 export function TodaySessions() {
   const { can } = usePermissions();
@@ -74,7 +75,10 @@ function TodaySessionsList({ timeZone }: { timeZone: string }) {
                   </span>
                   <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
                 </Link>
-                <MarkHeldButton session={session} />
+                <span className="flex flex-wrap items-center gap-2">
+                  <MarkHeldButton session={session} />
+                  <CancelSessionButton session={session} />
+                </span>
               </li>
             ))}
           </ul>

@@ -3,11 +3,11 @@ import type { PermissionAction, PermissionScope, Session } from '@kidzzy/shared'
 import { Alert, Button, ConfirmDialog } from '@/components/ui';
 import { usePermissions, useSession } from '@/features/auth';
 import { useMarkHeld } from '../hooks/useMarkHeld';
+import { canWriteSession } from './session-access';
 
 /**
- * Whether this caller may mark this session Held from the screen.
- * Scope `own` requires the instructor on the session, the status must be Scheduled, and the
- * start time must already have come on the browser clock. The API decides again with its clock.
+ * Whether this caller may mark this session Held from the screen: the write rule, a Scheduled
+ * status, and a start time that has already come on the browser clock. The API decides again.
  */
 function canMarkHeld(
   session: Session,
@@ -16,8 +16,7 @@ function canMarkHeld(
   scope: PermissionScope | null,
   now: Date = new Date(),
 ): boolean {
-  if (!can('sessions.update') || !callerId) return false;
-  if (scope === 'own' && session.instructorId !== callerId) return false;
+  if (!canWriteSession(session, callerId, can, scope)) return false;
   if (session.status !== 'scheduled') return false;
   return new Date(session.scheduledAt).getTime() <= now.getTime();
 }

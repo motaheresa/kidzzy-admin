@@ -33,3 +33,8 @@ export function getSession(id: string, signal?: AbortSignal): Promise<Session> {
 export function markSessionHeld(id: string): Promise<HeldResult> {
   return http.post<HeldResult>(`${path(id)}/held`);
 }
+
+/** POST /sessions/{id}/cancel. The reason is required. */
+export function cancelSession(id: string, reason: string): Promise<Session> {
+  return http.post<Session>(path(id) + '/cancel', { reason });
+}

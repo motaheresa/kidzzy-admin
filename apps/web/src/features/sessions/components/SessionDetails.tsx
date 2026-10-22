@@ -4,12 +4,13 @@ import { Alert, Button, DetailList, EmptyState, PageHeader, Skeleton } from '@/c
 import { usePermissions, useSession } from '@/features/auth';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { useSessionDetail } from '../hooks/useSessions';
+import { CancelSessionButton } from './CancelSessionButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
 /**
  * One session (US-12). Times are shown in the academy's timezone.
- * Marking Held is offered when this caller may record this session (US-13).
+ * Marking Held and cancelling are offered when this caller may change this session (US-13, US-14).
  */
 export function SessionDetails({ id }: { id: string }) {
   const session = useSessionDetail(id);
@@ -60,6 +61,7 @@ export function SessionDetails({ id }: { id: string }) {
         actions={
           <>
             <MarkHeldButton session={data} />
+            <CancelSessionButton session={data} />
             {can('groups.read') && (
               <Button asChild variant="outline">
                 <Link to={`/groups/${data.group.id}`}>ارجع للجروب</Link>
