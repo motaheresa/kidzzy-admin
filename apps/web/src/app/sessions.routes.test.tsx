@@ -60,14 +60,14 @@ const page = (data: Session[]): Page<Session> => ({
 
 type Handler = (url: URL) => Response;
 let fetchMock: MockInstance<typeof fetch>;
-let calls: { method: string; url: URL }[];
+let calls: { method: string; url: URL; body: unknown }[];
 
 function api(me: Me, handlers: Record<string, Handler> = {}) {
   fetchMock.mockImplementation((input, init = {}) => {
     const url = new URL(String(input), 'http://localhost');
     const method = init.method ?? 'GET';
     const path = url.pathname.replace('/api/v1', '');
-    calls.push({ method, url });
+    calls.push({ method, url, body: init.body ? JSON.parse(String(init.body)) : undefined });
     if (path === '/auth/me') return Promise.resolve(json(200, me));
     const handler = handlers[`${method} ${path}`];
     return Promise.resolve(handler ? handler(url) : problem(404, 'NOT_FOUND'));
@@ -289,5 +289,112 @@ describe('session details', () => {
     expect(
       await screen.findByRole('heading', { name: 'مش مسموح لك تفتح الصفحة دي' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('cancelling a session', () => {
+  const detailPath = `/sessions/${session.id}`;
+  const cancelledSession: Session = {
+    ...session,
+    status: 'cancelled',
+    cancelReason: 'Instructor ill',
+  };
+  const openDialog = async () => {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /الغي حصة جروب A/ }));
+    return user;
+  };
+
+  it('asks for a reason, sends it trimmed, and shows the session as cancelled', async () => {
+    api(admin, {
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`POST ${detailPath}/cancel`]: () => json(200, cancelledSession),
+    });
+    renderAt(detailPath);
+
+    const user = await openDialog();
+    await user.type(screen.getByLabelText(/السبب/), '  Instructor ill  ');
+    await user.click(screen.getByRole('button', { name: 'ايوه، الغيها' }));
+
+    expect(await screen.findByText('اتلغت')).toBeInTheDocument();
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
+      reason: 'Instructor ill',
+    });
+    expect(screen.queryByRole('button', { name: /الغي حصة جروب A/ })).not.toBeInTheDocument();
+  });
+
+  it('does not send a blank reason', async () => {
+    api(admin, { [`GET ${detailPath}`]: () => json(200, session) });
+    renderAt(detailPath);
+
+    const user = await openDialog();
+    await user.type(screen.getByLabelText(/السبب/), '   ');
+    await user.click(screen.getByRole('button', { name: 'ايوه، الغيها' }));
+
+    expect(await screen.findByText('اكتب سبب الالغاء')).toBeInTheDocument();
+    expect(calls.some((call) => call.method === 'POST')).toBe(false);
+  });
+
+  it('shows the reason message when the API refuses the reason', async () => {
+    api(admin, {
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`POST ${detailPath}/cancel`]: () =>
+        json(400, {
+          type: 'about:blank',
+          title: 'Error',
+          status: 400,
+          code: 'VALIDATION_FAILED',
+          errors: [{ field: 'reason', message: 'reason should not be empty' }],
+        }),
+    });
+    renderAt(detailPath);
+
+    const user = await openDialog();
+    await user.type(screen.getByLabelText(/السبب/), 'x');
+    await user.click(screen.getByRole('button', { name: 'ايوه، الغيها' }));
+
+    expect(await screen.findByText('اكتب سبب الالغاء، 500 حرف على الاكتر')).toBeInTheDocument();
+  });
+
+  it('shows the Arabic message when the session is no longer scheduled', async () => {
+    api(admin, {
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`POST ${detailPath}/cancel`]: () => problem(409, 'SESSION_NOT_SCHEDULED'),
+    });
+    renderAt(detailPath);
+
+    const user = await openDialog();
+    await user.type(screen.getByLabelText(/السبب/), 'Holiday');
+    await user.click(screen.getByRole('button', { name: 'ايوه، الغيها' }));
+
+    expect(await screen.findByText('الحصة دي مش في حالة مجدولة')).toBeInTheDocument();
+  });
+
+  it('is offered on a session that has not started, and on a today row', async () => {
+    api(instructorUser, { 'GET /sessions': () => json(200, page([session])) });
+    renderAt('/');
+
+    expect(await screen.findByRole('button', { name: /الغي حصة جروب A/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /سجّل حصة جروب A/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a Held session', admin, { ...heldSession }],
+    ['a Cancelled session', admin, cancelledSession],
+    ['a user without sessions.update', readOnlyAdmin, session],
+    [
+      'scope own on another instructor’s session',
+      instructorUser,
+      {
+        ...session,
+        instructorId: 'former-instructor',
+      },
+    ],
+  ])('hides the action for %s', async (_label, me, shown) => {
+    api(me, { [`GET ${detailPath}`]: () => json(200, shown) });
+    renderAt(detailPath);
+
+    await screen.findByRole('heading', { name: 'جروب A' });
+    expect(screen.queryByRole('button', { name: /الغي حصة جروب A/ })).not.toBeInTheDocument();
   });
 });

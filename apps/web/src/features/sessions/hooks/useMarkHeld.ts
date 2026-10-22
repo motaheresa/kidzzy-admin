@@ -1,14 +1,9 @@
 import type { Session } from '@kidzzy/shared';
-import { groupKeys } from '@/features/groups';
 import { useApiMutation, useQueryClient } from '@/lib/query';
 import { markSessionHeld } from '../api/sessions.api';
-import { sessionKeys } from '../api/sessions.keys';
+import { applySessionChange } from './applySessionChange';
 
-/**
- * Marks one session Held. The screen shows the error. The detail takes the new session at once,
- * and the session lists plus the group (held count and next session) are refreshed in the
- * background, so the confirm dialog closes without waiting for them.
- */
+/** Marks one session Held. The screen shows the error. See applySessionChange for the refresh. */
 export function useMarkHeld(id: string) {
   const queryClient = useQueryClient();
   return useApiMutation({
@@ -27,12 +22,7 @@ export function useMarkHeld(id: string) {
         compensatesSessionId: result.compensatesSessionId,
         cancelReason: result.cancelReason,
       };
-      queryClient.setQueryData(sessionKeys.detail(session.id), session);
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: sessionKeys.lists() }),
-        queryClient.invalidateQueries({ queryKey: groupKeys.detail(session.group.id) }),
-        queryClient.invalidateQueries({ queryKey: groupKeys.lists() }),
-      ]);
+      applySessionChange(queryClient, session);
     },
   });
 }

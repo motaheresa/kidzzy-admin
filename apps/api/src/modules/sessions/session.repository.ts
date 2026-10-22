@@ -264,6 +264,28 @@ export class SessionRepository {
     });
   }
 
+  /**
+   * Marks the session Cancelled with its reason and who changed the status. A Cancelled session
+   * keeps a null number. The academy mirror equals this academy, matching the check constraint.
+   */
+  async markCancelled(
+    id: string,
+    reason: string,
+    changedById: string,
+    changedAt: Date,
+  ): Promise<void> {
+    await this.txHost.tx.session.update({
+      where: { id },
+      data: {
+        status: 'cancelled',
+        cancelReason: reason,
+        statusChangedById: changedById,
+        statusChangedByAcademyId: this.tenant.requireAcademyId(),
+        statusChangedAt: changedAt,
+      },
+    });
+  }
+
   private where(filter: SessionListFilter): Prisma.SessionWhereInput {
     return {
       ...(filter.from || filter.to

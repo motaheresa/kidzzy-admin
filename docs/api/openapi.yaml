@@ -1168,7 +1168,18 @@ paths:
     post:
       tags:
         - Sessions
-      summary: Cancel a session with a reason
+      summary: Cancel a scheduled session with a reason
+      description: >
+        Cancels a Scheduled session. The reason is required (trimmed, 1 to 500 characters),
+        otherwise 400. A Cancelled session never gets a number, and it stops counting as an
+        earlier Scheduled session, so the sessions after it can be marked Held. It is allowed
+        before or after the start time. A session that is not Scheduled is 409
+        SESSION_NOT_SCHEDULED (a Held session is the admin's undo, SCRUM-41).
+
+
+        Scope own may cancel only a session whose instructor is the caller, the same write rule
+        as marking Held. The response does not include who changed the status; that is stored on
+        the row.
       operationId: cancelSession
       x-permission: sessions.update
       x-story: US-14

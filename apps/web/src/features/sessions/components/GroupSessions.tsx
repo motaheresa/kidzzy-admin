@@ -24,6 +24,7 @@ import { formatDateTime, formatNumber } from '@/lib/format';
 import { SESSIONS_PAGE_SIZE } from '../api/sessions.api';
 import { useSessionListParams } from '../hooks/useSessionListParams';
 import { useSessions } from '../hooks/useSessions';
+import { CancelSessionButton } from './CancelSessionButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
@@ -108,6 +109,7 @@ export function GroupSessions({ groupId }: { groupId: string }) {
                     <span className="flex flex-wrap items-center gap-2">
                       <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
                       <MarkHeldButton session={session} />
+                      <CancelSessionButton session={session} />
                     </span>
                   </TableCell>
                 </TableRow>
