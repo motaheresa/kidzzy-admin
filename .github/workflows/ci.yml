@@ -5,10 +5,11 @@ on:
   push:
     branches: [main]
 
-# Cancel an older run of the same branch when a new commit arrives
+# Pull requests cancel their own older run. A push to main does not: a deploy that is
+# already running must finish, and the next push waits instead of starting a second one.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -41,6 +42,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check the deploy script
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/deploy.sh scripts/deploy.test.sh
+          bash scripts/deploy.test.sh
 
       - uses: pnpm/action-setup@v4
 
@@ -83,6 +91,80 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # The deploy job sends these directories as they were tested. Only main needs them.
+      - name: Upload the tested build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          retention-days: 5
+          if-no-files-found: error
+          path: |
+            apps/api/dist
+            apps/web/dist
+            packages/shared/dist
+
+  deploy:
+    name: deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    # Secrets live on this environment. A required reviewer there is the approval gate.
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download the tested build
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      - name: Load the deploy key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Publish the build and run deploy.sh
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          test -f release/apps/api/dist/main.js
+          test -f release/apps/web/dist/index.html
+          test -f release/apps/web/dist/sw.js
+          test -f release/packages/shared/dist/cjs/index.js
+          if [[ -z "${SSH_HOST}" || -z "${SSH_USER}" ]]; then
+            echo "SSH_HOST and SSH_USER secrets are required" >&2
+            exit 1
+          fi
+          dest="${SSH_USER}@${SSH_HOST}"
+          sha="${GITHUB_SHA}"
+          remote="/tmp/kidzzy-release/${sha}"
+          ssh_base=(-i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          # rsync over SSH runs rsync on the server too. Fail before copying if it is missing.
+          ssh "${ssh_base[@]}" "$dest" "command -v rsync >/dev/null"
+          ssh "${ssh_base[@]}" "$dest" "mkdir -p '${remote}/apps/api/dist' '${remote}/apps/web/dist' '${remote}/packages/shared/dist'"
+          rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            release/apps/api/dist/ "${dest}:${remote}/apps/api/dist/"
+          rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            release/apps/web/dist/ "${dest}:${remote}/apps/web/dist/"
+          rsync -az --delete -e "ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            release/packages/shared/dist/ "${dest}:${remote}/packages/shared/dist/"
+          # Checkout first so this commit's script exists, then the script checks the sha again.
+          ssh "${ssh_base[@]}" "$dest" "set -euo pipefail; cd /www/wwwroot/kidzzy-admin; git update-index -q --refresh; git diff-index --quiet HEAD -- || { echo 'tracked files were changed on the server; refusing to deploy' >&2; exit 1; }; git fetch origin main; git checkout --detach '${sha}'; bash scripts/deploy.sh '${sha}'"
 
   commits:
     name: commit messages

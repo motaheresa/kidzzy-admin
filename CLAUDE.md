@@ -24,7 +24,7 @@ pnpm monorepo (`pnpm-workspace.yaml`):
 - `apps/web`: React 19 + Vite + Tailwind CSS 4 PWA, Arabic and right-to-left. In development, Vite proxies `/api` to `localhost:3000`, so the app is same-origin like production.
 - `packages/shared`: enums, error codes and API types used by both apps, built as ESM and CJS. No runtime logic and no dependencies.
 
-Production: one InterServer server managed with Webuzo, the API under PM2, at app.kidzzy-coders.com. No Docker anywhere on the developer's side (ADR-0010).
+Production: one InterServer VPS managed with aaPanel, at app.kidzzy-coders.com. Nginx serves the built web app and proxies `/api` to the API on 127.0.0.1:3000. PostgreSQL 18. The API is one PM2 process, `kidzzy-api`, owned by the `deploy` user; the repository is `/www/wwwroot/kidzzy-admin`. GitHub Actions builds once and the server does not (ADR-0014, `docs/deployment.md`). No Docker anywhere on the developer's side (ADR-0010).
 
 ## Developer machine
 
