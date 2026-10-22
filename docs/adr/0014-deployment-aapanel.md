@@ -28,7 +28,7 @@ Production is https://app.kidzzy-coders.com on this one VPS.
 
 ## Consequences
 
-- The four secrets `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY` and `SSH_KNOWN_HOSTS` are GitHub secrets, not files in the repository. The deploy job reads them as repository secrets, or as environment secrets of `production` if some are moved there (the environment value wins). Moving `SSH_PRIVATE_KEY` to the environment puts the key behind the reviewer's approval. Until the secrets exist, the job fails.
+- `SSH_HOST`, `SSH_PRIVATE_KEY` and `SSH_KNOWN_HOSTS` are GitHub secrets, not files in the repository. `SSH_USER` (`deploy`) is a repository variable: it is not secret, and as a secret GitHub masks every `deploy` in the logs. The deploy job reads them as repository secrets, or as environment secrets of `production` if some are moved there (the environment value wins). Moving `SSH_PRIVATE_KEY` to the environment puts the key behind the reviewer's approval. Until the secrets exist, the job fails.
 - `prisma migrate deploy` only moves forward. Rolling the code back past a migration needs a database restore, not only an older commit.
 - The daily `pg_dump` to Google Drive from ADR-0009 is not on this VPS yet. This decision does not recreate it.
 - Nginx itself is not in the repository. The required locations are in the runbook and have to be checked on the server.
