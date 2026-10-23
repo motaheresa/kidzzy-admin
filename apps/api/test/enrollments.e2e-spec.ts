@@ -164,6 +164,8 @@ describe('Enrollments (e2e)', () => {
         payeeType: 'student',
         payeeId: student.id,
         payeeName: student.name,
+        groupId: null,
+        groupName: null,
         cycleNumber: 1,
         sessionsPerCycle: 4,
         amount: '1500.00',

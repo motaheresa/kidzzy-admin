@@ -135,6 +135,8 @@ describe('Payment plans (e2e)', () => {
         id: expect.any(String) as string,
         payeeType: 'student',
         payeeId: student.id,
+        groupId: null,
+        groupName: null,
         sessionsPerCycle: 8,
         amount: '2800.50',
         effectiveFromCycle: 2,

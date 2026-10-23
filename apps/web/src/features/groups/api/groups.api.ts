@@ -35,6 +35,19 @@ export function listGroupOptions(signal?: AbortSignal): Promise<Page<Group>> {
   return http.get<Page<Group>>(`/groups?${query.toString()}`, { signal });
 }
 
+/** GET /groups?instructorId=&isActive=true: the active groups an instructor teaches now. */
+export function listInstructorGroups(
+  instructorId: string,
+  signal?: AbortSignal,
+): Promise<Page<Group>> {
+  const query = new URLSearchParams({
+    instructorId,
+    isActive: 'true',
+    pageSize: String(GROUP_OPTIONS_SIZE),
+  });
+  return http.get<Page<Group>>('/groups?' + query.toString(), { signal });
+}
+
 /** GET /groups/{id} */
 export function getGroup(id: string, signal?: AbortSignal): Promise<Group> {
   return http.get<Group>(path(id), { signal });

@@ -8,6 +8,8 @@ export function toPaymentPlan(row: PlanRow): PaymentPlan {
     id: row.id,
     payeeType: row.payeeType,
     payeeId: (row.payeeType === 'student' ? row.studentId : row.instructorId) ?? '',
+    groupId: row.groupId,
+    groupName: row.group?.name ?? null,
     sessionsPerCycle: row.sessionsPerCycle,
     amount: toMoney(row.amount),
     effectiveFromCycle: row.effectiveFromCycle,

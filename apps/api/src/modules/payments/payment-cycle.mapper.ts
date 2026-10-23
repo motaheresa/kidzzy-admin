@@ -12,6 +12,8 @@ export function toPaymentCycle(row: PaymentCycleRow): PaymentCycle {
     payeeType: row.payeeType,
     payeeId: (row.payeeType === 'student' ? row.studentId : row.instructorId) ?? '',
     payeeName: (row.payeeType === 'student' ? row.student?.name : row.instructor?.name) ?? '',
+    groupId: row.groupId,
+    groupName: row.group?.name ?? null,
     cycleNumber: row.cycleNumber,
     sessionsPerCycle: row.sessionsPerCycle,
     amount: toMoney(row.plan.amount),

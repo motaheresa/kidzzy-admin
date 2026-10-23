@@ -9,7 +9,7 @@ export function SetInstructorPlanPage() {
     <div className="flex max-w-2xl flex-col gap-6">
       <PageHeader
         title="خطة دفع المدرس"
-        description="اول خطة بتفتح الدورة رقم 1، والخطط بعدها بتشتغل من الدورة الجاية."
+        description="المدرس بياخد فلوسه عن كل جروب لوحده: اختار الجروب. اول خطة للجروب بتفتح الدورة رقم 1، والخطط بعدها بتشتغل من الدورة الجاية."
       />
       <PlanForm key={id} payee={{ type: 'instructor', id }} />
     </div>

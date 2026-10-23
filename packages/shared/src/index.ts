@@ -65,6 +65,7 @@ export const ErrorCode = {
   StudentCodeTaken: 'STUDENT_CODE_TAKEN',
   StudentAbsent: 'STUDENT_ABSENT',
   StudentNotInSession: 'STUDENT_NOT_IN_SESSION',
+  InstructorNotInGroup: 'INSTRUCTOR_NOT_IN_GROUP',
   StudentNotEnrollable: 'STUDENT_NOT_ENROLLABLE',
   GroupInactive: 'GROUP_INACTIVE',
   StudentHasNoPlan: 'STUDENT_HAS_NO_PLAN',
@@ -165,6 +166,8 @@ export interface CycleChange {
   payeeType: PayeeType;
   studentId: string | null;
   instructorId: string | null;
+  /** The group of an instructor's cycle (an instructor is paid per group); null for a student. */
+  groupId: string | null;
   sessionsCounted: number;
   sessionsPerCycle: number;
   status: CycleStatus;
@@ -311,6 +314,9 @@ export interface PaymentCycle {
   payeeType: PayeeType;
   payeeId: string;
   payeeName: string;
+  /** For an instructor's cycle, the group it counts (per group, ADR-0015); null for a student. */
+  groupId: string | null;
+  groupName: string | null;
   cycleNumber: number;
   sessionsPerCycle: number;
   amount: string;
@@ -328,6 +334,9 @@ export interface PaymentPlan {
   id: string;
   payeeType: PayeeType;
   payeeId: string;
+  /** For an instructor's plan, the group it is for (per group, ADR-0015); null for a student. */
+  groupId: string | null;
+  groupName: string | null;
   sessionsPerCycle: number;
   amount: string;
   /** The first cycle number this version applies to. */

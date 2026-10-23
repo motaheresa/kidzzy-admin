@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { GroupsModule } from '../groups/groups.module';
 import { InstructorsModule } from '../instructors/instructors.module';
 import { StudentsModule } from '../students/students.module';
 import { PaymentCycleRepository } from './payment-cycle.repository';
@@ -8,11 +9,12 @@ import { PaymentPlansService } from './payment-plans.service';
 
 /**
  * Payment plans and cycles (FR-15, FR-16). Enrolling a student starts their plan and first cycle
- * (US-08); changing a student's plan and reading the versions are US-20. AccessContext comes from
+ * (US-08); changing a student's plan and reading the versions are US-20. An instructor's plan and
+ * cycles are per group (ADR-0015). AccessContext comes from
  * the global AuthModule.
  */
 @Module({
-  imports: [StudentsModule, InstructorsModule],
+  imports: [StudentsModule, InstructorsModule, GroupsModule],
   controllers: [PaymentPlansController],
   providers: [PaymentPlanRepository, PaymentCycleRepository, PaymentPlansService],
   exports: [PaymentPlanRepository, PaymentCycleRepository],

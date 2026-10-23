@@ -9,6 +9,8 @@ const PLAN_SELECT = {
   payeeType: true,
   studentId: true,
   instructorId: true,
+  groupId: true,
+  group: { select: { name: true } },
   version: true,
   sessionsPerCycle: true,
   amount: true,
@@ -46,7 +48,7 @@ export class PaymentPlanRepository {
    * is that number or less (BR-10). Null when the payee never had a plan.
    */
   findInEffectForCycle(
-    payee: { studentId: string } | { instructorId: string },
+    payee: { studentId: string } | { instructorId: string; groupId: string },
     cycleNumber: number,
   ): Promise<PlanRow | null> {
     return this.txHost.tx.paymentPlan.findFirst({
@@ -65,27 +67,31 @@ export class PaymentPlanRepository {
     });
   }
 
-  /** Every version of the instructor's plan, the first first. */
-  listForInstructor(instructorId: string): Promise<PlanRow[]> {
+  /**
+   * The versions of the instructor's plans, by group name then version, the first first. One
+   * group's, or every group's: an instructor has a plan per group (ADR-0015).
+   */
+  listForInstructor(instructorId: string, groupId?: string): Promise<PlanRow[]> {
     return this.txHost.tx.paymentPlan.findMany({
-      where: { instructorId },
-      orderBy: { version: 'asc' },
+      where: { instructorId, ...(groupId ? { groupId } : {}) },
+      orderBy: [{ group: { name: 'asc' } }, { groupId: 'asc' }, { version: 'asc' }],
       select: PLAN_SELECT,
     });
   }
 
-  /** The instructor's highest version, or null when they never had a plan. */
-  findLatestForInstructor(instructorId: string): Promise<PlanRow | null> {
+  /** The highest version of the instructor's plan for this group, or null when there is none. */
+  findLatestForInstructor(instructorId: string, groupId: string): Promise<PlanRow | null> {
     return this.txHost.tx.paymentPlan.findFirst({
-      where: { instructorId },
+      where: { instructorId, groupId },
       orderBy: { version: 'desc' },
       select: PLAN_SELECT,
     });
   }
 
-  /** Inserts a version of an instructor's plan. The caller picks the version and the first cycle. */
+  /** Inserts a version of an instructor's plan for one group. The caller picks the version and the first cycle. */
   createForInstructor(input: {
     instructorId: string;
+    groupId: string;
     version: number;
     sessionsPerCycle: number;
     amount: Prisma.Decimal;
@@ -98,6 +104,8 @@ export class PaymentPlanRepository {
         payeeType: 'instructor',
         instructorId: input.instructorId,
         instructorAcademyId: academyId,
+        groupId: input.groupId,
+        groupAcademyId: academyId,
         version: input.version,
         sessionsPerCycle: input.sessionsPerCycle,
         amount: input.amount,
