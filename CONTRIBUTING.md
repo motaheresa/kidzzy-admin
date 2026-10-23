@@ -7,7 +7,7 @@ How work moves from a Jira story to production. Read it once before your first p
 1. Pick the top story of the current sprint in Jira and move it to **In Progress**.
 2. Create a branch from an up-to-date `main`.
 3. Commit in small steps with Conventional Commit messages.
-4. Push and open a pull request using the template.
+4. Run the fast checks locally (see "Checks before a pull request"), push and open a pull request using the template.
 5. CI must be green; review the diff yourself (and get one approval once the team grows).
 6. **Squash and merge** into `main`, delete the branch, and move the story to **Done** when it meets the Definition of Done.
 
@@ -65,11 +65,21 @@ Settings → Branches → Add rule for `main`:
 - Allow only squash merging (Settings → General → Pull Requests)
 - Automatically delete head branches
 
+## Checks before a pull request
+
+CI's `quality` job already runs everything on every pull request, on a fresh database, and it is required before merge: the format check, Prisma validate, the API spec lint, lint, typecheck, the unit tests, the migrations with the drift check, the full e2e suite and the build. Running all of it locally as well only costs time and disk, so locally run only:
+
+- `pnpm lint`, `pnpm typecheck`, `pnpm format:check` and `pnpm test`.
+- `pnpm lint:api-spec`, when `docs/api/openapi.yaml` changed.
+- The e2e spec files of the modules the change touches, against your local database (for example `pnpm --filter @kidzzy/api test:e2e -- sessions`).
+
+Leave the full e2e suite, the build and the drift check to CI. Watch it with `gh pr checks --watch`; if it fails, fix and push again. In the pull request, say which local checks ran and that the rest is CI.
+
 ## Definition of Done
 
 A story is done when:
 
-- It is merged through a reviewed pull request with green CI.
+- It is merged through a reviewed pull request with green CI (the full suite).
 - Automated tests cover its acceptance criteria.
 - It works at phone width in the Arabic RTL interface.
 - It is deployed to staging.
