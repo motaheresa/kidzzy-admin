@@ -43,6 +43,7 @@ model Academy {
   paymentPlans  PaymentPlan[]
   paymentCycles PaymentCycle[]
   attendance    Attendance[]
+  cycleSessions CycleSession[]
 
   @@map("academies")
 }
@@ -339,6 +340,7 @@ model Session {
   compensates     Session?      @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
   makeups         Session[]     @relation("SessionCompensation")
   attendance      Attendance[]
+  cycleSessions   CycleSession[]
 
   /// Generation inserts with ON CONFLICT DO NOTHING against this: running twice, or the job and a
   /// request at once, never duplicates a day (AC). Rows with a null slot never conflict.
@@ -438,6 +440,7 @@ model PaymentCycle {
   student    Student?    @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
   instructor User?       @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
   plan       PaymentPlan @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
+  sessions   CycleSession[]
 
   @@unique([id, academyId])
   @@unique([studentId, cycleNumber])
@@ -477,4 +480,24 @@ model Attendance {
   @@unique([sessionId, studentId])
   @@index([studentId])
   @@map("attendance")
+}
+
+/// One Held session counted in one cycle (US-22, BR-06, BR-07). A session is counted once per
+/// payee: in the open cycle of every student whose enrollment covers its date, and of the
+/// session's instructor. The rows show exactly which sessions a payment covers, and let an
+/// undo (US-17) take a session out of every cycle that counted it. A cycle's sessions_counted
+/// equals its opening_count plus its rows here. Attendance is never read to count.
+model CycleSession {
+  cycleId   String   @map("cycle_id") @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  academyId String   @map("academy_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy Academy      @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  cycle   PaymentCycle @relation(fields: [cycleId, academyId], references: [id, academyId], onDelete: Restrict)
+  session Session      @relation(fields: [sessionId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@id([cycleId, sessionId])
+  @@index([sessionId])
+  @@map("cycle_sessions")
 }
