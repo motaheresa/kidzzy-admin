@@ -1393,6 +1393,18 @@ paths:
       tags:
         - Payments
       summary: List payment cycles
+      description: >
+        Cycles by payee name, then group name, then the latest cycle first, so a payee's current cycle of
+        each group comes first. An instructor is paid per group (ADR-0015), so an instructor has one line
+        of cycles per group, each cycle carrying groupId and groupName; a student's cycles have none.
+        openingCount is the starting point of the payee's first cycle, the sessions taken before the system
+        (BR-14); it is 0 for later cycles. The filters are combined with AND, and approaching is a cycle in
+        progress with one or two sessions left.
+
+
+        Scope own (an instructor) reads only their own cycles, whatever the filters: without instructorId
+        they get their own, and a student's cycles (payeeType=student or studentId), or another
+        instructor's, are 403.
       operationId: listPaymentCycles
       x-permission: payments.read
       x-story: US-24, US-25

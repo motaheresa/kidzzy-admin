@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import { Prisma } from '../../generated/prisma/client';
+import type { PageWindow } from '../../common/pagination/page';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
+import type { CycleFilter } from './dto/list-payment-cycles.query';
 import type { PlanRow } from './payment-plan.repository';
 
 /** What a cycle row holds for the API (openapi.yaml: PaymentCycle). */
@@ -38,6 +40,14 @@ const COUNTABLE_SELECT = {
   sessionsCounted: true,
 } as const satisfies Prisma.PaymentCycleSelect;
 
+/** What GET /payment-cycles can filter by. The filters are combined with AND. */
+export interface CycleListFilter {
+  status?: CycleFilter;
+  payeeType?: 'student' | 'instructor';
+  studentId?: string;
+  instructorId?: string;
+}
+
 /** A cycle as counting a Held session needs it (US-22). */
 export type CountableCycle = Prisma.PaymentCycleGetPayload<{ select: typeof COUNTABLE_SELECT }>;
 
@@ -54,6 +64,55 @@ export class PaymentCycleRepository {
     private readonly txHost: TransactionHost<TenantTransactionalAdapter>,
     private readonly tenant: TenantContext,
   ) {}
+
+  /**
+   * One page of cycles, by payee name, then group name, then the latest cycle first, so a payee's
+   * current cycle of each group comes first.
+   */
+  async list(
+    filter: CycleListFilter,
+    window: PageWindow,
+  ): Promise<{ rows: PaymentCycleRow[]; total: number }> {
+    const where: Prisma.PaymentCycleWhereInput = {
+      ...(filter.payeeType ? { payeeType: filter.payeeType } : {}),
+      ...(filter.studentId ? { studentId: filter.studentId } : {}),
+      ...(filter.instructorId ? { instructorId: filter.instructorId } : {}),
+      ...(await this.statusWhere(filter.status)),
+    };
+    const [rows, total] = await Promise.all([
+      this.txHost.tx.paymentCycle.findMany({
+        where,
+        select: CYCLE_SELECT,
+        orderBy: [
+          { student: { name: 'asc' } },
+          { instructor: { name: 'asc' } },
+          { group: { name: 'asc' } },
+          { cycleNumber: 'desc' },
+          { id: 'asc' },
+        ],
+        skip: window.skip,
+        take: window.take,
+      }),
+      this.txHost.tx.paymentCycle.count({ where }),
+    ]);
+    return { rows, total };
+  }
+
+  /**
+   * The status filter. "Approaching" is a cycle in progress with one or two sessions left, which
+   * compares two columns of the same row, so the ids come from raw SQL (filtered by academy_id,
+   * since raw SQL is not tenant-scoped).
+   */
+  private async statusWhere(status?: CycleFilter): Promise<Prisma.PaymentCycleWhereInput> {
+    if (!status) return {};
+    if (status !== 'approaching') return { status };
+    const rows = await this.txHost.tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT id FROM payment_cycles
+      WHERE academy_id = ${this.tenant.requireAcademyId()}::uuid
+        AND status = 'in_progress'
+        AND sessions_per_cycle - sessions_counted <= 2`);
+    return { id: { in: rows.map((row) => row.id) } };
+  }
 
   /** The student's cycle in progress (at most one, by a partial unique index), or null. */
   findOpenForStudent(studentId: string): Promise<PaymentCycleRow | null> {

@@ -1,8 +1,10 @@
 import { PageHeader } from '@/components/ui';
 import { CurrentUserCard, LogoutButton } from '@/features/auth';
+import { MyCycles } from '@/features/payments';
 import { TodaySessions } from '@/features/sessions';
 
-/** Home: who is signed in, and today's sessions for whoever may read them (US-12). */
+/** Home: who is signed in, today's sessions for whoever may read them (US-12), and an instructor's
+ * own payment cycles per group (US-25). */
 export function HomePage() {
   return (
     <div className="flex flex-col gap-6">
@@ -13,6 +15,7 @@ export function HomePage() {
       />
       <CurrentUserCard />
       <TodaySessions />
+      <MyCycles />
     </div>
   );
 }

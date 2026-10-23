@@ -1,4 +1,11 @@
-import type { Group, InstructorDetail, Me, PaymentPlan, Student } from '@kidzzy/shared';
+import type {
+  Group,
+  InstructorDetail,
+  Me,
+  PaymentCycle,
+  PaymentPlan,
+  Student,
+} from '@kidzzy/shared';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -399,5 +406,148 @@ describe('an instructor’s plan, per group (US-21, ADR-0015)', () => {
     expect(
       await screen.findByRole('heading', { name: 'مش مسموح لك تفتح الصفحة دي' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('an instructor’s cycles, per group (US-24, US-25)', () => {
+  const ana: InstructorDetail = {
+    id: '2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a',
+    name: 'Ana',
+    email: 'ana@test.local',
+    phone: null,
+    isActive: true,
+    createdAt: '2026-10-16T08:30:00.000Z',
+    groups: [],
+  };
+  const cycle = (id: string, group: string, over: Partial<PaymentCycle> = {}): PaymentCycle => ({
+    id,
+    payeeType: 'instructor',
+    payeeId: ana.id,
+    payeeName: ana.name,
+    groupId: 'g-' + group,
+    groupName: 'جروب ' + group,
+    cycleNumber: 1,
+    sessionsPerCycle: 8,
+    amount: '2400.00',
+    openingCount: 0,
+    sessionsCounted: 0,
+    status: 'in_progress',
+    dueAt: null,
+    paidAt: null,
+    ...over,
+  });
+  const page = (data: PaymentCycle[]) => ({
+    data,
+    meta: { page: 1, pageSize: 100, total: data.length },
+  });
+  const cycleCalls = () => calls.filter((c) => c.url.pathname.endsWith('/payment-cycles'));
+
+  it('shows the admin each group’s cycle with its counter, and the starting point it began from', async () => {
+    api(admin, {
+      [`GET /instructors/${ana.id}`]: () => json(200, ana),
+      'GET /payment-plans': () => json(200, { data: [] }),
+      'GET /payment-cycles': () =>
+        json(
+          200,
+          page([
+            cycle('c1', 'أ', { openingCount: 3, sessionsCounted: 3 }),
+            cycle('c2', 'ب', { sessionsPerCycle: 4, amount: '1300.00', sessionsCounted: 1 }),
+          ]),
+        ),
+    });
+    renderAt(`/instructors/${ana.id}`);
+
+    const headingA = await screen.findByRole('heading', { name: 'جروب أ' });
+    const headingB = screen.getByRole('heading', { name: 'جروب ب' });
+    const blockA = within(headingA.parentElement as HTMLElement);
+    const blockB = within(headingB.parentElement as HTMLElement);
+    expect(blockA.getByText('3 من 8 سيشن')).toBeInTheDocument();
+    expect(blockA.getByText(/بدأت من 3 سيشن/)).toBeInTheDocument();
+    expect(blockB.getByText('1 من 4 سيشن')).toBeInTheDocument();
+    expect(blockB.queryByText(/بدأت من/)).not.toBeInTheDocument();
+
+    const request = cycleCalls()[0];
+    expect(request?.url.searchParams.get('instructorId')).toBe(ana.id);
+    expect(request?.url.searchParams.get('payeeType')).toBe('instructor');
+  });
+
+  it('shows a Due cycle and the latest cycle first, as the API sent them', async () => {
+    api(admin, {
+      [`GET /instructors/${ana.id}`]: () => json(200, ana),
+      'GET /payment-plans': () => json(200, { data: [] }),
+      'GET /payment-cycles': () =>
+        json(
+          200,
+          page([
+            cycle('c2', 'أ', { cycleNumber: 2, sessionsCounted: 1 }),
+            cycle('c1', 'أ', {
+              cycleNumber: 1,
+              sessionsCounted: 8,
+              status: 'due',
+              dueAt: '2026-10-20T10:00:00.000Z',
+            }),
+          ]),
+        ),
+    });
+    renderAt(`/instructors/${ana.id}`);
+
+    const heading = await screen.findByRole('heading', { name: 'جروب أ' });
+    const rows = within(heading.parentElement as HTMLElement).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('الدورة 2');
+    expect(rows[1]).toHaveTextContent('الدورة 1');
+    expect(rows[1]).toHaveTextContent('مستحقة');
+  });
+
+  it('tells the admin there are no cycles yet', async () => {
+    api(admin, {
+      [`GET /instructors/${ana.id}`]: () => json(200, ana),
+      'GET /payment-plans': () => json(200, { data: [] }),
+      'GET /payment-cycles': () => json(200, page([])),
+    });
+    renderAt(`/instructors/${ana.id}`);
+
+    expect(await screen.findByText('مفيش دورات')).toBeInTheDocument();
+    expect(screen.getByText(/حدد خطة المدرس لكل جروب/)).toBeInTheDocument();
+  });
+
+  it('shows an instructor their own cycles on the home screen, asking without an instructorId', async () => {
+    api(instructorUser, {
+      'GET /payment-cycles': () =>
+        json(200, page([cycle('c1', 'أ', { openingCount: 2, sessionsCounted: 2 })])),
+    });
+    renderAt('/');
+
+    expect(await screen.findByText('دوراتي')).toBeInTheDocument();
+    expect(await screen.findByText(/بدأت من 2 سيشن/)).toBeInTheDocument();
+    const request = cycleCalls()[0];
+    expect(request?.url.searchParams.has('instructorId')).toBe(false);
+    expect(request?.url.searchParams.get('payeeType')).toBe('instructor');
+  });
+
+  it('tells an instructor with no plan yet that the admin sets it', async () => {
+    api(instructorUser, { 'GET /payment-cycles': () => json(200, page([])) });
+    renderAt('/');
+
+    expect(await screen.findByText(/الأدمن هيحدد خطة الدفع بتاعتك لكل جروب/)).toBeInTheDocument();
+  });
+
+  it('does not show the admin the “my cycles” card, nor ask for cycles on the home screen', async () => {
+    api(admin);
+    renderAt('/');
+
+    await screen.findAllByText('الرئيسية');
+    await waitFor(() => expect(calls.some((c) => c.url.pathname.endsWith('/auth/me'))).toBe(true));
+    expect(screen.queryByText('دوراتي')).not.toBeInTheDocument();
+    expect(cycleCalls()).toHaveLength(0);
+  });
+
+  it('stays quiet when the cycles are refused', async () => {
+    api(instructorUser, { 'GET /payment-cycles': () => problem(403, 'FORBIDDEN') });
+    renderAt('/');
+
+    expect(await screen.findByText('دوراتي')).toBeInTheDocument();
+    await waitFor(() => expect(cycleCalls().length).toBeGreaterThan(0));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
