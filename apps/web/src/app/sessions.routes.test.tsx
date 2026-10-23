@@ -1,5 +1,5 @@
 import type { Me, Page, Session } from '@kidzzy/shared';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -396,5 +396,138 @@ describe('cancelling a session', () => {
 
     await screen.findByRole('heading', { name: 'جروب A' });
     expect(screen.queryByRole('button', { name: /الغي حصة جروب A/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('attendance on the session details', () => {
+  const detailPath = `/sessions/${session.id}`;
+  const attendancePath = `${detailPath}/attendance`;
+  const recorder: Me = {
+    ...admin,
+    permissions: [...admin.permissions, 'attendance.read:any', 'attendance.record:any'],
+  };
+  const reader: Me = { ...admin, permissions: [...admin.permissions, 'attendance.read:any'] };
+  const ownInstructor: Me = {
+    ...instructorUser,
+    permissions: [...instructorUser.permissions, 'attendance.read:own', 'attendance.record:own'],
+  };
+  const line = (studentId: string, studentName: string, status: 'present' | 'absent' | null) => ({
+    studentId,
+    studentName,
+    status,
+    performanceRating: null,
+    homeworkRating: null,
+  });
+  const empty = {
+    sessionId: session.id,
+    records: [line('s1', 'Amal', null), line('s2', 'Mona', null)],
+  };
+  const groupOf = (name: string) => screen.getByRole('radiogroup', { name: 'حضور ' + name });
+
+  it('stays hidden for a session that is not Held, without asking the API', async () => {
+    api(recorder, { [`GET ${detailPath}`]: () => json(200, session) });
+    renderAt(detailPath);
+
+    await screen.findByRole('heading', { name: 'جروب A' });
+    expect(screen.queryByText('الحضور')).not.toBeInTheDocument();
+    expect(calls.some((call) => call.url.pathname.endsWith('/attendance'))).toBe(false);
+  });
+
+  it('saves only what changed and says it was saved', async () => {
+    const saved = {
+      sessionId: session.id,
+      records: [line('s1', 'Amal', 'present'), line('s2', 'Mona', null)],
+    };
+    api(recorder, {
+      [`GET ${detailPath}`]: () => json(200, heldSession),
+      [`GET ${attendancePath}`]: () => json(200, empty),
+      [`PUT ${attendancePath}`]: () => json(200, saved),
+    });
+    renderAt(detailPath);
+
+    const user = userEvent.setup();
+    const save = await screen.findByRole('button', { name: 'احفظ الحضور' });
+    expect(save).toBeDisabled();
+    await user.click(
+      within(await waitFor(() => groupOf('Amal'))).getByRole('radio', { name: 'حاضر' }),
+    );
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    expect(await screen.findByText('اتحفظ')).toBeInTheDocument();
+    expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({
+      records: [
+        { studentId: 's1', status: 'present', performanceRating: null, homeworkRating: null },
+      ],
+    });
+    expect(screen.getByRole('button', { name: 'احفظ الحضور' })).toBeDisabled();
+  });
+
+  it('is read only for someone who may read but not record', async () => {
+    api(reader, {
+      [`GET ${detailPath}`]: () => json(200, heldSession),
+      [`GET ${attendancePath}`]: () =>
+        json(200, {
+          sessionId: session.id,
+          records: [line('s1', 'Amal', 'present'), line('s2', 'Mona', null)],
+        }),
+    });
+    renderAt(detailPath);
+
+    expect(await screen.findByText('Amal')).toBeInTheDocument();
+    expect(screen.getByText('حاضر')).toBeInTheDocument();
+    expect(screen.getByText('لسه ما اتسجلش')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'احفظ الحضور' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+  });
+
+  it('is read only for scope own on another instructor’s session', async () => {
+    api(ownInstructor, {
+      [`GET ${detailPath}`]: () => json(200, { ...heldSession, instructorId: 'former-instructor' }),
+      [`GET ${attendancePath}`]: () => json(200, empty),
+    });
+    renderAt(detailPath);
+
+    expect(await screen.findByText('Amal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'احفظ الحضور' })).not.toBeInTheDocument();
+  });
+
+  it('is editable for scope own on the instructor’s own session', async () => {
+    api(ownInstructor, {
+      [`GET ${detailPath}`]: () => json(200, heldSession),
+      [`GET ${attendancePath}`]: () => json(200, empty),
+    });
+    renderAt(detailPath);
+
+    expect(await screen.findByRole('button', { name: 'احفظ الحضور' })).toBeInTheDocument();
+  });
+
+  it('stays hidden for someone without attendance.read', async () => {
+    api(admin, { [`GET ${detailPath}`]: () => json(200, heldSession) });
+    renderAt(detailPath);
+
+    await screen.findByRole('heading', { name: 'جروب A' });
+    expect(screen.queryByText('الحضور')).not.toBeInTheDocument();
+    expect(calls.some((call) => call.url.pathname.endsWith('/attendance'))).toBe(false);
+  });
+
+  it.each([
+    [409, 'SESSION_NOT_HELD', 'الحصة دي لسه ما اتعملتش'],
+    [422, 'STUDENT_NOT_IN_SESSION', 'الطالب ده مش من طلاب الحصة دي'],
+  ])('shows the Arabic message for %s %s', async (status, code, message) => {
+    api(recorder, {
+      [`GET ${detailPath}`]: () => json(200, heldSession),
+      [`GET ${attendancePath}`]: () => json(200, empty),
+      [`PUT ${attendancePath}`]: () => problem(status, code),
+    });
+    renderAt(detailPath);
+
+    const user = userEvent.setup();
+    await user.click(
+      within(await waitFor(() => groupOf('Mona'))).getByRole('radio', { name: 'غايب' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'احفظ الحضور' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
   });
 });

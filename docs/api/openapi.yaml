@@ -1271,6 +1271,16 @@ paths:
       tags:
         - Attendance
       summary: Attendance and ratings of a session
+      description: >
+        Every student of the session, by name, with what is recorded for them (status null when
+        nothing is yet). The students of a session are the enrollments of its group that cover
+        the session's academy-local date (start_date <= date <= end_date, or no end_date), so a
+        transferred student appears in the group they were in that day. Works for a session in
+        any status.
+
+
+        Scope own reads a session it can see: it teaches the group now, or it is the instructor
+        on the session; otherwise 403. Another academy's session is 404.
       operationId: getSessionAttendance
       x-permission: attendance.read
       x-story: US-19
@@ -1295,6 +1305,25 @@ paths:
       tags:
         - Attendance
       summary: Save attendance and ratings for the session
+      description: >
+        Saves the records sent. Each record is inserted or updated for its student; students not
+        sent are left as they are, so a partial save is fine. Editing is allowed any time while
+        the session is Held. A rating left out or null is saved as null; homeworkRating null
+        means there was no homework. Ratings are 1 to 5 (otherwise 400), and the same studentId
+        twice in one request is 400. Counting the session into payment cycles does not depend on
+        attendance (AC-02).
+
+
+        409 SESSION_NOT_HELD when the session is not Held. 422 STUDENT_NOT_IN_SESSION when a
+        student is not one of the session's students (see GET), and 422 STUDENT_ABSENT when an
+        absent student carries a rating; both name the field, for example
+        records.0.studentId.
+
+
+        Writing is stricter than reading, the same rule as marking Held: scope own may record
+        only a session whose instructor is the caller (the instructor on the session, not
+        merely the group's current instructor), otherwise 403. Another academy's session is
+        404.
       operationId: saveSessionAttendance
       x-permission: attendance.record
       x-story: US-18, US-37
@@ -1323,6 +1352,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /payment-cycles:
     get:
       tags:
@@ -3191,18 +3222,51 @@ components:
           format: uuid
         records:
           type: array
+          description: >
+            Every student of the session, by name, recorded or not. A student nobody has recorded
+            yet has status null and no ratings.
           items:
-            allOf:
-              - $ref: '#/components/schemas/AttendanceRecord'
-              - type: object
-                properties:
-                  studentName:
-                    type: string
-                additionalProperties: false
+            $ref: '#/components/schemas/SessionAttendanceRecord'
       additionalProperties: false
       required:
         - sessionId
         - records
+    SessionAttendanceRecord:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        studentName:
+          type: string
+        status:
+          anyOf:
+            - type: string
+              enum:
+                - present
+                - absent
+            - type: 'null'
+          description: null = not recorded yet
+        performanceRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+        homeworkRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+          description: null = No homework (or not recorded yet)
+      additionalProperties: false
+      required:
+        - studentId
+        - studentName
+        - status
+        - performanceRating
+        - homeworkRating
     StudentAttendanceItem:
       type: object
       properties:

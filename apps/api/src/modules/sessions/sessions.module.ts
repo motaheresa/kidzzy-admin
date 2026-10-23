@@ -10,7 +10,7 @@ import { SessionsService } from './sessions.service';
 
 /**
  * Sessions: generation from the weekly schedules (US-11), reading them (US-12) and marking
- * one Held (US-13).
+ * one Held (US-13). The repository is exported for attendance (US-18).
  * The repository stays inside this module; groups already import it, so it does not
  * import GroupRepository back.
  */
@@ -25,6 +25,6 @@ import { SessionsService } from './sessions.service';
     SessionGenerationJob,
     SessionsService,
   ],
-  exports: [Clock, SessionGenerator, SessionRegeneration],
+  exports: [Clock, SessionGenerator, SessionRegeneration, SessionRepository],
 })
 export class SessionsModule {}

@@ -31,6 +31,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   STUDENT_ALREADY_ENROLLED: 'الطالب ده مسجل في جروب بالفعل',
   STUDENT_CODE_TAKEN: 'كود الطالب ده مستخدم قبل كده',
   STUDENT_ABSENT: 'مينفعش تقيّم طالب غايب',
+  STUDENT_NOT_IN_SESSION: 'الطالب ده مش من طلاب الحصة دي',
   STUDENT_NOT_ENROLLABLE: 'الطالب ده مش نشط، اختار طالب تاني',
   GROUP_INACTIVE: 'الجروب ده متوقف، اختار جروب شغال',
   STUDENT_HAS_NO_PLAN: 'الطالب ده مالوش خطة لسه، سجله في جروب الاول',
