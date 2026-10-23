@@ -41,6 +41,24 @@ export class EnrollmentRepository {
     });
   }
 
+  /**
+   * The students of a group on one academy-local day (YYYY-MM-DD): enrollments with
+   * start_date <= day and end_date null or >= day, by student name. A student who moved on
+   * that day belongs to the group they were in, because a day never has two enrollments.
+   */
+  listForGroupOnDate(groupId: string, day: string): Promise<EnrollmentRow[]> {
+    const date = stringToDate(day);
+    return this.txHost.tx.enrollment.findMany({
+      where: {
+        groupId,
+        startDate: { lte: date },
+        OR: [{ endDate: null }, { endDate: { gte: date } }],
+      },
+      select: ENROLLMENT_SELECT,
+      orderBy: [{ student: { name: 'asc' } }, { id: 'asc' }],
+    });
+  }
+
   /** All of the student's enrollments, the latest first (their group history). */
   listForStudent(studentId: string): Promise<EnrollmentRow[]> {
     return this.txHost.tx.enrollment.findMany({

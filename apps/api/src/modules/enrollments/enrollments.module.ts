@@ -12,5 +12,6 @@ import { StudentEnrollmentsController } from './student-enrollments.controller';
   imports: [StudentsModule, GroupsModule, PaymentsModule],
   controllers: [EnrollmentsController, StudentEnrollmentsController],
   providers: [EnrollmentsService, EnrollmentRepository],
+  exports: [EnrollmentRepository],
 })
 export class EnrollmentsModule {}

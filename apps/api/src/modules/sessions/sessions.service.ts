@@ -8,6 +8,7 @@ import { Clock } from './clock';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
 import { toSession } from './session.mapper';
 import { SessionRepository, type SessionRow } from './session.repository';
+import { isVisibleToInstructor } from './session-visibility';
 
 /**
  * Reading sessions (US-12).
@@ -89,8 +90,7 @@ export class SessionsService {
   /** Scope `own` may read the session when they teach the group now or they are its instructor. */
   private canSeeSession(row: SessionRow): boolean {
     if (this.access.scopeFor('sessions.read') !== 'own') return true;
-    const caller = this.access.userId;
-    return row.group.instructorId === caller || row.instructorId === caller;
+    return isVisibleToInstructor(row, this.access.userId);
   }
 
   /**

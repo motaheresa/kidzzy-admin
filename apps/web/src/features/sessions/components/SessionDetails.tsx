@@ -1,6 +1,7 @@
 import { CalendarOffIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Alert, Button, DetailList, EmptyState, PageHeader, Skeleton } from '@/components/ui';
+import { AttendanceSection } from '@/features/attendance';
 import { usePermissions, useSession } from '@/features/auth';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { useSessionDetail } from '../hooks/useSessions';
@@ -10,7 +11,7 @@ import { SessionStatusBadge } from './SessionStatusBadge';
 
 /**
  * One session (US-12). Times are shown in the academy's timezone.
- * Marking Held and cancelling are offered when this caller may change this session (US-13, US-14).
+ * Marking Held and cancelling are offered when this caller may change this session (US-13, US-14); a Held session shows its attendance (US-18).
  */
 export function SessionDetails({ id }: { id: string }) {
   const session = useSessionDetail(id);
@@ -80,6 +81,7 @@ export function SessionDetails({ id }: { id: string }) {
           { label: 'سبب الالغاء', value: data.cancelReason },
         ]}
       />
+      <AttendanceSection session={data} />
     </div>
   );
 }

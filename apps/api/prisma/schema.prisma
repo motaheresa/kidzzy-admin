@@ -42,6 +42,7 @@ model Academy {
   enrollments   Enrollment[]
   paymentPlans  PaymentPlan[]
   paymentCycles PaymentCycle[]
+  attendance    Attendance[]
 
   @@map("academies")
 }
@@ -70,6 +71,7 @@ model User {
   groups               Group[]
   sessions             Session[]      @relation("SessionInstructor")
   sessionStatusChanges Session[]      @relation("SessionStatusChange")
+  recordedAttendance   Attendance[]   @relation("AttendanceRecorder")
   instructorPlans      PaymentPlan[]
   instructorCycles     PaymentCycle[]
 
@@ -188,6 +190,7 @@ model Student {
   enrollments Enrollment[]
   plans       PaymentPlan[]
   cycles      PaymentCycle[]
+  attendance  Attendance[]
 
   @@unique([academyId, code])
   /// Composite key for tenant-safe foreign keys: a later table (enrollments, attendance)
@@ -280,6 +283,11 @@ model ScheduleSlot {
 }
 
 /// scheduled, held or cancelled (BR-01). Only held sessions get a number (BR-03).
+enum AttendanceStatus {
+  present
+  absent
+}
+
 enum SessionStatus {
   scheduled
   held
@@ -330,6 +338,7 @@ model Session {
   slot            ScheduleSlot? @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
   compensates     Session?      @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
   makeups         Session[]     @relation("SessionCompensation")
+  attendance      Attendance[]
 
   /// Generation inserts with ON CONFLICT DO NOTHING against this: running twice, or the job and a
   /// request at once, never duplicates a day (AC). Rows with a null slot never conflict.
@@ -438,4 +447,34 @@ model PaymentCycle {
   @@unique([instructorId], map: "payment_cycles_instructor_open_key", where: raw("status = 'in_progress'"))
   @@index([planId])
   @@map("payment_cycles")
+}
+
+/// One student's attendance and ratings in one Held session (US-18, US-37). A row exists only
+/// once someone recorded that student; the students of a session come from their enrollments
+/// (the group, on the session's academy-local date). Both ratings are 1..5 or null, and an
+/// absent student has none: the checks are in the migration. homework_rating null means there
+/// was no homework. Saving upserts by (session_id, student_id) and never deletes a row.
+model Attendance {
+  id                String           @id @default(uuid()) @db.Uuid
+  academyId         String           @map("academy_id") @db.Uuid
+  sessionId         String           @map("session_id") @db.Uuid
+  studentId         String           @map("student_id") @db.Uuid
+  status            AttendanceStatus
+  performanceRating Int?             @map("performance_rating") @db.SmallInt
+  homeworkRating    Int?             @map("homework_rating") @db.SmallInt
+  /// Who saved this row last, and when.
+  recordedById      String           @map("recorded_by") @db.Uuid
+  recordedAt        DateTime         @map("recorded_at") @db.Timestamptz(3)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy    Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  session    Session @relation(fields: [sessionId, academyId], references: [id, academyId], onDelete: Restrict)
+  student    Student @relation(fields: [studentId, academyId], references: [id, academyId], onDelete: Restrict)
+  recordedBy User    @relation("AttendanceRecorder", fields: [recordedById, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+  @@map("attendance")
 }

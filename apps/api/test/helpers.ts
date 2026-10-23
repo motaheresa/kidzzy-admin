@@ -96,6 +96,7 @@ export async function createUser(
 /** Deletes everything a test academy owns, in foreign-key order. */
 export async function removeAcademy(prisma: PrismaService, academyId: string): Promise<void> {
   const where = { academyId };
+  await prisma.unscoped.attendance.deleteMany({ where });
   await prisma.unscoped.paymentCycle.deleteMany({ where });
   await prisma.unscoped.paymentPlan.deleteMany({ where });
   await prisma.unscoped.enrollment.deleteMany({ where });

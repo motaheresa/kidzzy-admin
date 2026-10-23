@@ -64,6 +64,7 @@ export const ErrorCode = {
   StudentAlreadyEnrolled: 'STUDENT_ALREADY_ENROLLED',
   StudentCodeTaken: 'STUDENT_CODE_TAKEN',
   StudentAbsent: 'STUDENT_ABSENT',
+  StudentNotInSession: 'STUDENT_NOT_IN_SESSION',
   StudentNotEnrollable: 'STUDENT_NOT_ENROLLABLE',
   GroupInactive: 'GROUP_INACTIVE',
   StudentHasNoPlan: 'STUDENT_HAS_NO_PLAN',
@@ -167,6 +168,35 @@ export interface CycleChange {
   sessionsCounted: number;
   sessionsPerCycle: number;
   status: CycleStatus;
+}
+
+/**
+ * One student's line on a session's attendance (openapi.yaml: AttendanceRecord).
+ * homeworkRating null means there was no homework.
+ */
+export interface AttendanceRecord {
+  studentId: string;
+  status: AttendanceStatus;
+  performanceRating: number | null;
+  homeworkRating: number | null;
+}
+
+/**
+ * A student of the session with what was recorded for them (openapi.yaml: SessionAttendance).
+ * status is null while nothing is recorded for that student yet.
+ */
+export interface SessionAttendanceRecord {
+  studentId: string;
+  studentName: string;
+  status: AttendanceStatus | null;
+  performanceRating: number | null;
+  homeworkRating: number | null;
+}
+
+/** Every student of a session, recorded or not (openapi.yaml: SessionAttendance). */
+export interface SessionAttendance {
+  sessionId: string;
+  records: SessionAttendanceRecord[];
 }
 
 /** An instructor account (openapi.yaml: Instructor). */
