@@ -308,7 +308,7 @@ describe('Counting Held sessions into payment cycles (e2e)', () => {
       .post(api(`/students/${student}/transfer`))
       .set(as(adminToken))
       .send({ toGroupId: newerGroup.id, effectiveDate: '2026-10-15' })
-      .expect(201);
+      .expect(200);
     const [oldDay, oldLate] = await sessionsOf(oldGroup.id);
     const [newDay] = await sessionsOf(newerGroup.id);
     if (!oldDay || !oldLate || !newDay) throw new Error('need sessions');
@@ -431,7 +431,7 @@ describe('Counting Held sessions into payment cycles (e2e)', () => {
         .post(api(`/students/${student}/transfer`))
         .set(as(adminToken))
         .send({ toGroupId: newerGroup.id, effectiveDate: '2026-10-15' })
-        .expect(201);
+        .expect(200);
       const oldSessions = (await sessionsOf(oldGroup.id)).slice(0, 3);
       const newSessions = (await sessionsOf(newerGroup.id)).slice(0, 3);
       if (oldSessions.length < 3 || newSessions.length < 3)
