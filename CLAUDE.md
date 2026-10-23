@@ -37,13 +37,13 @@ Windows 10 with PowerShell, Node 22, pnpm 10 and a native PostgreSQL 16 install.
 | `pnpm dev`                                 | API (3000) and web (5173) in watch mode  |
 | `pnpm lint` / `pnpm typecheck`             | ESLint / TypeScript across the workspace |
 | `pnpm test` / `pnpm test:e2e`              | Unit tests / API e2e tests (need the DB) |
-| `pnpm build`                               | Production builds                        |
+| `pnpm build`                               | Production builds (CI runs it)           |
 | `pnpm format:check`                        | Prettier check, same as CI               |
 | `pnpm lint:api-spec`                       | Validate `docs/api/openapi.yaml`         |
 | `pnpm --filter @kidzzy/api prisma:migrate` | Create and apply a migration             |
 | `pnpm --filter @kidzzy/api prisma:seed`    | Seed permissions, academy and roles      |
 
-Run lint, typecheck and the tests before saying a change is done.
+Before opening or updating a pull request, run the fast checks locally: `pnpm lint`, `pnpm typecheck`, `pnpm format:check` and `pnpm test`, plus `pnpm lint:api-spec` when `openapi.yaml` changed, and **only the e2e spec files of the modules the change touches** (for example `pnpm --filter @kidzzy/api test:e2e -- sessions`) against the developer's local database, never a temporary one. Leave the full e2e suite, the build and the drift check to CI: its `quality` job runs everything on a fresh database and must pass before merge. Watch it with `gh pr checks --watch`, and if it fails, fix and push again. Say in the pull request which local checks ran and that the rest is CI.
 
 ## Data access
 
