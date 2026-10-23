@@ -1,5 +1,12 @@
 import { http } from '@/lib/http';
-import type { Payee, PaymentPlan, PlanSaveInput } from '../types';
+import type {
+  CycleListParams,
+  Page,
+  Payee,
+  PaymentCycle,
+  PaymentPlan,
+  PlanSaveInput,
+} from '../types';
 
 // The payment plan endpoints (openapi.yaml, tag Payments), as plain functions over the http
 // client. Components never call them; the hooks in ../hooks do.
@@ -23,4 +30,23 @@ export function savePlan(payee: Payee, input: PlanSaveInput): Promise<PaymentPla
     `/${resource}/${encodeURIComponent(payee.id)}/payment-plans`,
     input,
   );
+}
+
+/** The most cycles one call returns here (the API's largest page). */
+export const CYCLES_PAGE_SIZE = 100;
+
+/**
+ * GET /payment-cycles: the cycles of one payee kind, an instructor's one line per group
+ * (ADR-0015). Without instructorId the API answers with the caller's own.
+ */
+export function listCycles(
+  params: CycleListParams,
+  signal?: AbortSignal,
+): Promise<Page<PaymentCycle>> {
+  const query = new URLSearchParams({
+    payeeType: params.payeeType,
+    pageSize: String(CYCLES_PAGE_SIZE),
+  });
+  if (params.instructorId) query.set('instructorId', params.instructorId);
+  return http.get<Page<PaymentCycle>>('/payment-cycles?' + query.toString(), { signal });
 }
