@@ -7,6 +7,7 @@ import { AccessContext } from '../auth/access-context';
 import { Clock } from './clock';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
 import { toSession } from './session.mapper';
+import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRepository, type SessionRow } from './session.repository';
 import { isVisibleToInstructor } from './session-visibility';
 
@@ -36,6 +37,7 @@ export class SessionsService {
     private readonly sessions: SessionRepository,
     private readonly access: AccessContext,
     private readonly clock: Clock,
+    private readonly heldHooks: SessionHeldHooks,
   ) {}
 
   async list(query: ListSessionsQueryDto): Promise<Page<Session>> {
@@ -135,9 +137,11 @@ export class SessionsService {
       throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
     }
 
-    // TODO(SCRUM-38): count this Held session into the open payment cycles.
+    // Counts the session into the payment cycles (US-22), in this same transaction.
+    const cyclesUpdated = await this.heldHooks.run(held, now);
+
     // TODO(US-35): write the audit log for this status change.
-    return { ...toSession(held), cyclesUpdated: [] };
+    return { ...toSession(held), cyclesUpdated };
   }
 
   /**

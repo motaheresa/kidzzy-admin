@@ -1142,8 +1142,18 @@ paths:
         Marks a Scheduled session Held. sessionNumber becomes one more than the highest number
         already used in the same group, or 1 when none. Marking Held never renumbers sessions
         that are already Held. Undo (SCRUM-41, BR-13) is the story that renumbers later Held
-        sessions. cyclesUpdated is always an empty array until cycles are counted (SCRUM-38).
-        The response does not include who changed the status; that is stored on the row.
+        sessions. The response does not include who changed the status; that is stored on the row.
+
+
+        The session is counted into payment cycles in the same transaction (US-22, BR-06 to BR-08):
+        once in the open cycle of every student whose enrollment covers the session's academy-local
+        date, whether they attended or not (AC-02), and once in the open cycle of the instructor on
+        the session. cyclesUpdated lists those cycles with their counter after the change. When a
+        counter reaches the plan's session count the cycle becomes due and the next one opens at 0
+        under the plan version in effect for it (a plan change applies from the next cycle, BR-10).
+        A student or instructor with no open cycle (no plan yet) is skipped: the session is not
+        counted for them, and marking it Held is never refused because of that. The admin sets the
+        starting point when creating the plan.
 
 
         scheduledAt must be at or before the server clock, otherwise 409 SESSION_NOT_STARTED.

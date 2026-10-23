@@ -41,6 +41,21 @@ export class PaymentPlanRepository {
     });
   }
 
+  /**
+   * The plan version a payee's cycle number takes: the highest version whose effective_from_cycle
+   * is that number or less (BR-10). Null when the payee never had a plan.
+   */
+  findInEffectForCycle(
+    payee: { studentId: string } | { instructorId: string },
+    cycleNumber: number,
+  ): Promise<PlanRow | null> {
+    return this.txHost.tx.paymentPlan.findFirst({
+      where: { ...payee, effectiveFromCycle: { lte: cycleNumber } },
+      orderBy: { version: 'desc' },
+      select: PLAN_SELECT,
+    });
+  }
+
   /** Every version of the student's plan, the first first. */
   listForStudent(studentId: string): Promise<PlanRow[]> {
     return this.txHost.tx.paymentPlan.findMany({
