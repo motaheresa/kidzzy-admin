@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
-import type { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
 import type { PlanRow } from './payment-plan.repository';
@@ -24,6 +24,19 @@ export const CYCLE_SELECT = {
 } as const satisfies Prisma.PaymentCycleSelect;
 
 export type PaymentCycleRow = Prisma.PaymentCycleGetPayload<{ select: typeof CYCLE_SELECT }>;
+
+const COUNTABLE_SELECT = {
+  id: true,
+  payeeType: true,
+  studentId: true,
+  instructorId: true,
+  cycleNumber: true,
+  sessionsPerCycle: true,
+  sessionsCounted: true,
+} as const satisfies Prisma.PaymentCycleSelect;
+
+/** A cycle as counting a Held session needs it (US-22). */
+export type CountableCycle = Prisma.PaymentCycleGetPayload<{ select: typeof COUNTABLE_SELECT }>;
 
 /**
  * Reads and writes payment cycles (FR-15, FR-16). A cycle belongs to its payee, never to a group,
@@ -107,6 +120,83 @@ export class PaymentCycleRepository {
         sessionsCounted: openingCount,
       },
       select: CYCLE_SELECT,
+    });
+  }
+
+  /** The ids of the cycles in progress of these students and of this instructor (one each at most). */
+  async findOpenIds(studentIds: string[], instructorId: string): Promise<string[]> {
+    const rows = await this.txHost.tx.paymentCycle.findMany({
+      where: {
+        status: 'in_progress',
+        OR: [{ studentId: { in: studentIds } }, { instructorId }],
+      },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Locks these cycles until the transaction ends, in ONE statement and in id order, so two
+   * transactions that share cycles always take them in the same order and cannot deadlock.
+   * A cycle that stopped being in progress while this waited (a concurrent Held session
+   * completed it) is not returned: the caller reads the open cycles again. Raw SQL is not
+   * tenant-scoped, so academy_id is filtered here.
+   */
+  async lockOpen(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.txHost.tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT id FROM payment_cycles
+      WHERE id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})
+        AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+        AND status = 'in_progress'
+      ORDER BY id
+      FOR UPDATE`);
+    return rows.map((row) => row.id);
+  }
+
+  /** The cycles as they are now (read after the lock), by id. */
+  findCountable(ids: string[]): Promise<CountableCycle[]> {
+    return this.txHost.tx.paymentCycle.findMany({
+      where: { id: { in: ids } },
+      select: COUNTABLE_SELECT,
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /** Records that the session is counted in the cycle (cycle_sessions). */
+  async addSession(cycleId: string, sessionId: string): Promise<void> {
+    await this.txHost.tx.cycleSession.create({
+      data: { academyId: this.tenant.requireAcademyId(), cycleId, sessionId },
+    });
+  }
+
+  /**
+   * Sets the counter. With dueAt the cycle is complete: it becomes Due in the same statement,
+   * because a check constraint ties the status to the counter and to due_at.
+   */
+  async setCount(id: string, sessionsCounted: number, dueAt: Date | null): Promise<void> {
+    await this.txHost.tx.paymentCycle.update({
+      where: { id },
+      data: dueAt ? { sessionsCounted, status: 'due', dueAt } : { sessionsCounted },
+    });
+  }
+
+  /** Opens the cycle after a completed one, under the given plan version, counting from 0. */
+  async createNext(previous: CountableCycle, plan: PlanRow): Promise<void> {
+    const academyId = this.tenant.requireAcademyId();
+    await this.txHost.tx.paymentCycle.create({
+      data: {
+        academyId,
+        payeeType: previous.payeeType,
+        ...(previous.studentId
+          ? { studentId: previous.studentId, studentAcademyId: academyId }
+          : { instructorId: previous.instructorId, instructorAcademyId: academyId }),
+        planId: plan.id,
+        sessionsPerCycle: plan.sessionsPerCycle,
+        cycleNumber: previous.cycleNumber + 1,
+        openingCount: 0,
+        sessionsCounted: 0,
+      },
     });
   }
 }

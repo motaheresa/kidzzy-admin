@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AcademiesModule } from '../academies/academies.module';
 import { Clock } from './clock';
+import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRegeneration } from './session-regeneration';
 import { SessionGenerationJob } from './session-generation.job';
 import { SessionGenerator } from './session-generator';
@@ -24,7 +25,8 @@ import { SessionsService } from './sessions.service';
     SessionRegeneration,
     SessionGenerationJob,
     SessionsService,
+    SessionHeldHooks,
   ],
-  exports: [Clock, SessionGenerator, SessionRegeneration, SessionRepository],
+  exports: [Clock, SessionGenerator, SessionRegeneration, SessionRepository, SessionHeldHooks],
 })
 export class SessionsModule {}
