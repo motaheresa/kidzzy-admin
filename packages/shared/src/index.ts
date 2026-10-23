@@ -199,6 +199,41 @@ export interface SessionAttendance {
   records: SessionAttendanceRecord[];
 }
 
+/** A student as a row or a column of another record (openapi.yaml: StudentRef). */
+export interface StudentRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
+/** What was recorded for one student in one session of the group grid. */
+export interface GroupAttendanceCell {
+  sessionId: string;
+  status: AttendanceStatus;
+  performanceRating: number | null;
+  homeworkRating: number | null;
+}
+
+/**
+ * Students by Held sessions (openapi.yaml: GroupAttendance). A student's records hold only the
+ * sessions where something was recorded for them; a missing cell means not recorded.
+ */
+export interface GroupAttendance {
+  sessions: Session[];
+  students: { student: StudentRef; records: GroupAttendanceCell[] }[];
+}
+
+/** One line of a student's attendance history (openapi.yaml: StudentAttendanceItem). */
+export interface StudentAttendanceItem {
+  sessionId: string;
+  scheduledAt: string;
+  sessionNumber: number | null;
+  group: GroupRef;
+  status: AttendanceStatus;
+  performanceRating: number | null;
+  homeworkRating: number | null;
+}
+
 /** An instructor account (openapi.yaml: Instructor). */
 export interface Instructor {
   id: string;

@@ -632,6 +632,15 @@ paths:
       tags:
         - Attendance
       summary: Attendance and ratings of a student
+      description: >
+        The student's attendance, newest session first, paged. Only Held sessions appear.
+
+
+        Scope own sees only the records of sessions it can see (it teaches the group now, or it is
+        the instructor on the session). It gets 403 when it has no link to the student: the
+        student is not in a group it teaches now and none of their records is on a session it can
+        see; a student it teaches now with nothing recorded yet is an empty page. Unknown or
+        another academy's student is 404.
       operationId: getStudentAttendance
       x-permission: attendance.read
       x-story: US-19
@@ -927,6 +936,18 @@ paths:
       tags:
         - Attendance
       summary: Attendance and ratings grid of a group
+      description: >
+        Students by the group's Held sessions. Only Held sessions appear, earliest first. from and
+        to are academy-local dates (YYYY-MM-DD), both included, in the academy's timezone; from
+        after to is 400. Either may be left out. A student is a row when their enrollment covers
+        the date of at least one listed session; a student's records have a cell only for the
+        sessions where something was recorded.
+
+
+        Scope own: the group's current instructor sees every Held session of the group; an
+        instructor who only taught some of its sessions sees only those, and the students of
+        those sessions; an instructor with no session in the group gets 403. Unknown or another
+        academy's group is 404.
       operationId: getGroupAttendance
       x-permission: attendance.read
       x-story: US-19
@@ -3014,8 +3035,12 @@ components:
                 $ref: '#/components/schemas/StudentRef'
               records:
                 type: array
+                description: >
+                  What was recorded for the student, one cell per session where something was
+                  recorded, in the order of sessions. A session with no cell was not recorded for
+                  this student.
                 items:
-                  $ref: '#/components/schemas/AttendanceRecord'
+                  $ref: '#/components/schemas/GroupAttendanceCell'
             additionalProperties: false
             required:
               - student
@@ -3024,6 +3049,36 @@ components:
       required:
         - sessions
         - students
+    GroupAttendanceCell:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - present
+            - absent
+        performanceRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+        homeworkRating:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 5
+            - type: 'null'
+          description: null = No homework
+      additionalProperties: false
+      required:
+        - sessionId
+        - status
+        - performanceRating
+        - homeworkRating
     StudentRef:
       type: object
       properties:

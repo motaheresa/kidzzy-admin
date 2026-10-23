@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import type { AttendanceStatus } from '@kidzzy/shared';
+import type { PageWindow } from '../../common/pagination/page';
 import type { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
@@ -13,6 +14,34 @@ const ATTENDANCE_SELECT = {
 } as const satisfies Prisma.AttendanceSelect;
 
 export type AttendanceRow = Prisma.AttendanceGetPayload<{ select: typeof ATTENDANCE_SELECT }>;
+
+const GRID_SELECT = {
+  sessionId: true,
+  studentId: true,
+  status: true,
+  performanceRating: true,
+  homeworkRating: true,
+} as const satisfies Prisma.AttendanceSelect;
+
+export type GridAttendanceRow = Prisma.AttendanceGetPayload<{ select: typeof GRID_SELECT }>;
+
+const HISTORY_SELECT = {
+  status: true,
+  performanceRating: true,
+  homeworkRating: true,
+  session: {
+    select: {
+      id: true,
+      scheduledAt: true,
+      sessionNumber: true,
+      group: { select: { id: true, name: true } },
+    },
+  },
+} as const satisfies Prisma.AttendanceSelect;
+
+export type HistoryAttendanceRow = Prisma.AttendanceGetPayload<{
+  select: typeof HISTORY_SELECT;
+}>;
 
 /** What one save writes for one student. */
 export interface AttendanceWrite {
@@ -42,6 +71,51 @@ export class AttendanceRepository {
       where: { sessionId },
       select: ATTENDANCE_SELECT,
     });
+  }
+
+  /** Everything recorded for these sessions (the group grid). */
+  findForSessions(sessionIds: string[]): Promise<GridAttendanceRow[]> {
+    return this.txHost.tx.attendance.findMany({
+      where: { sessionId: { in: sessionIds } },
+      select: GRID_SELECT,
+    });
+  }
+
+  /**
+   * One page of a student's attendance, newest session first, only Held sessions.
+   * visibleToInstructorId keeps a record when that person currently teaches the session's group
+   * OR is the instructor on the session (the sessions visibility rule).
+   */
+  async listForStudent(
+    studentId: string,
+    window: PageWindow,
+    visibleToInstructorId?: string,
+  ): Promise<{ rows: HistoryAttendanceRow[]; total: number }> {
+    const where: Prisma.AttendanceWhereInput = {
+      studentId,
+      session: {
+        status: 'held',
+        ...(visibleToInstructorId
+          ? {
+              OR: [
+                { instructorId: visibleToInstructorId },
+                { group: { instructorId: visibleToInstructorId } },
+              ],
+            }
+          : {}),
+      },
+    };
+    const [rows, total] = await Promise.all([
+      this.txHost.tx.attendance.findMany({
+        where,
+        select: HISTORY_SELECT,
+        orderBy: [{ session: { scheduledAt: 'desc' } }, { id: 'asc' }],
+        skip: window.skip,
+        take: window.take,
+      }),
+      this.txHost.tx.attendance.count({ where }),
+    ]);
+    return { rows, total };
   }
 
   /**

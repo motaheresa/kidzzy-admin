@@ -13,7 +13,7 @@ const ENROLLMENT_SELECT = {
   studentId: true,
   startDate: true,
   endDate: true,
-  student: { select: { name: true } },
+  student: { select: { name: true, code: true } },
   group: { select: { id: true, name: true } },
 } as const satisfies Prisma.EnrollmentSelect;
 
@@ -53,6 +53,22 @@ export class EnrollmentRepository {
         groupId,
         startDate: { lte: date },
         OR: [{ endDate: null }, { endDate: { gte: date } }],
+      },
+      select: ENROLLMENT_SELECT,
+      orderBy: [{ student: { name: 'asc' } }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * The group's enrollments that overlap the days fromDay..toDay (YYYY-MM-DD, both included),
+   * by student name. The attendance grid asks for the students of the sessions in that range.
+   */
+  listForGroupBetween(groupId: string, fromDay: string, toDay: string): Promise<EnrollmentRow[]> {
+    return this.txHost.tx.enrollment.findMany({
+      where: {
+        groupId,
+        startDate: { lte: stringToDate(toDay) },
+        OR: [{ endDate: null }, { endDate: { gte: stringToDate(fromDay) } }],
       },
       select: ENROLLMENT_SELECT,
       orderBy: [{ student: { name: 'asc' } }, { id: 'asc' }],
