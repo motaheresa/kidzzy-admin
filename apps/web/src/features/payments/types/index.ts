@@ -12,8 +12,10 @@ export interface Payee {
   id: string;
 }
 
-/** What a plan form sends: a student's plan, or an instructor's, which may carry a starting point. */
+/** What a plan form sends: a student's plan, or an instructor's, which is per group. */
 export interface PlanSaveInput extends PlanInput {
-  /** Only an instructor's first plan (BR-14); a student's starting point is set at enrollment. */
+  /** Only an instructor's plan: the group it is for (an instructor is paid per group). */
+  groupId?: string;
+  /** Only the first plan of an instructor and group (BR-14); a student's is set at enrollment. */
   openingCount?: number;
 }

@@ -1147,13 +1147,16 @@ paths:
 
         The session is counted into payment cycles in the same transaction (US-22, BR-06 to BR-08):
         once in the open cycle of every student whose enrollment covers the session's academy-local
-        date, whether they attended or not (AC-02), and once in the open cycle of the instructor on
-        the session. cyclesUpdated lists those cycles with their counter after the change. When a
+        date, whether they attended or not (AC-02), and once in the open cycle of the (instructor on the
+        session, the session's group) pair: an instructor is paid per group (ADR-0015), so it never counts
+        in their cycles for other groups. cyclesUpdated lists those cycles with their counter after the change. When a
         counter reaches the plan's session count the cycle becomes due and the next one opens at 0
         under the plan version in effect for it (a plan change applies from the next cycle, BR-10).
-        A student or instructor with no open cycle (no plan yet) is skipped: the session is not
-        counted for them, and marking it Held is never refused because of that. The admin sets the
-        starting point when creating the plan.
+        A student, or an instructor for this group, with no open cycle (no plan yet) is skipped: the
+        session is not counted for them, and marking it Held is never refused because of that. The
+        admin sets the starting point when creating the plan. When a group changes instructor, the
+        former instructor's cycle for the group stays in progress and takes no new session (no
+        partial payment), and the new instructor is counted once they have a plan for the group.
 
 
         scheduledAt must be at or before the server clock, otherwise 409 SESSION_NOT_STARTED.
@@ -1622,7 +1625,12 @@ paths:
       summary: Plan versions of a student or instructor
       description:
         The versions of ONE payee, the first first. Send exactly one of studentId and instructorId (400 otherwise).
-        Scope own (an instructor) reads only their own plan; a student's plans are 403.
+        An instructor is paid per group, so an instructor has a plan per group (ADR-0015). With instructorId alone
+        the answer holds the versions of every group they have a plan for, by group name then version, and each
+        plan carries its groupId and groupName; with groupId too (400 without instructorId) only that group's
+        versions. A flat list with the group on each plan keeps one shape for students and instructors and lets
+        the screen group by groupId, including a group the instructor no longer teaches (its cycle is kept).
+        Scope own (an instructor) reads only their own plans; a student's plans are 403. An unknown group is 404.
       operationId: listPaymentPlans
       x-permission: payments.read
       x-story: US-20
@@ -1636,6 +1644,13 @@ paths:
         - name: instructorId
           in: query
           required: false
+          schema:
+            type: string
+            format: uuid
+        - name: groupId
+          in: query
+          required: false
+          description: Only with instructorId. The versions of the plan for this group.
           schema:
             type: string
             format: uuid
@@ -1660,6 +1675,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /students/{id}/payment-plans:
     post:
       tags:
@@ -1701,12 +1718,16 @@ paths:
     post:
       tags:
         - Payments
-      summary: Set or change an instructor's plan
+      summary: Set or change an instructor's plan for one group
       description:
-        The first plan is version 1 and opens cycle 1, counting from openingCount (0 to sessionsPerCycle - 1, BR-14).
-        A later plan is the next version from the cycle after the one in progress, like a student's (BR-10), and an
-        openingCount other than 0 is refused (STARTING_POINT_LOCKED). The same sessionsPerCycle and amount as the
-        latest version changes nothing (PLAN_UNCHANGED).
+        An instructor is paid per group (ADR-0015), so a plan belongs to an (instructor, group) pair, with its own
+        versions, its own starting point and its own cycles. The first plan of a pair is version 1 and opens cycle
+        1, counting from openingCount (0 to sessionsPerCycle - 1, BR-14). It needs the instructor to be the group's
+        current instructor (422 INSTRUCTOR_NOT_IN_GROUP). A later plan of the pair is the next version from the
+        cycle after the one in progress, like a student's (BR-10), and is allowed even when the instructor no
+        longer teaches the group, since the pair keeps its cycle; an openingCount other than 0 is refused
+        (STARTING_POINT_LOCKED). The same sessionsPerCycle and amount as the pair's latest version changes nothing
+        (PLAN_UNCHANGED). An unknown group or instructor is 404.
       operationId: createInstructorPlan
       x-permission: payments.manage
       x-story: US-21
@@ -3211,6 +3232,12 @@ components:
             - type: string
               format: uuid
             - type: 'null'
+        groupId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+          description: The group of an instructor's cycle (paid per group); null for a student's cycle
         sessionsCounted:
           type: integer
         sessionsPerCycle:
@@ -3225,6 +3252,7 @@ components:
       required:
         - cycleId
         - payeeType
+        - groupId
         - sessionsCounted
         - sessionsPerCycle
         - status
@@ -3387,6 +3415,16 @@ components:
           format: uuid
         payeeName:
           type: string
+        groupId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+          description: The group an instructor's cycle counts (paid per group); null for a student's cycle
+        groupName:
+          anyOf:
+            - type: string
+            - type: 'null'
         cycleNumber:
           type: integer
         sessionsPerCycle:
@@ -3424,6 +3462,8 @@ components:
         - payeeType
         - payeeId
         - payeeName
+        - groupId
+        - groupName
         - cycleNumber
         - sessionsPerCycle
         - amount
@@ -3555,6 +3595,16 @@ components:
         payeeId:
           type: string
           format: uuid
+        groupId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+          description: The group of an instructor's plan (paid per group); null for a student's plan
+        groupName:
+          anyOf:
+            - type: string
+            - type: 'null'
         sessionsPerCycle:
           type: integer
         amount:
@@ -3573,6 +3623,8 @@ components:
         - id
         - payeeType
         - payeeId
+        - groupId
+        - groupName
         - sessionsPerCycle
         - amount
         - effectiveFromCycle
@@ -3580,6 +3632,10 @@ components:
     InstructorPlanCreate:
       type: object
       properties:
+        groupId:
+          type: string
+          format: uuid
+          description: The group this plan is for. The instructor is paid per group.
         sessionsPerCycle:
           type: integer
           minimum: 1
@@ -3595,10 +3651,12 @@ components:
           maximum: 99
           default: 0
           description:
-            Used only for the instructor's first plan (BR-14), 0 to sessionsPerCycle - 1 (STARTING_POINT_OUT_OF_RANGE
-            otherwise). Later plans refuse any other value than 0 (STARTING_POINT_LOCKED).
+            Used only for the first plan of the (instructor, group) pair (BR-14), 0 to sessionsPerCycle - 1
+            (STARTING_POINT_OUT_OF_RANGE otherwise). Later plans of the pair refuse any other value than 0
+            (STARTING_POINT_LOCKED).
       additionalProperties: false
       required:
+        - groupId
         - sessionsPerCycle
         - amount
     Notification:

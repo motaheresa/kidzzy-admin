@@ -217,12 +217,14 @@ model Group {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy     Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academy       Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
   /// Composite foreign key: the instructor must belong to the same academy as the group.
-  instructor  User           @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
-  slots       ScheduleSlot[]
-  sessions    Session[]
-  enrollments Enrollment[]
+  instructor    User           @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  slots         ScheduleSlot[]
+  sessions      Session[]
+  enrollments   Enrollment[]
+  paymentPlans  PaymentPlan[]
+  paymentCycles PaymentCycle[]
 
   /// Composite key for tenant-safe foreign keys (schedule_slots, sessions).
   @@unique([id, academyId])
@@ -332,13 +334,13 @@ model Session {
   createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy         Academy       @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  group           Group         @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
-  instructor      User          @relation("SessionInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
-  statusChangedBy User?         @relation("SessionStatusChange", fields: [statusChangedById, statusChangedByAcademyId], references: [id, academyId], onDelete: Restrict)
-  slot            ScheduleSlot? @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
-  compensates     Session?      @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
-  makeups         Session[]     @relation("SessionCompensation")
+  academy         Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  group           Group          @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor      User           @relation("SessionInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  statusChangedBy User?          @relation("SessionStatusChange", fields: [statusChangedById, statusChangedByAcademyId], references: [id, academyId], onDelete: Restrict)
+  slot            ScheduleSlot?  @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
+  compensates     Session?       @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
+  makeups         Session[]      @relation("SessionCompensation")
   attendance      Attendance[]
   cycleSessions   CycleSession[]
 
@@ -387,6 +389,11 @@ model PaymentPlan {
   studentAcademyId    String?   @map("student_academy_id") @db.Uuid
   instructorId        String?   @map("instructor_id") @db.Uuid
   instructorAcademyId String?   @map("instructor_academy_id") @db.Uuid
+  /// The group an instructor plan is for: an instructor is paid per group (ADR-0015), so a plan
+  /// belongs to an (instructor, group) pair. Set exactly when payee_type is instructor.
+  /// groupAcademyId mirrors academyId whenever groupId is set (optional composite foreign key).
+  groupId             String?   @map("group_id") @db.Uuid
+  groupAcademyId      String?   @map("group_academy_id") @db.Uuid
   /// 1, 2, 3… per payee.
   version             Int
   /// N: a cycle is due when it counts N held sessions.
@@ -399,6 +406,7 @@ model PaymentPlan {
   academy    Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
   student    Student?       @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
   instructor User?          @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
+  group      Group?         @relation(fields: [groupId, groupAcademyId], references: [id, academyId], onDelete: Restrict)
   cycles     PaymentCycle[]
 
   @@unique([id, academyId])
@@ -406,14 +414,16 @@ model PaymentPlan {
   @@unique([id, academyId, sessionsPerCycle])
   /// NULLs are distinct in Postgres, so each pair only constrains its own payee type.
   @@unique([studentId, version])
-  @@unique([instructorId, version])
+  /// Versions are per (instructor, group) pair.
+  @@unique([instructorId, groupId, version])
   @@map("payment_plans")
 }
 
-/// A payee's cycle of N held sessions (FR-15, FR-16). Cycles are numbered 1, 2, 3… per payee and
-/// belong to the payee, not to a group, so a transfer keeps them (BR-11). sessions_counted starts
-/// at opening_count, the starting point, which only the payee's first cycle may have (BR-14).
-/// Counting held sessions is US-22; nothing before it changes the counter.
+/// A payee's cycle of N held sessions (FR-15, FR-16). A student has one cycle line, numbered 1, 2,
+/// 3… and kept by a transfer (BR-11). An instructor is paid per group (ADR-0015): the cycles are
+/// those of an (instructor, group) pair, numbered per pair, one in progress per pair.
+/// sessions_counted starts at opening_count, the starting point, which only the first cycle of the
+/// payee (or of the pair) may have (BR-14). Held sessions are counted by US-22 (cycle_sessions).
 model PaymentCycle {
   id                  String      @id @default(uuid()) @db.Uuid
   academyId           String      @map("academy_id") @db.Uuid
@@ -422,6 +432,11 @@ model PaymentCycle {
   studentAcademyId    String?     @map("student_academy_id") @db.Uuid
   instructorId        String?     @map("instructor_id") @db.Uuid
   instructorAcademyId String?     @map("instructor_academy_id") @db.Uuid
+  /// For an instructor's cycle, the group it counts (ADR-0015): the cycle belongs to the
+  /// (instructor, group) pair. Set exactly when payee_type is instructor; groupAcademyId mirrors
+  /// academyId whenever groupId is set.
+  groupId             String?     @map("group_id") @db.Uuid
+  groupAcademyId      String?     @map("group_academy_id") @db.Uuid
   /// The plan version in effect when the cycle started; a later version never changes it.
   planId              String      @map("plan_id") @db.Uuid
   /// The plan's N, copied so a check constraint can compare the counters with it. The foreign
@@ -436,18 +451,20 @@ model PaymentCycle {
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy    Academy     @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  student    Student?    @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
-  instructor User?       @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
-  plan       PaymentPlan @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
+  academy    Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  student    Student?       @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
+  instructor User?          @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
+  group      Group?         @relation(fields: [groupId, groupAcademyId], references: [id, academyId], onDelete: Restrict)
+  plan       PaymentPlan    @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
   sessions   CycleSession[]
 
   @@unique([id, academyId])
   @@unique([studentId, cycleNumber])
-  @@unique([instructorId, cycleNumber])
+  /// Cycles are numbered per (instructor, group) pair.
+  @@unique([instructorId, groupId, cycleNumber])
   /// At most one cycle in progress per payee.
   @@unique([studentId], map: "payment_cycles_student_open_key", where: raw("status = 'in_progress'"))
-  @@unique([instructorId], map: "payment_cycles_instructor_open_key", where: raw("status = 'in_progress'"))
+  @@unique([instructorId, groupId], map: "payment_cycles_instructor_open_key", where: raw("status = 'in_progress'"))
   @@index([planId])
   @@map("payment_cycles")
 }

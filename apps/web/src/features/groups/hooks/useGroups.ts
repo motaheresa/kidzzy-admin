@@ -1,5 +1,5 @@
 import { useApiQuery } from '@/lib/query';
-import { getGroup, listGroupOptions, listGroups } from '../api/groups.api';
+import { getGroup, listGroupOptions, listGroups, listInstructorGroups } from '../api/groups.api';
 import { groupKeys } from '../api/groups.keys';
 import type { GroupListParams } from '../types';
 
@@ -24,6 +24,19 @@ export function useGroupOptions() {
   return useApiQuery({
     queryKey: groupKeys.options(),
     queryFn: ({ signal }) => listGroupOptions(signal),
+    meta: { errorHandling: 'local' },
+  });
+}
+
+/**
+ * The active groups an instructor teaches now, for a choice list (the group of their payment
+ * plan, which is per group). Other features reach it through the feature's index.
+ */
+export function useInstructorGroups(instructorId: string, enabled = true) {
+  return useApiQuery({
+    queryKey: groupKeys.ofInstructor(instructorId),
+    queryFn: ({ signal }) => listInstructorGroups(instructorId, signal),
+    enabled,
     meta: { errorHandling: 'local' },
   });
 }

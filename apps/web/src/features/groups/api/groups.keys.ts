@@ -9,4 +9,7 @@ export const groupKeys = {
   details: () => [...groupKeys.all, 'detail'] as const,
   detail: (id: string) => [...groupKeys.details(), id] as const,
   options: () => [...groupKeys.lists(), 'options'] as const,
+  /** The active groups an instructor teaches now. */
+  ofInstructor: (instructorId: string) =>
+    [...groupKeys.lists(), 'instructor', instructorId] as const,
 };

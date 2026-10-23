@@ -220,6 +220,8 @@ describe('the student profile', () => {
             payeeType: 'student',
             payeeId: mona.id,
             payeeName: mona.name,
+            groupId: null,
+            groupName: null,
             cycleNumber: 1,
             sessionsPerCycle: 4,
             amount: '1500.00',

@@ -11,6 +11,7 @@ export const CYCLE_SELECT = {
   payeeType: true,
   studentId: true,
   instructorId: true,
+  groupId: true,
   cycleNumber: true,
   sessionsPerCycle: true,
   openingCount: true,
@@ -20,6 +21,7 @@ export const CYCLE_SELECT = {
   paidAt: true,
   student: { select: { name: true } },
   instructor: { select: { name: true } },
+  group: { select: { name: true } },
   plan: { select: { amount: true } },
 } as const satisfies Prisma.PaymentCycleSelect;
 
@@ -30,6 +32,7 @@ const COUNTABLE_SELECT = {
   payeeType: true,
   studentId: true,
   instructorId: true,
+  groupId: true,
   cycleNumber: true,
   sessionsPerCycle: true,
   sessionsCounted: true,
@@ -39,8 +42,10 @@ const COUNTABLE_SELECT = {
 export type CountableCycle = Prisma.PaymentCycleGetPayload<{ select: typeof COUNTABLE_SELECT }>;
 
 /**
- * Reads and writes payment cycles (FR-15, FR-16). A cycle belongs to its payee, never to a group,
- * so enrollments and transfers do not touch it (BR-11). Counting held sessions is US-22.
+ * Reads and writes payment cycles (FR-15, FR-16). A student's cycle belongs to the student, never
+ * to a group, so enrollments and transfers do not touch it (BR-11). An instructor is paid per
+ * group (ADR-0015): their cycles belong to an (instructor, group) pair. Counting held sessions
+ * is US-22.
  * Queries go through `txHost.tx`, limited to the academy in TenantContext.
  */
 @Injectable()
@@ -58,20 +63,25 @@ export class PaymentCycleRepository {
     });
   }
 
-  /** The instructor's cycle in progress (at most one, by a partial unique index), or null. */
-  findOpenForInstructor(instructorId: string): Promise<PaymentCycleRow | null> {
+  /**
+   * The instructor's cycle in progress for this group (at most one per instructor and group, by a
+   * partial unique index), or null. An instructor has a cycle line per group (ADR-0015).
+   */
+  findOpenForInstructor(instructorId: string, groupId: string): Promise<PaymentCycleRow | null> {
     return this.txHost.tx.paymentCycle.findFirst({
-      where: { instructorId, status: 'in_progress' },
+      where: { instructorId, groupId, status: 'in_progress' },
       select: CYCLE_SELECT,
     });
   }
 
   /**
-   * The instructor's first cycle under plan version 1: cycle 1, counting from the starting point
-   * (BR-14). The caller checks 0 <= openingCount < N; a check constraint holds it too.
+   * The first cycle of an (instructor, group) pair under plan version 1: cycle 1, counting from
+   * the starting point (BR-14). The caller checks 0 <= openingCount < N; a check constraint holds
+   * it too.
    */
   async createFirstForInstructor(
     instructorId: string,
+    groupId: string,
     plan: PlanRow,
     openingCount: number,
   ): Promise<PaymentCycleRow> {
@@ -82,6 +92,8 @@ export class PaymentCycleRepository {
         payeeType: 'instructor',
         instructorId,
         instructorAcademyId: academyId,
+        groupId,
+        groupAcademyId: academyId,
         planId: plan.id,
         sessionsPerCycle: plan.sessionsPerCycle,
         cycleNumber: 1,
@@ -123,12 +135,19 @@ export class PaymentCycleRepository {
     });
   }
 
-  /** The ids of the cycles in progress of these students and of this instructor (one each at most). */
-  async findOpenIds(studentIds: string[], instructorId: string): Promise<string[]> {
+  /**
+   * The ids of the cycles in progress of these students and of this instructor for this group:
+   * one each at most. The instructor's other groups have their own cycles and are not touched.
+   */
+  async findOpenIds(
+    studentIds: string[],
+    instructorId: string,
+    groupId: string,
+  ): Promise<string[]> {
     const rows = await this.txHost.tx.paymentCycle.findMany({
       where: {
         status: 'in_progress',
-        OR: [{ studentId: { in: studentIds } }, { instructorId }],
+        OR: [{ studentId: { in: studentIds } }, { instructorId, groupId }],
       },
       select: { id: true },
     });
@@ -190,7 +209,12 @@ export class PaymentCycleRepository {
         payeeType: previous.payeeType,
         ...(previous.studentId
           ? { studentId: previous.studentId, studentAcademyId: academyId }
-          : { instructorId: previous.instructorId, instructorAcademyId: academyId }),
+          : {
+              instructorId: previous.instructorId,
+              instructorAcademyId: academyId,
+              groupId: previous.groupId,
+              groupAcademyId: academyId,
+            }),
         planId: plan.id,
         sessionsPerCycle: plan.sessionsPerCycle,
         cycleNumber: previous.cycleNumber + 1,

@@ -1,5 +1,5 @@
-import type { InstructorDetail, Me, PaymentPlan, Student } from '@kidzzy/shared';
-import { render, screen, waitFor } from '@testing-library/react';
+import type { Group, InstructorDetail, Me, PaymentPlan, Student } from '@kidzzy/shared';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -50,6 +50,8 @@ const v1: PaymentPlan = {
   id: 'p1',
   payeeType: 'student',
   payeeId: mona.id,
+  groupId: null,
+  groupName: null,
   sessionsPerCycle: 4,
   amount: '1500.00',
   effectiveFromCycle: 1,
@@ -183,7 +185,7 @@ describe('changing the plan', () => {
   });
 });
 
-describe('an instructor’s plan (US-21)', () => {
+describe('an instructor’s plan, per group (US-21, ADR-0015)', () => {
   const ana: InstructorDetail = {
     id: '2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a',
     name: 'Ana',
@@ -193,24 +195,53 @@ describe('an instructor’s plan (US-21)', () => {
     createdAt: '2026-10-16T08:30:00.000Z',
     groups: [],
   };
-  const anaPlan: PaymentPlan = {
+  const group = (id: string, name: string): Group => ({
+    id,
+    name,
+    level: 'Scratch 1',
+    instructor: { id: ana.id, name: ana.name },
+    startDate: '2026-10-01',
+    isActive: true,
+    schedule: [],
+    studentCount: 0,
+    heldCount: 0,
+    nextSessionAt: null,
+  });
+  const groupA = group('ga-id', 'جروب A');
+  const groupB = group('gb-id', 'جروب B');
+  const planOf = (
+    id: string,
+    g: { id: string; name: string },
+    over: Partial<PaymentPlan> = {},
+  ) => ({
     ...v1,
-    id: 'p9',
-    payeeType: 'instructor',
+    id,
+    payeeType: 'instructor' as const,
     payeeId: ana.id,
+    groupId: g.id,
+    groupName: g.name,
     sessionsPerCycle: 8,
     amount: '2400.00',
-  };
-  const instructorHandlers = (plans: PaymentPlan[]): Record<string, Handler> => ({
+    ...over,
+  });
+  const planA = planOf('p9', groupA);
+  const planB = planOf('p10', groupB, { sessionsPerCycle: 4, amount: '1300.00' });
+  const instructorHandlers = (
+    plans: PaymentPlan[],
+    taught: Group[] = [groupA, groupB],
+  ): Record<string, Handler> => ({
     [`GET /instructors/${ana.id}`]: () => json(200, ana),
     'GET /payment-plans': () => json(200, { data: plans }),
+    'GET /groups': () =>
+      json(200, { data: taught, meta: { page: 1, pageSize: 100, total: taught.length } }),
   });
+  const planPost = () => calls.find((c) => c.method === 'POST')?.body;
 
-  it('offers to set the plan when there is none, and asks for the instructor’s plan by instructorId', async () => {
+  it('offers to set a plan when there is none, and asks for the plans by instructorId', async () => {
     api(admin, instructorHandlers([]));
     renderAt(`/instructors/${ana.id}`);
     expect(await screen.findByText('مفيش خطة دفع لسه')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'تحديد الخطة' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'تحديد او تغيير خطة جروب' })).toHaveAttribute(
       'href',
       `/instructors/${ana.id}/plan`,
     );
@@ -219,15 +250,30 @@ describe('an instructor’s plan (US-21)', () => {
     expect(request?.url.searchParams.has('studentId')).toBe(false);
   });
 
-  it('the first plan asks for the starting point and sends it with the amount as a string', async () => {
+  it('shows the versions group by group', async () => {
+    api(
+      admin,
+      instructorHandlers([planA, planB, planOf('p11', groupA, { effectiveFromCycle: 2 })]),
+    );
+    renderAt(`/instructors/${ana.id}`);
+
+    const headingA = await screen.findByRole('heading', { name: 'جروب A' });
+    const headingB = screen.getByRole('heading', { name: 'جروب B' });
+    expect(within(headingA.parentElement as HTMLElement).getAllByRole('row')).toHaveLength(3);
+    expect(within(headingB.parentElement as HTMLElement).getAllByRole('row')).toHaveLength(2);
+  });
+
+  it('asks which group first, then asks for the starting point of that group’s first plan', async () => {
     api(admin, {
       ...instructorHandlers([]),
-      [`POST /instructors/${ana.id}/payment-plans`]: () => json(201, anaPlan),
+      [`POST /instructors/${ana.id}/payment-plans`]: () => json(201, planA),
     });
     const router = renderAt(`/instructors/${ana.id}/plan`);
     const user = userEvent.setup();
 
-    expect(await screen.findByText(/ده اول خطة للمدرس/)).toBeInTheDocument();
+    expect(await screen.findByText(/اختار الجروب الاول/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('الجروب'), groupA.id);
+    expect(await screen.findByText(/ده اول خطة للمدرس في الجروب ده/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '8');
     await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '2400');
     await user.clear(screen.getByLabelText('نقطة البداية'));
@@ -235,42 +281,101 @@ describe('an instructor’s plan (US-21)', () => {
     await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/instructors/${ana.id}`));
-    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({
+    expect(planPost()).toEqual({
       sessionsPerCycle: 8,
       amount: '2400.00',
+      groupId: groupA.id,
       openingCount: 2,
     });
   });
 
-  it('a later plan has no starting point, shows the versions, and sends none', async () => {
+  it('a group with a plan has no starting point, another group still does', async () => {
     api(admin, {
-      ...instructorHandlers([anaPlan]),
+      ...instructorHandlers([planA]),
       [`POST /instructors/${ana.id}/payment-plans`]: () =>
-        json(201, { ...anaPlan, id: 'p10', effectiveFromCycle: 2 }),
+        json(201, planOf('p12', groupA, { effectiveFromCycle: 2 })),
     });
     renderAt(`/instructors/${ana.id}/plan`);
     const user = userEvent.setup();
+
+    await screen.findByLabelText('الجروب');
+    await user.selectOptions(screen.getByLabelText('الجروب'), groupA.id);
     expect(await screen.findByText(/الخطة الحالية/)).toBeInTheDocument();
     expect(screen.queryByLabelText('نقطة البداية')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('الجروب'), groupB.id);
+    expect(await screen.findByText(/ده اول خطة للمدرس في الجروب ده/)).toBeInTheDocument();
+    expect(screen.getByLabelText('نقطة البداية')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('الجروب'), groupA.id);
     await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '12');
     await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '3500');
     await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
-    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({
-      sessionsPerCycle: 12,
-      amount: '3500.00',
+    await waitFor(() => expect(planPost()).toBeDefined());
+    expect(planPost()).toEqual({ sessionsPerCycle: 12, amount: '3500.00', groupId: groupA.id });
+  });
+
+  it('offers a group the instructor has a plan for but no longer teaches, and says so', async () => {
+    const former = group('gc-id', 'جروب C');
+    api(admin, instructorHandlers([planOf('p13', former)], [groupA]));
+    renderAt(`/instructors/${ana.id}/plan`);
+
+    const select = await screen.findByLabelText('الجروب');
+    expect(within(select).getByRole('option', { name: 'جروب A' })).toBeInTheDocument();
+    expect(
+      within(select).getByRole('option', { name: 'جروب C (مش بيدرّس فيه دلوقتي)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('chooses the only group by itself', async () => {
+    api(admin, instructorHandlers([], [groupA]));
+    renderAt(`/instructors/${ana.id}/plan`);
+
+    expect(await screen.findByText(/ده اول خطة للمدرس في الجروب ده/)).toBeInTheDocument();
+    expect(screen.getByLabelText('الجروب')).toHaveValue(groupA.id);
+  });
+
+  it('asks for the group when none is chosen, and sends nothing', async () => {
+    api(admin, instructorHandlers([]));
+    renderAt(`/instructors/${ana.id}/plan`);
+    const user = userEvent.setup();
+
+    await screen.findByLabelText('الجروب');
+    await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '8');
+    await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '2400');
+    await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
+
+    expect(await screen.findByText('اختار الجروب', { selector: 'p' })).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+  });
+
+  it('says the instructor must teach the group for its first plan', async () => {
+    api(admin, {
+      ...instructorHandlers([]),
+      [`POST /instructors/${ana.id}/payment-plans`]: () => problem(422, 'INSTRUCTOR_NOT_IN_GROUP'),
     });
+    renderAt(`/instructors/${ana.id}/plan`);
+    const user = userEvent.setup();
+
+    await screen.findByLabelText('الجروب');
+    await user.selectOptions(screen.getByLabelText('الجروب'), groupA.id);
+    await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '8');
+    await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '2400');
+    await user.click(screen.getByRole('button', { name: 'حفظ الخطة' }));
+
+    expect(
+      await screen.findByText('المدرس ده مش مدرس الجروب ده دلوقتي، فمينفعش نحدد له اول خطة للجروب'),
+    ).toBeInTheDocument();
   });
 
   it('shows STARTING_POINT_OUT_OF_RANGE under the starting point', async () => {
     api(admin, {
-      ...instructorHandlers([]),
+      ...instructorHandlers([], [groupA]),
       [`POST /instructors/${ana.id}/payment-plans`]: () =>
         problem(422, 'STARTING_POINT_OUT_OF_RANGE'),
     });
     renderAt(`/instructors/${ana.id}/plan`);
     const user = userEvent.setup();
-    await screen.findByText(/ده اول خطة للمدرس/);
+    await screen.findByText(/ده اول خطة للمدرس في الجروب ده/);
     await user.type(screen.getByLabelText('عدد سيشنات الدورة'), '8');
     await user.type(screen.getByLabelText('مبلغ الدورة (جنيه)'), '2400');
     await user.clear(screen.getByLabelText('نقطة البداية'));
@@ -281,8 +386,15 @@ describe('an instructor’s plan (US-21)', () => {
     );
   });
 
+  it('tells the admin when the instructor has no group at all', async () => {
+    api(admin, instructorHandlers([], []));
+    renderAt(`/instructors/${ana.id}/plan`);
+
+    expect(await screen.findByText(/مش مدرس اي جروب دلوقتي/)).toBeInTheDocument();
+  });
+
   it('shows the forbidden page to an instructor opening the plan screen', async () => {
-    api(instructorUser, instructorHandlers([anaPlan]));
+    api(instructorUser, instructorHandlers([planA]));
     renderAt(`/instructors/${ana.id}/plan`);
     expect(
       await screen.findByRole('heading', { name: 'مش مسموح لك تفتح الصفحة دي' }),
