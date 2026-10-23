@@ -199,6 +199,34 @@ export class SessionRepository {
     return { rows, total };
   }
 
+  /**
+   * The Held sessions of a group, earliest first, with from inclusive and to exclusive (the
+   * attendance grid). onlyInstructorId keeps the sessions that person is the instructor on.
+   */
+  listHeldForGroup(
+    groupId: string,
+    range: { from?: Date; to?: Date },
+    onlyInstructorId?: string,
+  ): Promise<SessionRow[]> {
+    return this.txHost.tx.session.findMany({
+      where: {
+        groupId,
+        status: 'held',
+        ...(range.from || range.to
+          ? {
+              scheduledAt: {
+                ...(range.from ? { gte: range.from } : {}),
+                ...(range.to ? { lt: range.to } : {}),
+              },
+            }
+          : {}),
+        ...(onlyInstructorId ? { instructorId: onlyInstructorId } : {}),
+      },
+      select: SESSION_SELECT,
+      orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   /** One session, or null when this academy has none with that id. */
   async findById(id: string): Promise<SessionRow | null> {
     return this.txHost.tx.session.findUnique({ where: { id }, select: SESSION_SELECT });

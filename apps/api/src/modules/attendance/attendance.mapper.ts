@@ -1,6 +1,17 @@
-import type { SessionAttendance } from '@kidzzy/shared';
+import type {
+  GroupAttendance,
+  SessionAttendance,
+  StudentAttendanceItem,
+  StudentRef,
+} from '@kidzzy/shared';
 import type { EnrollmentRow } from '../enrollments/enrollment.repository';
-import type { AttendanceRow } from './attendance.repository';
+import { toSession } from '../sessions/session.mapper';
+import type { SessionRow } from '../sessions/session.repository';
+import type {
+  AttendanceRow,
+  GridAttendanceRow,
+  HistoryAttendanceRow,
+} from './attendance.repository';
 
 /**
  * openapi.yaml: SessionAttendance. Every student of the session, in the order given (by
@@ -24,5 +35,54 @@ export function toSessionAttendance(
         homeworkRating: row?.homeworkRating ?? null,
       };
     }),
+  };
+}
+
+/**
+ * openapi.yaml: GroupAttendance. The students come in the order given (by name); each student's
+ * records follow the order of the sessions and hold only the cells that were recorded.
+ */
+export function toGroupAttendance(
+  sessions: SessionRow[],
+  students: StudentRef[],
+  recorded: GridAttendanceRow[],
+): GroupAttendance {
+  const byStudent = new Map<string, Map<string, GridAttendanceRow>>();
+  for (const row of recorded) {
+    const cells = byStudent.get(row.studentId) ?? new Map<string, GridAttendanceRow>();
+    cells.set(row.sessionId, row);
+    byStudent.set(row.studentId, cells);
+  }
+  return {
+    sessions: sessions.map(toSession),
+    students: students.map((student) => ({
+      student,
+      records: sessions.flatMap((session) => {
+        const row = byStudent.get(student.id)?.get(session.id);
+        return row
+          ? [
+              {
+                sessionId: session.id,
+                status: row.status,
+                performanceRating: row.performanceRating,
+                homeworkRating: row.homeworkRating,
+              },
+            ]
+          : [];
+      }),
+    })),
+  };
+}
+
+/** openapi.yaml: StudentAttendanceItem. */
+export function toStudentAttendanceItem(row: HistoryAttendanceRow): StudentAttendanceItem {
+  return {
+    sessionId: row.session.id,
+    scheduledAt: row.session.scheduledAt.toISOString(),
+    sessionNumber: row.session.sessionNumber,
+    group: { id: row.session.group.id, name: row.session.group.name },
+    status: row.status,
+    performanceRating: row.performanceRating,
+    homeworkRating: row.homeworkRating,
   };
 }
