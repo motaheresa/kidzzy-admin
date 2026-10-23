@@ -390,18 +390,18 @@ describe('Instructor plans per group (e2e)', () => {
     });
 
     it.each([
-      ['no group', { sessionsPerCycle: 8, amount: '2400.00' }],
-      ['a group that is not an id', { ...first, groupId: 'not-an-id' }],
-      ['an amount as a number', { sessionsPerCycle: 8, amount: 2400 }],
-      ['an amount of zero', { sessionsPerCycle: 8, amount: '0.00' }],
-      ['0 sessions', { sessionsPerCycle: 0, amount: '2400.00' }],
-      ['101 sessions', { sessionsPerCycle: 101, amount: '2400.00' }],
-      ['a negative starting point', { ...first, openingCount: -1 }],
-      ['an unknown field', { ...first, effectiveFromCycle: 3 }],
-    ])('refuses %s (400)', async (_label, body) => {
+      ['no group', { sessionsPerCycle: 8, amount: '2400.00' }, false],
+      ['a group that is not an id', { ...first, groupId: 'not-an-id' }, false],
+      ['an amount as a number', { sessionsPerCycle: 8, amount: 2400 }, true],
+      ['an amount of zero', { sessionsPerCycle: 8, amount: '0.00' }, true],
+      ['0 sessions', { sessionsPerCycle: 0, amount: '2400.00' }, true],
+      ['101 sessions', { sessionsPerCycle: 101, amount: '2400.00' }, true],
+      ['a negative starting point', { ...first, openingCount: -1 }, true],
+      ['an unknown field', { ...first, effectiveFromCycle: 3 }, true],
+    ])('refuses %s (400)', async (_label, body, withGroup) => {
       const instructor = await newInstructor();
       const group = await newGroup(instructor);
-      await setPlan(instructor, { groupId: group.id, ...body }).expect(400);
+      await setPlan(instructor, withGroup ? { groupId: group.id, ...body } : body).expect(400);
     });
   });
 
