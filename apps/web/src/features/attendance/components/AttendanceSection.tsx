@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AttendanceStatus, type Session } from '@kidzzy/shared';
 import {
   Alert,
@@ -14,8 +14,10 @@ import {
   ToggleGroupItem,
 } from '@/components/ui';
 import { usePermissions, useSession } from '@/features/auth';
+import { formatNumber } from '@/lib/format';
 import { useSaveAttendance, useSessionAttendance } from '../hooks/useAttendance';
 import type { AttendanceDraft, SessionAttendance } from '../types';
+import { StarRating } from './StarRating';
 
 type Draft = Record<string, AttendanceDraft>;
 
@@ -105,6 +107,17 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
     });
   }
 
+  function setRating(
+    studentId: string,
+    field: 'performanceRating' | 'homeworkRating',
+    value: number | null,
+  ) {
+    setDraft((current) => {
+      const line = current[studentId];
+      return line ? { ...current, [studentId]: { ...line, [field]: value } } : current;
+    });
+  }
+
   function onSave() {
     save.mutate(
       changed.flatMap((record) => {
@@ -130,24 +143,61 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
           return (
             <li
               key={record.studentId}
-              className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
+              className="flex flex-col gap-3 rounded-lg border border-border bg-background px-4 py-3"
             >
-              <span className="font-medium">{record.studentName}</span>
-              {editable ? (
-                <ToggleGroup
-                  type="single"
-                  value={line?.status ?? ''}
-                  onValueChange={(value) => {
-                    // Clicking the selected option again would clear it; there is no "unrecorded".
-                    if (value) setStatus(record.studentId, value as AttendanceStatus);
-                  }}
-                  aria-label={'حضور ' + record.studentName}
-                >
-                  <ToggleGroupItem value={AttendanceStatus.Present}>حاضر</ToggleGroupItem>
-                  <ToggleGroupItem value={AttendanceStatus.Absent}>غايب</ToggleGroupItem>
-                </ToggleGroup>
-              ) : (
-                <StatusBadge status={record.status} />
+              <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
+                <span className="font-medium">{record.studentName}</span>
+                {editable ? (
+                  <ToggleGroup
+                    type="single"
+                    value={line?.status ?? ''}
+                    onValueChange={(value) => {
+                      // Clicking the selected option again would clear it; there is no "unrecorded".
+                      if (value) setStatus(record.studentId, value as AttendanceStatus);
+                    }}
+                    aria-label={'حضور ' + record.studentName}
+                  >
+                    <ToggleGroupItem value={AttendanceStatus.Present}>حاضر</ToggleGroupItem>
+                    <ToggleGroupItem value={AttendanceStatus.Absent}>غايب</ToggleGroupItem>
+                  </ToggleGroup>
+                ) : (
+                  <StatusBadge status={record.status} />
+                )}
+              </div>
+              {editable && line?.status === AttendanceStatus.Present && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <RatingField label="الأداء">
+                    <StarRating
+                      label={'تقييم الأداء ' + record.studentName}
+                      value={line.performanceRating}
+                      onChange={(value) => setRating(record.studentId, 'performanceRating', value)}
+                    />
+                  </RatingField>
+                  <RatingField label="الواجب">
+                    <StarRating
+                      label={'تقييم الواجب ' + record.studentName}
+                      value={line.homeworkRating}
+                      noneLabel="مفيش واجب"
+                      onChange={(value) => setRating(record.studentId, 'homeworkRating', value)}
+                    />
+                  </RatingField>
+                </div>
+              )}
+              {!editable && record.status === AttendanceStatus.Present && (
+                <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+                  <span>
+                    الأداء:{' '}
+                    {record.performanceRating === null
+                      ? 'لسه ما اتقيمش'
+                      : formatNumber(record.performanceRating) + ' من 5'}
+                  </span>
+                  <span>
+                    الواجب:{' '}
+                    {record.homeworkRating === null
+                      ? 'مفيش واجب'
+                      : formatNumber(record.homeworkRating) + ' من 5'}
+                  </span>
+                </p>
               )}
             </li>
           );
@@ -175,4 +225,13 @@ function StatusBadge({ status }: { status: AttendanceStatus | null }) {
   if (status === AttendanceStatus.Present) return <Badge variant="success">حاضر</Badge>;
   if (status === AttendanceStatus.Absent) return <Badge variant="danger">غايب</Badge>;
   return <Badge variant="neutral">لسه ما اتسجلش</Badge>;
+}
+
+function RatingField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
 }

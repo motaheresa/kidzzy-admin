@@ -530,4 +530,138 @@ describe('attendance on the session details', () => {
 
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
+
+  describe('ratings', () => {
+    const rated = (performanceRating: number | null, homeworkRating: number | null) => ({
+      sessionId: session.id,
+      records: [
+        {
+          studentId: 's1',
+          studentName: 'Amal',
+          status: 'present' as const,
+          performanceRating,
+          homeworkRating,
+        },
+      ],
+    });
+    const star = (group: string, count: number) =>
+      within(screen.getByRole('radiogroup', { name: group + ' Amal' })).getByRole('radio', {
+        name: count + ' من 5',
+      });
+    const open = async (data: unknown, me: Me = recorder) => {
+      api(me, {
+        [`GET ${detailPath}`]: () => json(200, heldSession),
+        [`GET ${attendancePath}`]: () => json(200, data),
+        [`PUT ${attendancePath}`]: () => json(200, data),
+      });
+      renderAt(detailPath);
+      await screen.findByRole('button', { name: 'احفظ الحضور' });
+      return userEvent.setup();
+    };
+    const sent = () => calls.find((call) => call.method === 'PUT')?.body;
+
+    it('sets a performance rating, clears it by pressing it again, and sends the new one', async () => {
+      const user = await open(rated(null, null));
+
+      await user.click(star('تقييم الأداء', 4));
+      expect(star('تقييم الأداء', 4)).toBeChecked();
+      await user.click(star('تقييم الأداء', 4));
+      expect(star('تقييم الأداء', 4)).not.toBeChecked();
+      await user.click(star('تقييم الأداء', 3));
+      await user.click(screen.getByRole('button', { name: 'احفظ الحضور' }));
+
+      await waitFor(() => expect(sent()).toBeDefined());
+      expect(sent()).toEqual({
+        records: [
+          { studentId: 's1', status: 'present', performanceRating: 3, homeworkRating: null },
+        ],
+      });
+    });
+
+    it('sends null for "no homework" and keeps the other rating', async () => {
+      const user = await open(rated(5, 3));
+
+      expect(star('تقييم الواجب', 3)).toBeChecked();
+      await user.click(
+        within(screen.getByRole('radiogroup', { name: 'تقييم الواجب Amal' })).getByRole('radio', {
+          name: 'مفيش واجب',
+        }),
+      );
+      await user.click(screen.getByRole('button', { name: 'احفظ الحضور' }));
+
+      await waitFor(() => expect(sent()).toBeDefined());
+      expect(sent()).toEqual({
+        records: [
+          { studentId: 's1', status: 'present', performanceRating: 5, homeworkRating: null },
+        ],
+      });
+    });
+
+    it('shows "no homework" as chosen when nothing was given', async () => {
+      await open(rated(null, null));
+
+      expect(
+        within(screen.getByRole('radiogroup', { name: 'تقييم الواجب Amal' })).getByRole('radio', {
+          name: 'مفيش واجب',
+        }),
+      ).toBeChecked();
+    });
+
+    it('hides the ratings of an absent student and clears them before saving', async () => {
+      const user = await open(rated(5, 4));
+
+      await user.click(
+        within(screen.getByRole('radiogroup', { name: 'حضور Amal' })).getByRole('radio', {
+          name: 'غايب',
+        }),
+      );
+      expect(
+        screen.queryByRole('radiogroup', { name: 'تقييم الأداء Amal' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('radiogroup', { name: 'تقييم الواجب Amal' }),
+      ).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'احفظ الحضور' }));
+
+      await waitFor(() => expect(sent()).toBeDefined());
+      expect(sent()).toEqual({
+        records: [
+          { studentId: 's1', status: 'absent', performanceRating: null, homeworkRating: null },
+        ],
+      });
+    });
+
+    it('works from the keyboard in right to left order', async () => {
+      const user = await open(rated(null, null));
+
+      expect(screen.getByRole('radiogroup', { name: 'تقييم الأداء Amal' })).toHaveAttribute(
+        'dir',
+        'rtl',
+      );
+      star('تقييم الأداء', 1).focus();
+      // Right to left: the left arrow goes to the next star.
+      await user.keyboard('{ArrowLeft}');
+      expect(star('تقييم الأداء', 2)).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(star('تقييم الأداء', 1)).toHaveFocus();
+      await user.keyboard('{ArrowLeft}{ArrowLeft}{ArrowLeft}');
+      expect(star('تقييم الأداء', 4)).toHaveFocus();
+      await user.keyboard(' ');
+      expect(star('تقييم الأداء', 4)).toBeChecked();
+    });
+
+    it('shows the ratings read only to someone who may not record', async () => {
+      api(reader, {
+        [`GET ${detailPath}`]: () => json(200, heldSession),
+        [`GET ${attendancePath}`]: () => json(200, rated(4, null)),
+      });
+      renderAt(detailPath);
+
+      expect(await screen.findByText(/الأداء:/)).toHaveTextContent('الأداء: 4 من 5');
+      expect(screen.getByText(/الواجب:/)).toHaveTextContent('الواجب: مفيش واجب');
+      expect(
+        screen.queryByRole('radiogroup', { name: 'تقييم الأداء Amal' }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
