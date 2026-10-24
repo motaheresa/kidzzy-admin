@@ -294,6 +294,44 @@ export class SessionRepository {
   }
 
   /**
+   * Takes a Held session back to Scheduled (US-17): no number, and who changed the status. The
+   * number is freed in this same UPDATE, because a check ties a number to the Held status.
+   */
+  async markScheduled(id: string, changedById: string, changedAt: Date): Promise<void> {
+    await this.txHost.tx.session.update({
+      where: { id },
+      data: {
+        status: 'scheduled',
+        sessionNumber: null,
+        statusChangedById: changedById,
+        statusChangedByAcademyId: this.tenant.requireAcademyId(),
+        statusChangedAt: changedAt,
+      },
+    });
+  }
+
+  /**
+   * After a Held session left its group, every later number goes down by one (BR-13). One row at
+   * a time, lowest first: the unique (group_id, session_number) is checked at every row, so the
+   * lowest takes the number the undone session freed, the next takes the one just freed, and so
+   * on. Returns how many were renumbered. Call it after markScheduled, with the group locked.
+   */
+  async renumberAfter(groupId: string, number: number): Promise<number> {
+    const later = await this.txHost.tx.session.findMany({
+      where: { groupId, sessionNumber: { gt: number } },
+      orderBy: { sessionNumber: 'asc' },
+      select: { id: true, sessionNumber: true },
+    });
+    for (const row of later) {
+      await this.txHost.tx.session.update({
+        where: { id: row.id },
+        data: { sessionNumber: (row.sessionNumber ?? 0) - 1 },
+      });
+    }
+    return later.length;
+  }
+
+  /**
    * Marks the session Cancelled with its reason and who changed the status. A Cancelled session
    * keeps a null number. The academy mirror equals this academy, matching the check constraint.
    */

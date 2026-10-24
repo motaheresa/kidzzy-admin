@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AcademiesModule } from '../academies/academies.module';
+import { AuditModule } from '../audit/audit.module';
 import { Clock } from './clock';
 import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRegeneration } from './session-regeneration';
@@ -16,7 +17,7 @@ import { SessionsService } from './sessions.service';
  * import GroupRepository back.
  */
 @Module({
-  imports: [AcademiesModule],
+  imports: [AcademiesModule, AuditModule],
   controllers: [SessionsController],
   providers: [
     Clock,

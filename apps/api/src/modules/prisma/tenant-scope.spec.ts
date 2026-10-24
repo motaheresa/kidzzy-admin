@@ -7,6 +7,7 @@ describe('TENANT_MODELS', () => {
   it('holds every model with academyId, and only those', () => {
     expect([...TENANT_MODELS].sort()).toEqual([
       'Attendance',
+      'AuditLog',
       'CycleSession',
       'Enrollment',
       'Group',
