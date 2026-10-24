@@ -11,6 +11,7 @@ export function toSession(row: SessionRow): Session {
     id: row.id,
     group: { id: row.group.id, name: row.group.name },
     instructorId: row.instructorId,
+    instructorName: row.instructor.name,
     scheduledAt: row.scheduledAt.toISOString(),
     durationMin: row.durationMin,
     status: row.status,

@@ -143,6 +143,8 @@ export interface Session {
    * Can differ from the group's current instructor after that instructor changes.
    */
   instructorId: string;
+  /** The name of the instructor on the session, so a list can say who without another request. */
+  instructorName: string;
   /** ISO 8601, UTC */
   scheduledAt: string;
   durationMin: number;
