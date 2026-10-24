@@ -1,12 +1,14 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
 import { DateTime } from 'luxon';
-import { ErrorCode, type Payment } from '@kidzzy/shared';
+import { ErrorCode, type Page, type Payment } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
+import { pageWindow, toPage } from '../../common/pagination/page';
 import { AcademyRepository } from '../academies/academy.repository';
 import { AccessContext } from '../auth/access-context';
 import { toDecimal } from '../prisma/money';
 import { Clock } from '../sessions/clock';
+import type { ListPaymentsQueryDto } from './dto/list-payments.query';
 import type { PaymentCreateDto } from './dto/payment-create.dto';
 import { PaymentCycleRepository } from './payment-cycle.repository';
 import { toPayment } from './payment.mapper';
@@ -29,6 +31,44 @@ export class PaymentsService {
     private readonly clock: Clock,
     private readonly access: AccessContext,
   ) {}
+
+  /**
+   * The payment history (US-24, US-25), newest first. Scope `any` (the admin) filters by payee,
+   * student, instructor and an academy-local date range, both ends included. Scope `own` (an
+   * instructor) reads only their own payments, the same rule as the cycles: a student's, or
+   * another instructor's, are 403, and without a filter they get their own.
+   */
+  async list(query: ListPaymentsQueryDto): Promise<Page<Payment>> {
+    if (query.from && query.to && query.from > query.to) {
+      throw new AppException(
+        ErrorCode.ValidationFailed,
+        HttpStatus.BAD_REQUEST,
+        'from must not be after to',
+        [{ field: 'from', message: 'from must not be after to' }],
+      );
+    }
+    const own = this.access.scopeFor('payments.read') === 'own';
+    if (own) {
+      const asksForStudents = query.payeeType === 'student' || query.studentId !== undefined;
+      const asksForOthers =
+        query.instructorId !== undefined && query.instructorId !== this.access.userId;
+      if (asksForStudents || asksForOthers) {
+        throw new AppException(ErrorCode.Forbidden, HttpStatus.FORBIDDEN, 'Not allowed');
+      }
+    }
+
+    const { rows, total } = await this.payments.list(
+      {
+        payeeType: own ? 'instructor' : query.payeeType,
+        studentId: query.studentId,
+        instructorId: own ? this.access.userId : query.instructorId,
+        from: query.from,
+        to: query.to,
+      },
+      pageWindow(query),
+    );
+    return toPage(rows.map(toPayment), query, total);
+  }
 
   /**
    * Two layers keep a cycle from being paid twice. First the cycle row is locked (SELECT … FOR

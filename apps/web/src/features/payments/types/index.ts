@@ -11,11 +11,31 @@ import type {
 /** The API's plan shapes (openapi.yaml: PaymentPlan, PlanInput, InstructorPlanCreate). */
 export type { Page, Payment, PaymentCreate, PaymentCycle, PaymentPlan, PlanInput };
 
-/** What GET /payment-cycles is asked for here: one instructor's cycles, or the caller's own. */
+/** The status filters of the cycles list; "approaching" is one or two sessions before the end. */
+export type CycleFilter = 'in_progress' | 'approaching' | 'due' | 'paid';
+
+/**
+ * What GET /payment-cycles is asked for here: one kind of payee, optionally one instructor (left
+ * out for the caller's own cycles) and a status. Without pageSize, the largest page.
+ */
 export interface CycleListParams {
   payeeType: PayeeType;
-  /** Left out for an instructor's own cycles. */
   instructorId?: string;
+  status?: CycleFilter;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * What GET /payments is asked for here: the payment history, optionally of one instructor (left
+ * out for the caller's own), between two academy-local dates, both included.
+ */
+export interface PaymentListParams {
+  instructorId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 /**

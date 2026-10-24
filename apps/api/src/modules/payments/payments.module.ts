@@ -9,6 +9,7 @@ import { PaymentCyclesController } from './payment-cycles.controller';
 import { PaymentCyclesService } from './payment-cycles.service';
 import { PaymentPlanRepository } from './payment-plan.repository';
 import { PaymentRepository } from './payment.repository';
+import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { PaymentPlansController } from './payment-plans.controller';
 import { PaymentPlansService } from './payment-plans.service';
@@ -21,7 +22,7 @@ import { PaymentPlansService } from './payment-plans.service';
  */
 @Module({
   imports: [AcademiesModule, StudentsModule, InstructorsModule, GroupsModule, SessionsModule],
-  controllers: [PaymentPlansController, PaymentCyclesController],
+  controllers: [PaymentPlansController, PaymentCyclesController, PaymentsController],
   providers: [
     PaymentPlanRepository,
     PaymentCycleRepository,

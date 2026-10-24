@@ -1,7 +1,6 @@
 import { WalletIcon } from 'lucide-react';
 import {
   Alert,
-  Badge,
   Card,
   CardContent,
   CardHeader,
@@ -12,17 +11,10 @@ import {
 import { usePermissions } from '@/features/auth';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { useCycles } from '../hooks/useCycles';
+import { CycleStatusBadge } from './CycleStatusBadge';
+import { PaymentsList } from './PaymentsList';
 import { RecordPaymentButton } from './RecordPaymentButton';
 import type { PaymentCycle } from '../types';
-
-const STATUS: Record<
-  PaymentCycle['status'],
-  { label: string; variant: 'info' | 'warning' | 'success' }
-> = {
-  in_progress: { label: 'شغالة', variant: 'info' },
-  due: { label: 'مستحقة', variant: 'warning' },
-  paid: { label: 'اتدفعت', variant: 'success' },
-};
 
 /**
  * An instructor's cycles for the admin (US-24): one block per group, because an instructor is
@@ -94,6 +86,7 @@ function CyclesCard({
             </section>
           ))
         )}
+        <PaymentsList instructorId={instructorId} />
       </CardContent>
     </Card>
   );
@@ -110,12 +103,11 @@ function groupsOf(cycles: PaymentCycle[]): [string, PaymentCycle[]][] {
 }
 
 function CycleRow({ cycle }: { cycle: PaymentCycle }) {
-  const status = STATUS[cycle.status];
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-border bg-background px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">الدورة {formatNumber(cycle.cycleNumber)}</span>
-        <Badge variant={status.variant}>{status.label}</Badge>
+        <CycleStatusBadge status={cycle.status} />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="numeric">

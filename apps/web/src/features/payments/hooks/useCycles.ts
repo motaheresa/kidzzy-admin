@@ -8,6 +8,7 @@ export function useCycles(params: CycleListParams) {
   return useApiQuery({
     queryKey: paymentKeys.cycleList(params),
     queryFn: ({ signal }) => listCycles(params, signal),
+    placeholderData: (previous) => previous,
     meta: { errorHandling: 'local' },
   });
 }

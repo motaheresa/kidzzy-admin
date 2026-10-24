@@ -13,6 +13,7 @@ import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { PaymentsPage } from '@/pages/payments/PaymentsPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
 import { SessionPage } from '@/pages/sessions/SessionPage';
 import { ChangeStudentPlanPage } from '@/pages/students/ChangeStudentPlanPage';
@@ -129,6 +130,10 @@ export const routes: RouteObject[] = [
               { path: '/instructors', element: <InstructorsPage /> },
               { path: '/instructors/:id', element: <InstructorPage /> },
             ],
+          },
+          {
+            element: <RequirePermission permission="payments.read" scope="any" />,
+            children: [{ path: '/payments', element: <PaymentsPage /> }],
           },
           {
             element: <RequirePermission permission="instructors.manage" />,

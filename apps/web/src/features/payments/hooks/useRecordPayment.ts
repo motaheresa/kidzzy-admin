@@ -11,7 +11,12 @@ import type { Payment, PaymentCreate } from '../types';
  */
 export function useRecordPayment(cycleId: string, onRecorded?: () => void) {
   const queryClient = useQueryClient();
-  const refresh = () => queryClient.invalidateQueries({ queryKey: paymentKeys.cycles() });
+  // The cycles change, and so does the payment history.
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: paymentKeys.cycles() }),
+      queryClient.invalidateQueries({ queryKey: paymentKeys.history() }),
+    ]);
   return useApiMutation<Payment, PaymentCreate>({
     mutationFn: (input) => recordPayment(cycleId, input),
     meta: { errorHandling: 'local' },

@@ -1,5 +1,6 @@
 import { http } from '@/lib/http';
 import type {
+  PaymentListParams,
   Payment,
   PaymentCreate,
   CycleListParams,
@@ -47,10 +48,30 @@ export function listCycles(
 ): Promise<Page<PaymentCycle>> {
   const query = new URLSearchParams({
     payeeType: params.payeeType,
-    pageSize: String(CYCLES_PAGE_SIZE),
+    page: String(params.page ?? 1),
+    pageSize: String(params.pageSize ?? CYCLES_PAGE_SIZE),
   });
   if (params.instructorId) query.set('instructorId', params.instructorId);
+  if (params.status) query.set('status', params.status);
   return http.get<Page<PaymentCycle>>('/payment-cycles?' + query.toString(), { signal });
+}
+
+/**
+ * GET /payments: the payment history, newest first. Without instructorId, an instructor gets
+ * their own payments. from and to are academy-local dates, both included.
+ */
+export function listPayments(
+  params: PaymentListParams,
+  signal?: AbortSignal,
+): Promise<Page<Payment>> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    pageSize: String(params.pageSize ?? CYCLES_PAGE_SIZE),
+  });
+  if (params.instructorId) query.set('instructorId', params.instructorId);
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+  return http.get<Page<Payment>>('/payments?' + query.toString(), { signal });
 }
 
 /** POST /payment-cycles/{id}/payments: the payment that settles a Due cycle (US-23). */
