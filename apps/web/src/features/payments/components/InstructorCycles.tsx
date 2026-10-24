@@ -12,6 +12,7 @@ import {
 import { usePermissions } from '@/features/auth';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { useCycles } from '../hooks/useCycles';
+import { RecordPaymentButton } from './RecordPaymentButton';
 import type { PaymentCycle } from '../types';
 
 const STATUS: Record<
@@ -122,6 +123,7 @@ function CycleRow({ cycle }: { cycle: PaymentCycle }) {
         </span>
         <span className="numeric text-muted-foreground">{formatMoney(cycle.amount)}</span>
       </div>
+      <RecordPaymentButton cycle={cycle} />
       {cycle.openingCount > 0 && (
         <p className="text-xs text-muted-foreground">
           بدأت من {formatNumber(cycle.openingCount)} سيشن (اتاخدوا قبل السيستم)

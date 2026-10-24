@@ -3,5 +3,6 @@
 export { paymentKeys } from './api/payments.keys';
 export { InstructorCycles, MyCycles } from './components/InstructorCycles';
 export { PlanForm } from './components/PlanForm';
+export { RecordPaymentButton } from './components/RecordPaymentButton';
 export { PlanHistory } from './components/PlanHistory';
 export type { Payee, PaymentPlan } from './types';

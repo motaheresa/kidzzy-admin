@@ -1,5 +1,7 @@
 import { http } from '@/lib/http';
 import type {
+  Payment,
+  PaymentCreate,
   CycleListParams,
   Page,
   Payee,
@@ -49,4 +51,9 @@ export function listCycles(
   });
   if (params.instructorId) query.set('instructorId', params.instructorId);
   return http.get<Page<PaymentCycle>>('/payment-cycles?' + query.toString(), { signal });
+}
+
+/** POST /payment-cycles/{id}/payments: the payment that settles a Due cycle (US-23). */
+export function recordPayment(cycleId: string, input: PaymentCreate): Promise<Payment> {
+  return http.post<Payment>('/payment-cycles/' + encodeURIComponent(cycleId) + '/payments', input);
 }

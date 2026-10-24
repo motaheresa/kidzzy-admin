@@ -1,7 +1,15 @@
-import type { Page, PaymentCycle, PaymentPlan, PayeeType, PlanInput } from '@kidzzy/shared';
+import type {
+  Page,
+  Payment,
+  PaymentCreate,
+  PaymentCycle,
+  PaymentPlan,
+  PayeeType,
+  PlanInput,
+} from '@kidzzy/shared';
 
 /** The API's plan shapes (openapi.yaml: PaymentPlan, PlanInput, InstructorPlanCreate). */
-export type { Page, PaymentCycle, PaymentPlan, PlanInput };
+export type { Page, Payment, PaymentCreate, PaymentCycle, PaymentPlan, PlanInput };
 
 /** What GET /payment-cycles is asked for here: one instructor's cycles, or the caller's own. */
 export interface CycleListParams {

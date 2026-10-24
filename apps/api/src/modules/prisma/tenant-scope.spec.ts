@@ -10,6 +10,7 @@ describe('TENANT_MODELS', () => {
       'CycleSession',
       'Enrollment',
       'Group',
+      'Payment',
       'PaymentCycle',
       'PaymentPlan',
       'RefreshToken',

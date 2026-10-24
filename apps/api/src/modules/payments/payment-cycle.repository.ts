@@ -194,6 +194,28 @@ export class PaymentCycleRepository {
     });
   }
 
+  /** One cycle with its plan amount, or null when this academy has none with that id. */
+  findById(id: string): Promise<PaymentCycleRow | null> {
+    return this.txHost.tx.paymentCycle.findUnique({ where: { id }, select: CYCLE_SELECT });
+  }
+
+  /**
+   * Locks one cycle row until the transaction ends, so two payments of the same cycle run one
+   * after the other and the second sees the first. Call findById again after it. Raw SQL is not
+   * tenant-scoped, so academy_id is filtered here.
+   */
+  async lock(id: string): Promise<void> {
+    await this.txHost.tx.$queryRaw`
+      SELECT id FROM payment_cycles
+      WHERE id = ${id}::uuid AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+      FOR UPDATE`;
+  }
+
+  /** Marks a Due cycle paid. One UPDATE: a check constraint ties status to paid_at. */
+  async markPaid(id: string, paidAt: Date): Promise<void> {
+    await this.txHost.tx.paymentCycle.update({ where: { id }, data: { status: 'paid', paidAt } });
+  }
+
   /**
    * The ids of the cycles in progress of these students and of this instructor for this group:
    * one each at most. The instructor's other groups have their own cycles and are not touched.

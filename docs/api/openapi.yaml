@@ -1531,6 +1531,19 @@ paths:
       tags:
         - Payments
       summary: Record the payment of a Due cycle
+      description: >
+        One payment settles one full cycle, with no partial payments (BR-09). It works for a student's cycle and
+        for an instructor's cycle alike (an instructor's is per group, ADR-0015). Only a Due cycle can be paid
+        (409 CYCLE_NOT_DUE while it is in progress, 409 CYCLE_ALREADY_PAID once it is paid, so a second payment is
+        refused). The amount must equal the plan amount of the cycle, compared as a decimal (422 AMOUNT_MISMATCH).
+        paidOn is an academy-local date that cannot be after today in the academy's timezone (422
+        PAID_ON_IN_FUTURE); a past date is allowed. A note is stored trimmed, and a blank one is stored as null.
+
+
+        The cycle row is locked and read again before the payment is written, and the payment and the cycle
+        becoming paid are one transaction, so two requests for the same cycle give one 201 and one 409. The
+        database also holds a UNIQUE on the cycle as a last safety net. Undoing or editing a payment is not
+        part of this operation. An unknown cycle, or another academy's, is 404.
       operationId: recordPayment
       x-permission: payments.manage
       x-story: US-23

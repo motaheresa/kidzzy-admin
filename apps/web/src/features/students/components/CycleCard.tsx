@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Badge, Card, CardContent, CardHeader, CardTitle, DetailList } from '@/components/ui';
 import { formatMoney, formatNumber } from '@/lib/format';
 import type { PaymentCycle } from '../types';
@@ -13,9 +14,10 @@ const STATUS: Record<
 
 /**
  * The student's cycle in progress (FR-15): which cycle, how many of its N sessions are counted,
- * and the amount due when it completes. The starting point shows only when there is one.
+ * and the amount due when it completes. The starting point shows only when there is one. `action`
+ * is for what the screen offers on the cycle (recording its payment when it is Due).
  */
-export function CycleCard({ cycle }: { cycle: PaymentCycle }) {
+export function CycleCard({ cycle, action }: { cycle: PaymentCycle; action?: ReactNode }) {
   const status = STATUS[cycle.status];
   return (
     <Card>
@@ -38,6 +40,7 @@ export function CycleCard({ cycle }: { cycle: PaymentCycle }) {
             },
           ]}
         />
+        {action && <div className="mt-4">{action}</div>}
       </CardContent>
     </Card>
   );

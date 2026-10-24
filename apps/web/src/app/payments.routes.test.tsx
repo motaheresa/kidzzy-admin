@@ -6,7 +6,7 @@ import type {
   PaymentPlan,
   Student,
 } from '@kidzzy/shared';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -549,5 +549,219 @@ describe('an instructor’s cycles, per group (US-24, US-25)', () => {
     expect(await screen.findByText('دوراتي')).toBeInTheDocument();
     await waitFor(() => expect(cycleCalls().length).toBeGreaterThan(0));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('recording a payment (US-23)', () => {
+  const ana: InstructorDetail = {
+    id: '2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a',
+    name: 'Ana',
+    email: 'ana@test.local',
+    phone: null,
+    isActive: true,
+    createdAt: '2026-10-16T08:30:00.000Z',
+    groups: [],
+  };
+  const due: PaymentCycle = {
+    id: 'cycle-due',
+    payeeType: 'instructor',
+    payeeId: ana.id,
+    payeeName: ana.name,
+    groupId: 'g-a',
+    groupName: 'جروب أ',
+    cycleNumber: 2,
+    sessionsPerCycle: 4,
+    amount: '1500.00',
+    openingCount: 0,
+    sessionsCounted: 4,
+    status: 'due',
+    dueAt: '2026-10-20T10:00:00.000Z',
+    paidAt: null,
+  };
+  const paid: PaymentCycle = {
+    ...due,
+    status: 'paid',
+    paidAt: '2026-10-25T10:00:00.000Z',
+  };
+  const page = (data: PaymentCycle[]) => ({
+    data,
+    meta: { page: 1, pageSize: 100, total: data.length },
+  });
+  const instructorPage = (cycles: () => PaymentCycle[]): Record<string, Handler> => ({
+    [`GET /instructors/${ana.id}`]: () => json(200, ana),
+    'GET /payment-plans': () => json(200, { data: [] }),
+    'GET /payment-cycles': () => json(200, page(cycles())),
+  });
+  const payment = {
+    id: 'pay-1',
+    cycleId: due.id,
+    amount: '1500.00',
+    paidOn: '2026-10-25',
+    method: 'cash',
+    note: null,
+    recordedBy: { id: 'admin-1', name: 'Mohamed' },
+    createdAt: '2026-10-24T22:30:00.000Z',
+  };
+  const paymentPath = `POST /payment-cycles/${due.id}/payments`;
+  const posts = () =>
+    calls.filter((c) => c.method === 'POST' && c.url.pathname.endsWith('/payments'));
+
+  beforeEach(() => {
+    // 22:30 UTC on the 24th is the 25th in Cairo: the default date is the academy's today.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-24T22:30:00.000Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const openDialog = async () => {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /سجّل دفعة/ }));
+    await screen.findByRole('alertdialog');
+    return user;
+  };
+
+  it('offers the action on a Due cycle only, to whoever holds payments.manage', async () => {
+    const inProgress: PaymentCycle = {
+      ...due,
+      id: 'c-ip',
+      status: 'in_progress',
+      sessionsCounted: 2,
+    };
+    api(
+      admin,
+      instructorPage(() => [due, inProgress, { ...paid, id: 'c-paid', cycleNumber: 1 }]),
+    );
+    renderAt(`/instructors/${ana.id}`);
+
+    await screen.findAllByText(/من 4 سيشن/);
+    expect(screen.getAllByRole('button', { name: /سجّل دفعة/ })).toHaveLength(1);
+  });
+
+  it('is not offered to an instructor reading their own cycles', async () => {
+    api(instructorUser, { 'GET /payment-cycles': () => json(200, page([due])) });
+    renderAt('/');
+
+    await screen.findByText('دوراتي');
+    await screen.findByText(/من 4 سيشن/);
+    expect(screen.queryByRole('button', { name: /سجّل دفعة/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the plan amount read only and today in the academy’s timezone, and sends them', async () => {
+    let settled = false;
+    api(admin, {
+      ...instructorPage(() => [settled ? paid : due]),
+      [paymentPath]: () => {
+        settled = true;
+        return json(201, payment);
+      },
+    });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    const dialog = within(screen.getByRole('alertdialog'));
+    expect(dialog.getByLabelText('المبلغ (جنيه)')).toHaveAttribute('readonly');
+    expect(dialog.getByLabelText('تاريخ الدفع')).toHaveValue('2026-10-25');
+    await user.click(dialog.getByRole('button', { name: 'سجّل الدفعة' }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toEqual({ amount: '1500.00', paidOn: '2026-10-25', method: 'cash' });
+    // The cycles are read again: it is paid now, so the action is gone and the dialog closed.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /سجّل دفعة/ })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen date, method and a trimmed note', async () => {
+    api(admin, { ...instructorPage(() => [due]), [paymentPath]: () => json(201, payment) });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    const dialog = within(screen.getByRole('alertdialog'));
+    fireEvent.change(dialog.getByLabelText('تاريخ الدفع'), { target: { value: '2026-10-20' } });
+    await user.selectOptions(dialog.getByLabelText('طريقة الدفع'), 'transfer');
+    await user.type(dialog.getByLabelText('ملاحظة'), '  ref 123  ');
+    await user.click(dialog.getByRole('button', { name: 'سجّل الدفعة' }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toEqual({
+      amount: '1500.00',
+      paidOn: '2026-10-20',
+      method: 'transfer',
+      note: 'ref 123',
+    });
+  });
+
+  it.each([
+    ['AMOUNT_MISMATCH', 422, 'المبلغ مش مطابق لمبلغ الخطة'],
+    ['PAID_ON_IN_FUTURE', 422, 'تاريخ الدفع مينفعش يكون بعد النهارده'],
+  ])('shows %s under its field and keeps the dialog open', async (code, status, message) => {
+    api(admin, { ...instructorPage(() => [due]), [paymentPath]: () => problem(status, code) });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'سجّل الدفعة' }),
+    );
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('says the cycle is already paid, reads the cycles again and shows it paid', async () => {
+    let refused = false;
+    api(admin, {
+      ...instructorPage(() => [refused ? paid : due]),
+      [paymentPath]: () => {
+        refused = true;
+        return problem(409, 'CYCLE_ALREADY_PAID');
+      },
+    });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'سجّل الدفعة' }),
+    );
+
+    expect(await screen.findByText('الدورة دي اتدفعت بالفعل')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.url.pathname.endsWith('/payment-cycles') && c.method === 'GET'),
+      ).toHaveLength(2),
+    );
+  });
+
+  it('records the payment of a student’s Due cycle from the student profile, and reloads the profile', async () => {
+    const studentCycle: PaymentCycle = {
+      ...due,
+      id: 'cycle-student',
+      payeeType: 'student',
+      payeeId: mona.id,
+      payeeName: mona.name,
+      groupId: null,
+      groupName: null,
+    };
+    let reads = 0;
+    api(admin, {
+      [`GET /students/${mona.id}`]: () => {
+        reads += 1;
+        return json(200, { ...mona, currentCycle: studentCycle });
+      },
+      [`GET /students/${mona.id}/enrollments`]: () => json(200, { data: [] }),
+      'GET /payment-plans': () => json(200, { data: [] }),
+      'POST /payment-cycles/cycle-student/payments': () =>
+        json(201, { ...payment, cycleId: 'cycle-student' }),
+    });
+    renderAt(`/students/${mona.id}`);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /سجّل دفعة/ }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'سجّل الدفعة' }),
+    );
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    await waitFor(() => expect(reads).toBeGreaterThan(1));
   });
 });
