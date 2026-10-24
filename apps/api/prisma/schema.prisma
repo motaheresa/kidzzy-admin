@@ -45,6 +45,7 @@ model Academy {
   attendance    Attendance[]
   cycleSessions CycleSession[]
   payments      Payment[]
+  auditLogs     AuditLog[]
 
   @@map("academies")
 }
@@ -75,6 +76,7 @@ model User {
   sessionStatusChanges Session[]      @relation("SessionStatusChange")
   recordedAttendance   Attendance[]   @relation("AttendanceRecorder")
   recordedPayments     Payment[]      @relation("PaymentRecorder")
+  auditLogs            AuditLog[]     @relation("AuditActor")
   instructorPlans      PaymentPlan[]
   instructorCycles     PaymentCycle[]
 
@@ -554,4 +556,31 @@ model Payment {
   @@unique([id, academyId])
   @@index([paidOn])
   @@map("payments")
+}
+
+/// Who changed what and when, for the changes that move money or numbers (NFR-06, US-35). Today
+/// only the undo of a Held session writes here (US-17); the others come with US-35. Rows are
+/// written in the same transaction as the change they describe, so a change that rolls back
+/// leaves no entry and an entry never exists without its change. Nothing edits or deletes a row.
+/// before and after hold the fields that changed, as JSON. The checks are in the migration.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  academyId  String   @map("academy_id") @db.Uuid
+  actorId    String   @map("actor_id") @db.Uuid
+  /// What happened, for example session.held_undone or payment.recorded.
+  action     String
+  /// The kind of record it happened to, for example sessions.
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  actor   User    @relation("AuditActor", fields: [actorId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

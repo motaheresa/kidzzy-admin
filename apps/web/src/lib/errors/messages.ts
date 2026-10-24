@@ -28,6 +28,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   SESSION_OUT_OF_ORDER:
     'فيه حصة أقدم لسه مجدولة، أو الحصة دي قبل حصة اتسجلت بالفعل. افتح الجروب وفلتر «مجدولة». لو الحصة مش بتاعتك، الأدمن هو اللي يسجّلها.',
   SESSION_NOT_HELD: 'الحصة دي لسه ما اتعملتش',
+  SESSION_IN_LATER_CYCLE:
+    'الحصة دي محسوبة في دورة وبعدها دورة بدأت تحسب حصص. رجّع الحصص الاحدث الاول',
   STUDENT_ALREADY_ENROLLED: 'الطالب ده مسجل في جروب بالفعل',
   STUDENT_CODE_TAKEN: 'كود الطالب ده مستخدم قبل كده',
   STUDENT_ABSENT: 'مينفعش تقيّم طالب غايب',

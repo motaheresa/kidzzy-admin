@@ -61,6 +61,7 @@ export const ErrorCode = {
   SessionNotStarted: 'SESSION_NOT_STARTED',
   SessionOutOfOrder: 'SESSION_OUT_OF_ORDER',
   SessionNotHeld: 'SESSION_NOT_HELD',
+  SessionInLaterCycle: 'SESSION_IN_LATER_CYCLE',
   StudentAlreadyEnrolled: 'STUDENT_ALREADY_ENROLLED',
   StudentCodeTaken: 'STUDENT_CODE_TAKEN',
   StudentAbsent: 'STUDENT_ABSENT',

@@ -73,6 +73,11 @@ export class AttendanceRepository {
     });
   }
 
+  /** Deletes what was recorded for the session (when its Held status is undone, US-17). */
+  async deleteForSession(sessionId: string): Promise<void> {
+    await this.txHost.tx.attendance.deleteMany({ where: { sessionId } });
+  }
+
   /** Everything recorded for these sessions (the group grid). */
   findForSessions(sessionIds: string[]): Promise<GridAttendanceRow[]> {
     return this.txHost.tx.attendance.findMany({

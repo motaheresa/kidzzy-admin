@@ -4,6 +4,7 @@ import { ErrorCode, type HeldResult, type Page, type Session } from '@kidzzy/sha
 import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
 import { AccessContext } from '../auth/access-context';
+import { AuditService } from '../audit/audit.service';
 import { Clock } from './clock';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
 import { toSession } from './session.mapper';
@@ -38,6 +39,7 @@ export class SessionsService {
     private readonly access: AccessContext,
     private readonly clock: Clock,
     private readonly heldHooks: SessionHeldHooks,
+    private readonly audit: AuditService,
   ) {}
 
   async list(query: ListSessionsQueryDto): Promise<Page<Session>> {
@@ -142,6 +144,54 @@ export class SessionsService {
 
     // TODO(US-35): write the audit log for this status change.
     return { ...toSession(held), cyclesUpdated };
+  }
+
+  /**
+   * Returns a Held session to Scheduled (US-17, BR-13), for the admin only, with no time limit.
+   * In one transaction, after the group lock: the hooks take the session out of every cycle that
+   * counted it (the counters drop, a Due cycle returns to In progress) and delete its attendance,
+   * or refuse (a paid cycle, or a cycle after it that already counts sessions: undo the newest
+   * first); then the session goes back to Scheduled with no number, the later Held sessions of
+   * the group are renumbered, and the change is written to the audit log. If anything refuses,
+   * nothing changed. The session can be marked Held again only if no later session of the group
+   * is Held (the order rule).
+   */
+  @Transactional()
+  async undoHeld(id: string): Promise<Session> {
+    const first = await this.sessions.findById(id);
+    if (!first) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    await this.sessions.lockGroup(first.group.id);
+
+    const row = await this.sessions.findById(id);
+    if (!row) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    if (row.status !== 'held' || row.sessionNumber === null) {
+      throw new AppException(
+        ErrorCode.SessionNotHeld,
+        HttpStatus.CONFLICT,
+        'Only a Held session can be undone',
+      );
+    }
+
+    await this.heldHooks.undo(row);
+    await this.sessions.markScheduled(id, this.access.userId, this.clock.now());
+    const renumbered = await this.sessions.renumberAfter(row.group.id, row.sessionNumber);
+    await this.audit.record({
+      action: 'session.held_undone',
+      entityType: 'sessions',
+      entityId: id,
+      before: { status: 'held', sessionNumber: row.sessionNumber },
+      after: { status: 'scheduled', sessionNumber: null, laterSessionsRenumbered: renumbered },
+    });
+
+    const undone = await this.sessions.findById(id);
+    if (!undone) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    return toSession(undone);
   }
 
   /**
