@@ -1,4 +1,4 @@
-import type { PermissionAction } from '@kidzzy/shared';
+import type { PermissionAction, PermissionScope } from '@kidzzy/shared';
 import { NavLink } from 'react-router';
 import { usePermissions } from '@/features/auth';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,8 @@ interface NavItem {
   label: string;
   /** Shown only to users who hold it (any scope). The API still checks every request. */
   permission?: PermissionAction;
+  /** Shown only with this scope of the permission (the admin's screens use "any"). */
+  scope?: PermissionScope;
 }
 
 /** The main sections, in the wireframe's order. A new screen adds its link here. */
@@ -16,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/groups', label: 'الجروبات', permission: 'groups.read' },
   { to: '/students', label: 'الطلاب', permission: 'students.read' },
   { to: '/instructors', label: 'المدرسين', permission: 'instructors.read' },
+  { to: '/payments', label: 'المدفوعات', permission: 'payments.read', scope: 'any' },
 ];
 
 /**
@@ -23,8 +26,11 @@ const NAV_ITEMS: NavItem[] = [
  * wrapping, and marks the current section (aria-current="page").
  */
 export function AppNav() {
-  const { can } = usePermissions();
-  const items = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
+  const { can, scopeFor } = usePermissions();
+  const items = NAV_ITEMS.filter((item) => {
+    if (!item.permission) return true;
+    return item.scope ? scopeFor(item.permission) === item.scope : can(item.permission);
+  });
 
   return (
     <nav aria-label="الأقسام" className="mx-auto w-full max-w-5xl overflow-x-auto px-4">

@@ -1579,6 +1579,15 @@ paths:
       tags:
         - Payments
       summary: Payment history
+      description: >
+        Payments, newest first (the day they were paid, then when they were recorded). Each payment names whose
+        cycle it settled (payeeType, payeeId, payeeName, cycleNumber) and, for an instructor, the group, because
+        an instructor is paid per group (ADR-0015). from and to are academy-local dates (YYYY-MM-DD) compared
+        with the day the payment was made, both included; from after to is 400. The filters are combined with AND.
+
+
+        Scope own (an instructor) reads only their own payments, whatever the filters: without instructorId they
+        get their own, and a student's payments (payeeType=student or studentId), or another instructor's, are 403.
       operationId: listPayments
       x-permission: payments.read
       x-story: US-24, US-25
@@ -3547,6 +3556,28 @@ components:
         cycleId:
           type: string
           format: uuid
+        payeeType:
+          type: string
+          enum:
+            - student
+            - instructor
+        payeeId:
+          type: string
+          format: uuid
+        payeeName:
+          type: string
+        groupId:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+          description: The group of an instructor's cycle (paid per group); null for a student's cycle
+        groupName:
+          anyOf:
+            - type: string
+            - type: 'null'
+        cycleNumber:
+          type: integer
         amount:
           type: string
           pattern: ^\d+\.\d{2}$
@@ -3576,6 +3607,12 @@ components:
       required:
         - id
         - cycleId
+        - payeeType
+        - payeeId
+        - payeeName
+        - groupId
+        - groupName
+        - cycleNumber
         - amount
         - paidOn
         - method

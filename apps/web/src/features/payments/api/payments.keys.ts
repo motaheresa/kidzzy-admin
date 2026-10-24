@@ -1,4 +1,4 @@
-import type { CycleListParams, Payee } from '../types';
+import type { CycleListParams, Payee, PaymentListParams } from '../types';
 
 // Query keys of the payments feature, built in one place so a key is never retyped by hand.
 export const paymentKeys = {
@@ -10,4 +10,7 @@ export const paymentKeys = {
   /** The payment cycles, for any filters. */
   cycles: () => [...paymentKeys.all, 'cycles'] as const,
   cycleList: (params: CycleListParams) => [...paymentKeys.cycles(), params] as const,
+  /** The payment history, for any filters. */
+  history: () => [...paymentKeys.all, 'history'] as const,
+  historyList: (params: PaymentListParams) => [...paymentKeys.history(), params] as const,
 };

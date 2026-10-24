@@ -334,6 +334,14 @@ export interface PaymentCycle {
 export interface Payment {
   id: string;
   cycleId: string;
+  /** Whose cycle it settled. An instructor is paid per group (ADR-0015). */
+  payeeType: PayeeType;
+  payeeId: string;
+  payeeName: string;
+  /** The group of an instructor's cycle; null for a student's. */
+  groupId: string | null;
+  groupName: string | null;
+  cycleNumber: number;
   amount: string;
   /** Academy-local date, YYYY-MM-DD. */
   paidOn: string;

@@ -175,6 +175,12 @@ describe('Recording a payment (e2e)', () => {
       expect(res.body).toEqual({
         id: expect.any(String) as string,
         cycleId,
+        payeeType: 'instructor',
+        payeeId: expect.any(String) as string,
+        payeeName: expect.any(String) as string,
+        groupId: expect.any(String) as string,
+        groupName: expect.any(String) as string,
+        cycleNumber: 1,
         amount: '1500.00',
         paidOn: TODAY,
         method: 'cash',
