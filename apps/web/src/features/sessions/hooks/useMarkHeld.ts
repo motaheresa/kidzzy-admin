@@ -14,6 +14,7 @@ export function useMarkHeld(id: string) {
         id: result.id,
         group: result.group,
         instructorId: result.instructorId,
+        instructorName: result.instructorName,
         scheduledAt: result.scheduledAt,
         durationMin: result.durationMin,
         status: result.status,

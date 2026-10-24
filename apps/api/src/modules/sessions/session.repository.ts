@@ -23,6 +23,7 @@ export interface SessionListFilter {
 const SESSION_SELECT = {
   id: true,
   instructorId: true,
+  instructor: { select: { name: true } },
   scheduledAt: true,
   durationMin: true,
   status: true,

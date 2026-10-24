@@ -3173,6 +3173,9 @@ components:
           description: >
             The instructor on the session: who taught it, or who will teach it. Can differ from the group's current
             instructor.
+        instructorName:
+          type: string
+          description: The name of the instructor on the session, so a list can say who without another request.
         scheduledAt:
           type: string
           format: date-time
@@ -3205,6 +3208,7 @@ components:
         - id
         - group
         - instructorId
+        - instructorName
         - scheduledAt
         - durationMin
         - status

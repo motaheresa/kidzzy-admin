@@ -37,6 +37,7 @@ const session: Session = {
   id: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
   group: { id: '3c1d2e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f', name: 'جروب A' },
   instructorId: 'inst-1',
+  instructorName: 'Ana',
   scheduledAt: '2026-10-22T14:00:00.000Z',
   durationMin: 60,
   status: 'scheduled',
@@ -663,5 +664,127 @@ describe('attendance on the session details', () => {
         screen.queryByRole('radiogroup', { name: 'تقييم الأداء Amal' }),
       ).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('sessions that need marking (SCRUM-73)', () => {
+  const overdue: Session = {
+    ...session,
+    id: '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e',
+    scheduledAt: '2026-10-21T14:00:00.000Z',
+  };
+  const needsMarkingCalls = () =>
+    calls.filter((c) => c.method === 'GET' && c.url.searchParams.get('status') === 'scheduled');
+
+  /** Today's list is empty; the needs-marking list (status=scheduled) answers from `overdueNow`. */
+  function home(me: Me, overdueNow: () => Session[], extra: Record<string, Handler> = {}) {
+    api(me, {
+      'GET /sessions': (url) =>
+        json(200, page(url.searchParams.get('status') === 'scheduled' ? overdueNow() : [])),
+      ...extra,
+    });
+  }
+
+  it('shows yesterday’s Scheduled session above today’s, with who taught it, asking for what started before now', async () => {
+    home(admin, () => [overdue]);
+    renderAt('/');
+
+    expect(await screen.findByText(/سيشنات محتاجة تتسجل/)).toBeInTheDocument();
+    const row = (await screen.findByRole('link', { name: /جروب A/ })).closest('li') as HTMLElement;
+    expect(within(row).getByText(/Ana/)).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /سجّل حصة جروب A/ })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /الغي حصة جروب A/ })).toBeInTheDocument();
+
+    const query = needsMarkingCalls()[0]?.url.searchParams;
+    expect(query?.get('status')).toBe('scheduled');
+    expect(query?.get('to')).toBe('2026-10-22T10:00:00.000Z');
+    expect(query?.has('from')).toBe(false);
+  });
+
+  it('leaves the section after Mark Held, and today’s list is read again', async () => {
+    let held = false;
+    home(admin, () => (held ? [] : [overdue]), {
+      [`POST /sessions/${overdue.id}/held`]: () => {
+        held = true;
+        return json(200, { ...overdue, status: 'held', sessionNumber: 1, cyclesUpdated: [] });
+      },
+    });
+    renderAt('/');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
+    await user.click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
+
+    await waitFor(() => expect(screen.queryByText(/سيشنات محتاجة تتسجل/)).not.toBeInTheDocument());
+    const todayReads = calls.filter(
+      (c) =>
+        c.method === 'GET' &&
+        c.url.pathname.endsWith('/sessions') &&
+        !c.url.searchParams.has('status'),
+    );
+    expect(todayReads.length).toBeGreaterThan(1);
+  });
+
+  it('leaves the section after Cancel', async () => {
+    let cancelled = false;
+    home(admin, () => (cancelled ? [] : [overdue]), {
+      [`POST /sessions/${overdue.id}/cancel`]: () => {
+        cancelled = true;
+        return json(200, { ...overdue, status: 'cancelled', cancelReason: 'Holiday' });
+      },
+    });
+    renderAt('/');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: /الغي حصة جروب A/ }));
+    await user.type(await screen.findByLabelText('السبب'), 'Holiday');
+    await user.click(screen.getByRole('button', { name: 'ايوه، الغيها' }));
+
+    await waitFor(() => expect(screen.queryByText(/سيشنات محتاجة تتسجل/)).not.toBeInTheDocument());
+  });
+
+  it('shows nothing when no session needs marking', async () => {
+    home(admin, () => []);
+    renderAt('/');
+
+    await waitFor(() => expect(needsMarkingCalls().length).toBeGreaterThan(0));
+    await screen.findByText('مفيش حصص النهارده');
+    expect(screen.queryByText(/سيشنات محتاجة تتسجل/)).not.toBeInTheDocument();
+  });
+
+  it('shows an instructor their own, with the actions, and not the instructor’s name', async () => {
+    home(instructorUser, () => [overdue]);
+    renderAt('/');
+
+    const row = (await screen.findByRole('link', { name: /جروب A/ })).closest('li') as HTMLElement;
+    expect(within(row).getByRole('button', { name: /سجّل حصة جروب A/ })).toBeInTheDocument();
+    expect(within(row).queryByText(/Ana/)).not.toBeInTheDocument();
+  });
+
+  it('shows an instructor a session they cannot write without any action', async () => {
+    const theirs: Session = {
+      ...overdue,
+      instructorId: 'former-instructor',
+      instructorName: 'Former',
+    };
+    home(instructorUser, () => [theirs]);
+    renderAt('/');
+
+    const row = (await screen.findByRole('link', { name: /جروب A/ })).closest('li') as HTMLElement;
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows the Arabic message when the list cannot be read', async () => {
+    api(admin, {
+      'GET /sessions': (url) =>
+        url.searchParams.get('status') === 'scheduled'
+          ? problem(500, 'INTERNAL_ERROR')
+          : json(200, page([])),
+    });
+    renderAt('/');
+
+    expect(
+      await screen.findByText('حصلت مشكلة في السيرفر، جرب تاني', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 });

@@ -36,6 +36,7 @@ const session = (id: string, scheduledAt: string, sessionNumber: number) => ({
   id,
   group: { id: groupId, name: 'جروب A' },
   instructorId: 'inst-1',
+  instructorName: 'Ana',
   scheduledAt,
   durationMin: 60,
   status: 'held' as const,

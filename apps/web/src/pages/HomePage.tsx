@@ -1,9 +1,10 @@
 import { PageHeader } from '@/components/ui';
 import { CurrentUserCard, LogoutButton } from '@/features/auth';
 import { MyCycles } from '@/features/payments';
-import { TodaySessions } from '@/features/sessions';
+import { NeedsMarking, TodaySessions } from '@/features/sessions';
 
-/** Home: who is signed in, today's sessions for whoever may read them (US-12), and an instructor's
+/** Home: who is signed in, the sessions that still need marking and today's sessions for whoever may
+ * read them (US-12, SCRUM-73), and an instructor's
  * own payment cycles per group (US-25). */
 export function HomePage() {
   return (
@@ -14,6 +15,7 @@ export function HomePage() {
         actions={<LogoutButton />}
       />
       <CurrentUserCard />
+      <NeedsMarking />
       <TodaySessions />
       <MyCycles />
     </div>
