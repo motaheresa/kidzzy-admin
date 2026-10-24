@@ -13,6 +13,9 @@ import {
   Skeleton,
 } from '@/components/ui';
 import { usePermissions } from '@/features/auth';
+import { RecordPaymentButton } from '@/features/payments';
+import { useQueryClient } from '@/lib/query';
+import { studentKeys } from '../api/students.keys';
 import { useStudent } from '../hooks/useStudents';
 import { CycleCard } from './CycleCard';
 import { DeactivateStudentButton } from './DeactivateStudentButton';
@@ -26,6 +29,7 @@ import { StudentStatusBadge } from './StudentStatusBadge';
 export function StudentProfile({ id }: { id: string }) {
   const student = useStudent(id);
   const { can } = usePermissions();
+  const queryClient = useQueryClient();
 
   if (student.isPending) {
     return (
@@ -97,7 +101,19 @@ export function StudentProfile({ id }: { id: string }) {
         }
       />
 
-      {data.currentCycle && <CycleCard cycle={data.currentCycle} />}
+      {data.currentCycle && (
+        <CycleCard
+          cycle={data.currentCycle}
+          action={
+            <RecordPaymentButton
+              cycle={data.currentCycle}
+              onRecorded={() =>
+                void queryClient.invalidateQueries({ queryKey: studentKeys.detail(id) })
+              }
+            />
+          }
+        />
+      )}
 
       <Card>
         <CardHeader>

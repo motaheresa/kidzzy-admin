@@ -45,6 +45,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   STARTING_POINT_LOCKED: 'نقطة البداية لاول دورة بس، وعنده دورة بالفعل',
   STARTING_POINT_OUT_OF_RANGE: 'نقطة البداية لازم تكون اقل من عدد سيشنات الدورة',
   AMOUNT_MISMATCH: 'المبلغ مش مطابق لمبلغ الخطة',
+  PAID_ON_IN_FUTURE: 'تاريخ الدفع مينفعش يكون بعد النهارده',
   RATE_LIMITED: 'محاولات كثيرة، جرب تاني بعد دقيقة',
   INTERNAL_ERROR: 'حصلت مشكلة في السيرفر، جرب تاني',
 };
@@ -107,6 +108,8 @@ export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';
  * the code's message under that field, so the form shows it where the user has to fix it.
  */
 export const CODE_FIELDS: Partial<Record<ErrorCode, string>> = {
+  AMOUNT_MISMATCH: 'amount',
+  PAID_ON_IN_FUTURE: 'paidOn',
   EMAIL_TAKEN: 'email',
   PHONE_TAKEN: 'phone',
   STUDENT_CODE_TAKEN: 'code',

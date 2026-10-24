@@ -44,6 +44,7 @@ model Academy {
   paymentCycles PaymentCycle[]
   attendance    Attendance[]
   cycleSessions CycleSession[]
+  payments      Payment[]
 
   @@map("academies")
 }
@@ -73,6 +74,7 @@ model User {
   sessions             Session[]      @relation("SessionInstructor")
   sessionStatusChanges Session[]      @relation("SessionStatusChange")
   recordedAttendance   Attendance[]   @relation("AttendanceRecorder")
+  recordedPayments     Payment[]      @relation("PaymentRecorder")
   instructorPlans      PaymentPlan[]
   instructorCycles     PaymentCycle[]
 
@@ -457,6 +459,7 @@ model PaymentCycle {
   group      Group?         @relation(fields: [groupId, groupAcademyId], references: [id, academyId], onDelete: Restrict)
   plan       PaymentPlan    @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
   sessions   CycleSession[]
+  payments   Payment[]
 
   @@unique([id, academyId])
   @@unique([studentId, cycleNumber])
@@ -517,4 +520,38 @@ model CycleSession {
   @@id([cycleId, sessionId])
   @@index([sessionId])
   @@map("cycle_sessions")
+}
+
+enum PaymentMethod {
+  cash
+  transfer
+  wallet
+
+  @@map("payment_method")
+}
+
+/// The payment that settles one Due cycle (US-23, BR-09): no partial payments, so one payment per
+/// cycle, and its amount equals the cycle's plan amount. UNIQUE (cycle_id) is the database's own
+/// refusal of a second payment; the service also locks the cycle row first and checks again, so
+/// two requests at once get a clean 409 rather than a unique violation. paid_on is an
+/// academy-local date, not in the future. A payment is not edited or undone here. The checks
+/// (amount above 0, a trimmed note that is never blank) are in the migration.
+model Payment {
+  id           String        @id @default(uuid()) @db.Uuid
+  academyId    String        @map("academy_id") @db.Uuid
+  cycleId      String        @unique @map("cycle_id") @db.Uuid
+  amount       Decimal       @db.Decimal(10, 2)
+  paidOn       DateTime      @map("paid_on") @db.Date
+  method       PaymentMethod
+  note         String?
+  recordedById String        @map("recorded_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy    Academy      @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  cycle      PaymentCycle @relation(fields: [cycleId, academyId], references: [id, academyId], onDelete: Restrict)
+  recordedBy User         @relation("PaymentRecorder", fields: [recordedById, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@index([paidOn])
+  @@map("payments")
 }

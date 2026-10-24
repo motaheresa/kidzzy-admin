@@ -78,6 +78,7 @@ export const ErrorCode = {
   StartingPointLocked: 'STARTING_POINT_LOCKED',
   StartingPointOutOfRange: 'STARTING_POINT_OUT_OF_RANGE',
   AmountMismatch: 'AMOUNT_MISMATCH',
+  PaidOnInFuture: 'PAID_ON_IN_FUTURE',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -327,6 +328,29 @@ export interface PaymentCycle {
   dueAt: string | null;
   /** ISO 8601, UTC */
   paidAt: string | null;
+}
+
+/** The payment that settled a cycle (openapi.yaml: Payment). amount: "1500.00". */
+export interface Payment {
+  id: string;
+  cycleId: string;
+  amount: string;
+  /** Academy-local date, YYYY-MM-DD. */
+  paidOn: string;
+  method: PaymentMethod;
+  note: string | null;
+  /** Who recorded it. */
+  recordedBy: GroupRef;
+  /** ISO 8601, UTC */
+  createdAt: string;
+}
+
+/** What recording a payment sends (openapi.yaml: PaymentCreate). */
+export interface PaymentCreate {
+  amount: string;
+  paidOn: string;
+  method: PaymentMethod;
+  note?: string;
 }
 
 /** A plan version of a student or instructor (openapi.yaml: PaymentPlan). amount: "1500.00". */
