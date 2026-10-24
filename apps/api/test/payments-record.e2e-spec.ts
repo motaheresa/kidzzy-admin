@@ -180,7 +180,8 @@ describe('Recording a payment (e2e)', () => {
         method: 'cash',
         note: 'Cash in hand',
         recordedBy: { id: adminId, name: 'admin' },
-        createdAt: NOW.toISOString(),
+        // The row's own timestamp comes from the database, not from the fixed Clock.
+        createdAt: expect.any(String) as string,
       });
       const rows = await payments(cycleId);
       expect(rows).toHaveLength(1);
