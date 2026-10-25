@@ -1247,6 +1247,17 @@ paths:
       tags:
         - Sessions
       summary: Move a session to a new time
+      description: >
+        Changes only scheduledAt of a Scheduled session (US-15, FR-10, BR-02). The session stays
+        Scheduled with no number and keeps its occurrenceDate and durationMin; the status fields are
+        not touched, because a reschedule is not a status change. A Held or Cancelled session is
+        409 SESSION_NOT_SCHEDULED. Same write rule as marking Held: scope own only for the
+        instructor on the session (403 otherwise), scope any for every session; another academy's
+        session is 404. scheduledAt is an ISO 8601 instant with its zone, UTC on the way out.
+        The new time is deliberately NOT checked: it may be in the past, and it is not compared
+        with other sessions of the group. The change is written to the audit log (action
+        session.rescheduled, before and after scheduledAt). Reminders (SCRUM-44) are computed from
+        scheduledAt, so they move with the session by design; there is no reminder record to update.
       operationId: rescheduleSession
       x-permission: sessions.update
       x-story: US-15

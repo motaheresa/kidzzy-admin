@@ -68,8 +68,36 @@ function nextCalendarDay(day: string): string {
  * wall clock that zone gives it, then shifted; a second pass settles a DST boundary.
  */
 function zonedMidnightUtc(day: string, timeZone: string): Date {
+  return zonedInstantUtc(day, '00:00', timeZone);
+}
+
+/**
+ * The academy-local date (YYYY-MM-DD) and time (HH:mm) of an instant, the values a date input and
+ * a time input take.
+ */
+export function zonedDateAndTime(
+  value: Date | string,
+  timeZone = 'Africa/Cairo',
+): { date: string; time: string } {
+  const parts = wallClock(new Date(value), timeZone);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${parts.year}-${two(parts.month)}-${two(parts.day)}`,
+    time: `${two(parts.hour)}:${two(parts.minute)}`,
+  };
+}
+
+/**
+ * The UTC instant of an academy-local wall-clock date (YYYY-MM-DD) and time (HH:mm), never the
+ * browser's zone and never a fixed offset: Egypt's offset changes with daylight saving time.
+ * Done the same way for midnights: a UTC guess is compared with the wall clock the zone gives
+ * it, then shifted; a second pass settles a DST boundary. A time the zone skips or repeats
+ * lands on one of its two neighbours.
+ */
+export function zonedInstantUtc(day: string, time: string, timeZone: string): Date {
   const [year, month, date] = day.split('-').map(Number);
-  const midnight = Date.UTC(year!, month! - 1, date!, 0, 0, 0);
+  const [hours, minutes] = time.split(':').map(Number);
+  const midnight = Date.UTC(year!, month! - 1, date!, hours!, minutes!, 0);
   let utc = midnight;
   for (let pass = 0; pass < 2; pass += 1) {
     const parts = wallClock(new Date(utc), timeZone);
