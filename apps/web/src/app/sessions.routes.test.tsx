@@ -1022,3 +1022,205 @@ describe('changing the time of a session (US-15)', () => {
     );
   });
 });
+
+describe('adding a make-up or extra session (US-16)', () => {
+  const groupPath = `/groups/${session.group.id}`;
+  const button = /ضيف حصة جروب A/;
+  const cancelled1: Session = {
+    ...session,
+    id: 'c1c1c1c1-0000-4000-8000-000000000001',
+    scheduledAt: '2026-10-08T14:00:00.000Z',
+    status: 'cancelled',
+    cancelReason: 'x',
+  };
+  const cancelled2: Session = {
+    ...cancelled1,
+    id: 'c2c2c2c2-0000-4000-8000-000000000002',
+    scheduledAt: '2026-10-15T14:00:00.000Z',
+  };
+  const makeupOf1: Session = {
+    ...session,
+    id: 'a1a1a1a1-0000-4000-8000-000000000003',
+    isMakeup: true,
+    compensatesSessionId: cancelled1.id,
+  };
+  const created: Session = {
+    ...session,
+    id: 'd1d1d1d1-0000-4000-8000-000000000004',
+    isMakeup: true,
+  };
+  const posts = () => calls.filter((c) => c.method === 'POST');
+  const fill = (date: string, time: string) => {
+    fireEvent.change(screen.getByLabelText('التاريخ'), { target: { value: date } });
+    fireEvent.change(screen.getByLabelText('الساعة'), { target: { value: time } });
+  };
+
+  function group(over: object = {}, me: Me = admin, extra: Record<string, Handler> = {}) {
+    api(me, {
+      'GET /sessions': (url) => {
+        if (url.searchParams.get('status') === 'cancelled') {
+          return json(200, page([cancelled1, cancelled2]));
+        }
+        if (url.searchParams.get('isMakeup') === 'true') return json(200, page([makeupOf1]));
+        return json(200, page([session]));
+      },
+      [`GET ${groupPath}`]: () =>
+        json(200, {
+          ...groupData(),
+          schedule: [{ weekday: 4, startTime: '17:00', durationMin: 90 }],
+          ...over,
+        }),
+      [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
+      ...extra,
+    });
+  }
+
+  it('is offered to whoever may update sessions, on an active group', async () => {
+    group();
+    renderAt(groupPath);
+    expect(await screen.findByRole('button', { name: button })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['an inactive group', admin, { isActive: false }],
+    ['someone without sessions.update', readOnlyAdmin, {}],
+    [
+      'scope own on another instructor’s group',
+      instructorUser,
+      { instructor: { id: 'someone-else', name: 'X' } },
+    ],
+  ])('is not offered on %s', async (_name, me, over) => {
+    group(over, me);
+    renderAt(groupPath);
+    await screen.findByRole('link', { name: /22 أكتوبر 2026/ });
+    expect(screen.queryByRole('button', { name: button })).not.toBeInTheDocument();
+  });
+
+  it('is offered to scope own on the group they teach now', async () => {
+    group({}, instructorUser);
+    renderAt(groupPath);
+    expect(await screen.findByRole('button', { name: button })).toBeInTheDocument();
+  });
+
+  it('starts from the group’s usual duration and offers only Cancelled sessions without a make-up', async () => {
+    group();
+    renderAt(groupPath);
+    await userEvent.setup().click(await screen.findByRole('button', { name: button }));
+
+    const dialog = within(await screen.findByRole('alertdialog'));
+    expect(dialog.getByLabelText(/المدة/)).toHaveValue(90);
+    const select = dialog.getByLabelText('بتعوّض عن');
+    // The extra option, and the 15th only: the 8th already has a make-up.
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(2));
+    expect(within(select).getByRole('option', { name: /15 أكتوبر 2026/ })).toBeInTheDocument();
+    expect(within(select).queryByRole('option', { name: /8 أكتوبر 2026/ })).not.toBeInTheDocument();
+  });
+
+  it('adds an extra session: the Cairo time goes as UTC, with no link', async () => {
+    group({}, admin, { [`POST ${groupPath}/sessions`]: () => json(201, created) });
+    renderAt(groupPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    await screen.findByRole('alertdialog');
+    // After Egypt leaves DST (UTC+2): 17:00 on 2026-10-30 is 15:00 UTC.
+    fill('2026-10-30', '17:00');
+    await user.click(screen.getByRole('button', { name: 'ضيف الحصة' }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toEqual({ scheduledAt: '2026-10-30T15:00:00.000Z', durationMin: 90 });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+
+  it('adds a make-up with the chosen Cancelled session and a changed duration', async () => {
+    group({}, admin, { [`POST ${groupPath}/sessions`]: () => json(201, created) });
+    renderAt(groupPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    const dialog = within(await screen.findByRole('alertdialog'));
+    fill('2026-10-29', '17:00');
+    fireEvent.change(dialog.getByLabelText(/المدة/), { target: { value: '45' } });
+    await waitFor(() =>
+      expect(within(dialog.getByLabelText('بتعوّض عن')).getAllByRole('option')).toHaveLength(2),
+    );
+    await user.selectOptions(dialog.getByLabelText('بتعوّض عن'), cancelled2.id);
+    await user.click(dialog.getByRole('button', { name: 'ضيف الحصة' }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toEqual({
+      scheduledAt: '2026-10-29T14:00:00.000Z',
+      durationMin: 45,
+      compensatesSessionId: cancelled2.id,
+    });
+  });
+
+  it('sends nothing while the time is empty or the duration is out of range', async () => {
+    group();
+    renderAt(groupPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    const dialog = within(await screen.findByRole('alertdialog'));
+    await user.click(dialog.getByRole('button', { name: 'ضيف الحصة' }));
+    fill('2026-10-30', '17:00');
+    fireEvent.change(dialog.getByLabelText(/المدة/), { target: { value: '10' } });
+    await user.click(dialog.getByRole('button', { name: 'ضيف الحصة' }));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('reads the session lists again after adding', async () => {
+    group({}, admin, { [`POST ${groupPath}/sessions`]: () => json(201, created) });
+    renderAt(groupPath);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: button }));
+    await screen.findByRole('alertdialog');
+    const before = sessionCalls().length;
+    fill('2026-10-30', '17:00');
+    await user.click(screen.getByRole('button', { name: 'ضيف الحصة' }));
+
+    await waitFor(() => expect(sessionCalls().length).toBeGreaterThan(before));
+  });
+
+  it.each([
+    ['SESSION_NOT_CANCELLED', 409, 'الحصة دي مش ملغية، التعويض بيبقى عن حصة ملغية بس'],
+    ['SESSION_ALREADY_COMPENSATED', 409, 'الحصة الملغية دي ليها حصة تعويضية بالفعل'],
+    ['COMPENSATES_SESSION_INVALID', 422, 'اختار حصة ملغية من نفس الجروب'],
+    ['GROUP_INACTIVE', 409, 'الجروب ده متوقف، اختار جروب شغال'],
+  ])('shows %s in the dialog and keeps it open', async (code, status, message) => {
+    group({}, admin, { [`POST ${groupPath}/sessions`]: () => problem(status, code) });
+    renderAt(groupPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    await screen.findByRole('alertdialog');
+    fill('2026-10-30', '17:00');
+    await user.click(screen.getByRole('button', { name: 'ضيف الحصة' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('labels a make-up “تعويضية” and an extra session “اضافية”', async () => {
+    api(admin, {
+      'GET /sessions': () =>
+        json(
+          200,
+          page([
+            makeupOf1,
+            {
+              ...created,
+              id: 'e1e1e1e1-0000-4000-8000-000000000005',
+              scheduledAt: '2026-10-31T14:00:00.000Z',
+            },
+          ]),
+        ),
+      [`GET ${groupPath}`]: () => json(200, groupData()),
+      [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
+    });
+    renderAt(groupPath);
+
+    expect(await screen.findByText('تعويضية')).toBeInTheDocument();
+    expect(screen.getByText('اضافية')).toBeInTheDocument();
+  });
+});

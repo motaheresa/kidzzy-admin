@@ -21,6 +21,7 @@ export function listSessions(
   if (params.to) query.set('to', params.to);
   if (params.groupId) query.set('groupId', params.groupId);
   if (params.status) query.set('status', params.status);
+  if (params.isMakeup !== undefined) query.set('isMakeup', String(params.isMakeup));
   return http.get<Page<Session>>(`/sessions?${query.toString()}`, { signal });
 }
 
@@ -47,4 +48,16 @@ export function undoSessionHeld(id: string): Promise<Session> {
 /** POST /sessions/{id}/reschedule: a Scheduled session moves to another instant (UTC ISO 8601). */
 export function rescheduleSession(id: string, scheduledAt: string): Promise<Session> {
   return http.post<Session>(path(id) + '/reschedule', { scheduledAt });
+}
+
+/** What POST /groups/{id}/sessions takes (openapi.yaml: SessionCreate). */
+export interface SessionCreateInput {
+  scheduledAt: string;
+  durationMin: number;
+  compensatesSessionId?: string;
+}
+
+/** POST /groups/{id}/sessions: a make-up (with a link) or an extra session (without). */
+export function createSession(groupId: string, input: SessionCreateInput): Promise<Session> {
+  return http.post<Session>('/groups/' + encodeURIComponent(groupId) + '/sessions', input);
 }

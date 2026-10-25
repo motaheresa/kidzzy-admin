@@ -11,4 +11,6 @@ export interface SessionListParams {
   to?: string;
   groupId?: string;
   status?: SessionStatus;
+  /** true: only the make-up and extra sessions added by hand. */
+  isMakeup?: boolean;
 }

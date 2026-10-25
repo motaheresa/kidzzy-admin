@@ -10,19 +10,24 @@ const STATUS_LABEL: Record<
   [SessionStatus.Cancelled]: { label: 'اتلغت', variant: 'danger' },
 };
 
-/** The session's status, and a second badge when it is a make-up. */
+/**
+ * The session's status, and a second badge for a session added by hand (US-16): "تعويضية" when it
+ * makes up for a cancelled session (`compensates`), "اضافية" when it is an extra one.
+ */
 export function SessionStatusBadge({
   status,
   isMakeup,
+  compensates = false,
 }: {
   status: SessionStatusValue;
   isMakeup?: boolean;
+  compensates?: boolean;
 }) {
   const item = STATUS_LABEL[status];
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       <Badge variant={item.variant}>{item.label}</Badge>
-      {isMakeup && <Badge variant="accent">تعويضية</Badge>}
+      {isMakeup && <Badge variant="accent">{compensates ? 'تعويضية' : 'اضافية'}</Badge>}
     </span>
   );
 }

@@ -4,5 +4,5 @@ export { CreateGroupForm } from './components/CreateGroupForm';
 export { EditGroupForm } from './components/EditGroupForm';
 export { GroupDetails } from './components/GroupDetails';
 export { GroupsList } from './components/GroupsList';
-export { useGroupOptions, useInstructorGroups } from './hooks/useGroups';
+export { useGroup, useGroupOptions, useInstructorGroups } from './hooks/useGroups';
 export type { Group } from './types';

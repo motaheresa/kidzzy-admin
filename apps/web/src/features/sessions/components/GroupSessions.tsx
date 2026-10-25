@@ -25,6 +25,7 @@ import { SESSIONS_PAGE_SIZE } from '../api/sessions.api';
 import { useSessionListParams } from '../hooks/useSessionListParams';
 import { useSessions } from '../hooks/useSessions';
 import { CancelSessionButton } from './CancelSessionButton';
+import { AddSessionButton } from './AddSessionButton';
 import { RescheduleSessionButton } from './RescheduleSessionButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
@@ -53,6 +54,7 @@ export function GroupSessions({ groupId }: { groupId: string }) {
     <Card>
       <CardHeader className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>الحصص</CardTitle>
+        <AddSessionButton groupId={groupId} />
         <ToggleGroup
           type="single"
           value={filter}
@@ -108,7 +110,11 @@ export function GroupSessions({ groupId }: { groupId: string }) {
                   </TableCell>
                   <TableCell>
                     <span className="flex flex-wrap items-center gap-2">
-                      <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
+                      <SessionStatusBadge
+                        status={session.status}
+                        isMakeup={session.isMakeup}
+                        compensates={session.compensatesSessionId !== null}
+                      />
                       <MarkHeldButton session={session} />
                       <RescheduleSessionButton session={session} />
                       <CancelSessionButton session={session} />
