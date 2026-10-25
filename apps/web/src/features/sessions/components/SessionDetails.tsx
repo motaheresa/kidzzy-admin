@@ -58,7 +58,11 @@ export function SessionDetails({ id }: { id: string }) {
         description={
           <span className="flex flex-wrap items-center gap-2">
             <span>{formatDateTime(data.scheduledAt, timeZone)}</span>
-            <SessionStatusBadge status={data.status} isMakeup={data.isMakeup} />
+            <SessionStatusBadge
+              status={data.status}
+              isMakeup={data.isMakeup}
+              compensates={data.compensatesSessionId !== null}
+            />
           </span>
         }
         actions={

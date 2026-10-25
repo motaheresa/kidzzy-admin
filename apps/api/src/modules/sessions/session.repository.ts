@@ -18,6 +18,7 @@ export interface SessionListFilter {
   groupId?: string;
   visibleToInstructorId?: string;
   status?: SessionStatus;
+  isMakeup?: boolean;
 }
 
 const SESSION_SELECT = {
@@ -160,12 +161,60 @@ export class SessionRepository {
     return count;
   }
 
-  /** The group's current instructor, or null when this academy has no such group. */
-  async findGroup(groupId: string): Promise<{ instructorId: string } | null> {
+  /** The group's current instructor and whether it is active, or null when this academy has no such group. */
+  async findGroup(groupId: string): Promise<{ instructorId: string; isActive: boolean } | null> {
     return this.txHost.tx.group.findUnique({
       where: { id: groupId },
-      select: { instructorId: true },
+      select: { instructorId: true, isActive: true },
     });
+  }
+
+  /** Whether a make-up already points at this session (BR-04: one make-up per cancelled session). */
+  async hasMakeup(sessionId: string): Promise<boolean> {
+    const found = await this.txHost.tx.session.findFirst({
+      where: { compensatesSessionId: sessionId },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
+  /**
+   * Adds a session by hand (US-16): no slot, no occurrence date, Scheduled, no number. It is
+   * stored with is_makeup = true, which the schema ties to "no slot"; compensates_session_id
+   * tells a make-up (set) from an extra session (null). Returns null when the partial unique
+   * index sessions_one_makeup_key refused it (a make-up for that session already exists).
+   * Call it with the group locked.
+   */
+  async createManual(input: {
+    groupId: string;
+    instructorId: string;
+    scheduledAt: Date;
+    durationMin: number;
+    compensatesSessionId: string | null;
+  }): Promise<string | null> {
+    const academyId = this.tenant.requireAcademyId();
+    try {
+      const created = await this.txHost.tx.session.create({
+        data: {
+          academyId,
+          groupId: input.groupId,
+          instructorId: input.instructorId,
+          scheduledAt: input.scheduledAt,
+          durationMin: input.durationMin,
+          isMakeup: true,
+          ...(input.compensatesSessionId
+            ? { compensatesSessionId: input.compensatesSessionId, compensatesAcademyId: academyId }
+            : {}),
+        },
+        select: { id: true },
+      });
+      return created.id;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /** True when this instructor is on at least one session of the group (they taught or will teach it). */
@@ -370,6 +419,7 @@ export class SessionRepository {
         : {}),
       ...(filter.groupId ? { groupId: filter.groupId } : {}),
       ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.isMakeup !== undefined ? { isMakeup: filter.isMakeup } : {}),
       ...(filter.visibleToInstructorId
         ? {
             OR: [

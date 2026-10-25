@@ -6,6 +6,7 @@ import { pageWindow, toPage } from '../../common/pagination/page';
 import { AccessContext } from '../auth/access-context';
 import { AuditService } from '../audit/audit.service';
 import { Clock } from './clock';
+import type { CreateSessionDto } from './dto/create-session.dto';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
 import type { RescheduleSessionDto } from './dto/reschedule-session.dto';
 import { toSession } from './session.mapper';
@@ -66,6 +67,7 @@ export class SessionsService {
         groupId: query.groupId,
         visibleToInstructorId: scope === 'own' ? this.access.userId : query.instructorId,
         status: query.status,
+        isMakeup: query.isMakeup,
       },
       pageWindow(query),
     );
@@ -221,6 +223,98 @@ export class SessionsService {
   }
 
   /**
+   * Adds a make-up or an extra session to a group (US-16, FR-11, BR-04).
+   *
+   * Scope `any` may add to any group of the academy; scope `own` only to a group they teach now
+   * (`groups.instructor_id`), otherwise 403. The group is 404 when unknown (or another academy's)
+   * and 409 GROUP_INACTIVE when inactive. The session's instructor is the group's current one.
+   * It starts Scheduled with no number, no slot and no occurrence date, so the daily generation
+   * and a schedule edit never touch it. It is stored with is_makeup = true; the link
+   * `compensatesSessionId` makes it a make-up, and without it it is an extra session.
+   *
+   * With a link, the target must be a session of THIS group (otherwise 422
+   * COMPENSATES_SESSION_INVALID, also for an unknown id or another academy's, because it is a
+   * reference in the body and not the URL's resource), Cancelled (409 SESSION_NOT_CANCELLED) and
+   * not yet compensated (409 SESSION_ALREADY_COMPENSATED). The checks run under the group lock;
+   * the partial unique index sessions_one_makeup_key is the last safety net.
+   *
+   * The time is not checked (the past is allowed, and there is no overlap check), like a
+   * reschedule. Marked Held, it is numbered and counted in the payment cycles like any Held session.
+   */
+  @Transactional()
+  async createForGroup(groupId: string, dto: CreateSessionDto): Promise<Session> {
+    const first = await this.sessions.findGroup(groupId);
+    if (!first) throw groupNotFound();
+    // Before the lock, so a caller who is not allowed does not wait on it.
+    this.ensureMayAddTo(first.instructorId);
+
+    await this.sessions.lockGroup(groupId);
+    const group = await this.sessions.findGroup(groupId);
+    if (!group) throw groupNotFound();
+    this.ensureMayAddTo(group.instructorId);
+    if (!group.isActive) {
+      throw new AppException(ErrorCode.GroupInactive, HttpStatus.CONFLICT, 'The group is inactive');
+    }
+
+    if (dto.compensatesSessionId) await this.ensureCanCompensate(groupId, dto.compensatesSessionId);
+
+    const id = await this.sessions.createManual({
+      groupId,
+      instructorId: group.instructorId,
+      scheduledAt: new Date(dto.scheduledAt),
+      durationMin: dto.durationMin,
+      compensatesSessionId: dto.compensatesSessionId ?? null,
+    });
+    if (!id) throw alreadyCompensated();
+    await this.audit.record({
+      action: 'session.created',
+      entityType: 'sessions',
+      entityId: id,
+      after: {
+        scheduledAt: new Date(dto.scheduledAt).toISOString(),
+        durationMin: dto.durationMin,
+        compensatesSessionId: dto.compensatesSessionId ?? null,
+      },
+    });
+
+    const created = await this.sessions.findById(id);
+    if (!created) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    return toSession(created);
+  }
+
+  /** Scope `own` adds only to a group they teach now; scope `any` to any group. */
+  private ensureMayAddTo(currentInstructorId: string): void {
+    if (
+      this.access.scopeFor('sessions.update') === 'own' &&
+      currentInstructorId !== this.access.userId
+    ) {
+      throw new AppException(ErrorCode.Forbidden, HttpStatus.FORBIDDEN, 'Not allowed');
+    }
+  }
+
+  private async ensureCanCompensate(groupId: string, targetId: string): Promise<void> {
+    const target = await this.sessions.findById(targetId);
+    if (!target || target.group.id !== groupId) {
+      throw new AppException(
+        ErrorCode.CompensatesSessionInvalid,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'The session to make up for must be a session of this group',
+        [{ field: 'compensatesSessionId', message: 'Not a session of this group' }],
+      );
+    }
+    if (target.status !== 'cancelled') {
+      throw new AppException(
+        ErrorCode.SessionNotCancelled,
+        HttpStatus.CONFLICT,
+        'Only a cancelled session can be made up for',
+      );
+    }
+    if (await this.sessions.hasMakeup(targetId)) throw alreadyCompensated();
+  }
+
+  /**
    * Moves a Scheduled session to another time (US-15, FR-10). Only scheduled_at changes: the
    * session stays Scheduled with no number, and keeps its occurrence_date (the slot occurrence it
    * stands for) and its duration. status_changed_* is left alone, because it records who last
@@ -327,3 +421,12 @@ export class SessionsService {
     }
   }
 }
+
+const groupNotFound = () =>
+  new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such group');
+const alreadyCompensated = () =>
+  new AppException(
+    ErrorCode.SessionAlreadyCompensated,
+    HttpStatus.CONFLICT,
+    'This cancelled session already has a make-up',
+  );

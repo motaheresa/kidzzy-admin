@@ -1046,6 +1046,14 @@ paths:
           schema:
             type: string
             default: scheduledAt
+        - name: isMakeup
+          in: query
+          required: false
+          schema:
+            type: boolean
+            description: >
+              true returns only the make-up and extra sessions added by hand (US-16); false only the generated ones.
+              Left out returns both.
       responses:
         '200':
           description: OK
@@ -1105,6 +1113,33 @@ paths:
       tags:
         - Sessions
       summary: Add a make-up or extra session
+      description: >
+        Adds a session by hand to a group (US-16, FR-11, BR-04). Scope any (the admin) may add to any group of the
+        academy; scope own (an instructor) only to a group they teach now (groups.instructor_id), otherwise 403. An
+        unknown group, or another academy's, is 404; an inactive group is 409 GROUP_INACTIVE. The new session's
+        instructor is the group's current instructor. Everything runs in one transaction that starts with the group
+        row lock, the same lock as the other session writes.
+
+
+        The session is Scheduled with no number, no slot and no occurrence date, so the daily generation and a
+        schedule edit never touch it, and the given durationMin (15 to 240). It is stored with isMakeup true (the
+        schema ties isMakeup to "no slot"); compensatesSessionId tells the two apart: with it the session is a
+        make-up, without it an extra session. Both are numbered and counted in the payment cycles when marked Held,
+        like any Held session.
+
+
+        With compensatesSessionId the target must be a session of the same group, otherwise 422
+        COMPENSATES_SESSION_INVALID on compensatesSessionId (also for an unknown id or another academy's, because it
+        is a reference in the body and not the URL's resource); it must be Cancelled, otherwise 409
+        SESSION_NOT_CANCELLED; and it must not already have a make-up (BR-04), otherwise 409
+        SESSION_ALREADY_COMPENSATED. The partial unique index sessions_one_makeup_key is the last safety net for the
+        last rule.
+
+
+        scheduledAt is an ISO 8601 instant with its zone (a time without Z or an offset is 400). Like a reschedule,
+        the time is deliberately not checked: it may be in the past, and it is not compared with other sessions.
+        The creation is written to the audit log (action session.created, after: scheduledAt, durationMin,
+        compensatesSessionId).
       operationId: createSession
       x-permission: sessions.update
       x-story: US-16
@@ -1133,6 +1168,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /sessions/{id}/held:
     post:
       tags:

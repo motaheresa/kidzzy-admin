@@ -74,7 +74,11 @@ function TodaySessionsList({ timeZone }: { timeZone: string }) {
                   <span className="numeric text-sm text-muted-foreground">
                     {formatTime(session.scheduledAt, timeZone)}
                   </span>
-                  <SessionStatusBadge status={session.status} isMakeup={session.isMakeup} />
+                  <SessionStatusBadge
+                    status={session.status}
+                    isMakeup={session.isMakeup}
+                    compensates={session.compensatesSessionId !== null}
+                  />
                 </Link>
                 <span className="flex flex-wrap items-center gap-2">
                   <MarkHeldButton session={session} />

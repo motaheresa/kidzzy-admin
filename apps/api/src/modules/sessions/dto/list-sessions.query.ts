@@ -1,6 +1,7 @@
-import { IsIn, IsISO8601, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsIn, IsISO8601, IsOptional, IsUUID } from 'class-validator';
 import { SessionStatus } from '@kidzzy/shared';
 import { PageQueryDto } from '../../../common/pagination/page-query.dto';
+import { ToBoolean } from '../../../common/validation/transforms';
 
 const STATUSES = [SessionStatus.Scheduled, SessionStatus.Held, SessionStatus.Cancelled] as const;
 
@@ -31,6 +32,12 @@ export class ListSessionsQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(STATUSES)
   status?: SessionStatus;
+
+  /** true: only the make-up and extra sessions added by hand; false: only the generated ones. */
+  @IsOptional()
+  @ToBoolean()
+  @IsBoolean()
+  isMakeup?: boolean;
 
   /** The only sort the API offers. Omitted means the same order. */
   @IsOptional()
