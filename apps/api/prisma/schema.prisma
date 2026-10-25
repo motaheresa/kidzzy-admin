@@ -558,8 +558,8 @@ model Payment {
   @@map("payments")
 }
 
-/// Who changed what and when, for the changes that move money or numbers (NFR-06, US-35). Today
-/// only the undo of a Held session writes here (US-17); the others come with US-35. Rows are
+/// Who changed what and when, for the changes that move money or numbers (NFR-06, US-35): see the
+/// list of actions in openapi.yaml (GET /audit-logs). Rows are
 /// written in the same transaction as the change they describe, so a change that rolls back
 /// leaves no entry and an entry never exists without its change. Nothing edits or deletes a row.
 /// before and after hold the fields that changed, as JSON. The checks are in the migration.

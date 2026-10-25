@@ -145,7 +145,31 @@ export class SessionsService {
     // Counts the session into the payment cycles (US-22), in this same transaction.
     const cyclesUpdated = await this.heldHooks.run(held, now);
 
-    // TODO(US-35): write the audit log for this status change.
+    // Each counted cycle took exactly this one session, so its counter was one lower before, and
+    // only a cycle in progress is counted: the "before" is exact.
+    await this.audit.record({
+      action: 'session.held',
+      entityType: 'sessions',
+      entityId: id,
+      before: {
+        status: 'scheduled',
+        sessionNumber: null,
+        cycles: cyclesUpdated.map((cycle) => ({
+          cycleId: cycle.cycleId,
+          sessionsCounted: cycle.sessionsCounted - 1,
+          status: 'in_progress',
+        })),
+      },
+      after: {
+        status: 'held',
+        sessionNumber,
+        cycles: cyclesUpdated.map((cycle) => ({
+          cycleId: cycle.cycleId,
+          sessionsCounted: cycle.sessionsCounted,
+          status: cycle.status,
+        })),
+      },
+    });
     return { ...toSession(held), cyclesUpdated };
   }
 
@@ -218,7 +242,13 @@ export class SessionsService {
     if (!cancelled) {
       throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
     }
-    // TODO(US-35): write the audit log for this status change.
+    await this.audit.record({
+      action: 'session.cancelled',
+      entityType: 'sessions',
+      entityId: id,
+      before: { status: 'scheduled' },
+      after: { status: 'cancelled', cancelReason: reason },
+    });
     return toSession(cancelled);
   }
 

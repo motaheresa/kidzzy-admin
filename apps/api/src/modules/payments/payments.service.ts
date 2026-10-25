@@ -6,7 +6,8 @@ import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
 import { AcademyRepository } from '../academies/academy.repository';
 import { AccessContext } from '../auth/access-context';
-import { toDecimal } from '../prisma/money';
+import { AuditService } from '../audit/audit.service';
+import { toDecimal, toMoney } from '../prisma/money';
 import { Clock } from '../sessions/clock';
 import type { ListPaymentsQueryDto } from './dto/list-payments.query';
 import type { PaymentCreateDto } from './dto/payment-create.dto';
@@ -30,6 +31,7 @@ export class PaymentsService {
     private readonly academies: AcademyRepository,
     private readonly clock: Clock,
     private readonly access: AccessContext,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -137,7 +139,20 @@ export class PaymentsService {
     await this.cycles.markPaid(cycleId, now);
 
     // TODO(US-28): tell the instructor their payment was recorded (an instructor's cycle).
-    // TODO(US-35): write the audit log for this payment.
+    // The note is free text and stays out of the log; the money and the cycle's status are in.
+    await this.audit.record({
+      action: 'payment.recorded',
+      entityType: 'payment_cycles',
+      entityId: cycleId,
+      before: { cycleStatus: cycle.status },
+      after: {
+        cycleStatus: 'paid',
+        paymentId: created.id,
+        amount: toMoney(amount),
+        paidOn: dto.paidOn,
+        method: dto.method,
+      },
+    });
     return toPayment(created);
   }
 }

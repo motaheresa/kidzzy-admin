@@ -1,3 +1,4 @@
+import { AuditModule } from '../audit/audit.module';
 import { Module } from '@nestjs/common';
 import { AcademiesModule } from '../academies/academies.module';
 import { SessionsModule } from '../sessions/sessions.module';
@@ -10,7 +11,7 @@ import { StudentsService } from './students.service';
  * exported for enrollments (US-08), which lock and read the student.
  */
 @Module({
-  imports: [AcademiesModule, SessionsModule],
+  imports: [AcademiesModule, AuditModule, SessionsModule],
   controllers: [StudentsController],
   providers: [StudentsService, StudentRepository],
   exports: [StudentRepository],

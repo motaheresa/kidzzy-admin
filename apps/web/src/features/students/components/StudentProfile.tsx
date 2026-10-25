@@ -1,3 +1,4 @@
+import { AuditHistoryLink } from '@/features/audit';
 import { PencilIcon, UserXIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import {
@@ -87,17 +88,20 @@ export function StudentProfile({ id }: { id: string }) {
           </span>
         }
         actions={
-          can('students.manage') && (
-            <>
-              <Button asChild variant="outline">
-                <Link to={`/students/${data.id}/edit`}>
-                  <PencilIcon aria-hidden="true" />
-                  تعديل البيانات
-                </Link>
-              </Button>
-              {data.isActive && <DeactivateStudentButton student={data} />}
-            </>
-          )
+          <>
+            {can('students.manage') && (
+              <>
+                <Button asChild variant="outline">
+                  <Link to={`/students/${data.id}/edit`}>
+                    <PencilIcon aria-hidden="true" />
+                    تعديل البيانات
+                  </Link>
+                </Button>
+                {data.isActive && <DeactivateStudentButton student={data} />}
+              </>
+            )}
+            <AuditHistoryLink entityType="students" entityId={data.id} />
+          </>
         }
       />
 

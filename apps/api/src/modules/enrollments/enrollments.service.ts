@@ -2,6 +2,8 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
 import { ErrorCode, type Enrollment } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
+import { AuditService } from '../audit/audit.service';
+import { planAudit } from '../payments/plan-audit';
 import { AccessContext } from '../auth/access-context';
 import { GroupRepository, type GroupRow } from '../groups/group.repository';
 import { PaymentCycleRepository } from '../payments/payment-cycle.repository';
@@ -35,6 +37,7 @@ export class EnrollmentsService {
     private readonly plans: PaymentPlanRepository,
     private readonly cycles: PaymentCycleRepository,
     private readonly access: AccessContext,
+    private readonly audit: AuditService,
   ) {}
 
   /** GET /groups/{id}/enrollments: the group's students now. Scope `own`: their groups only. */
@@ -141,7 +144,17 @@ export class EnrollmentsService {
       groupId: target.id,
       startDate: dto.effectiveDate,
     });
-    // TODO(US-35): audit log, the student moved between groups.
+    await this.audit.record({
+      action: 'enrollment.transferred',
+      entityType: 'students',
+      entityId: studentId,
+      before: { groupId: open.group.id, startDate: dateToString(open.startDate), endDate: null },
+      after: {
+        groupId: target.id,
+        startDate: dto.effectiveDate,
+        previousGroupEndDate: addDays(dto.effectiveDate, -1),
+      },
+    });
     return toEnrollment(enrollment);
   }
 
@@ -179,7 +192,12 @@ export class EnrollmentsService {
       effectiveFromCycle: 1,
     });
     await this.cycles.createFirstForStudent(studentId, plan, openingCount);
-    // TODO(US-35): audit log, the student's plan was set (NFR-06).
+    await this.audit.record({
+      action: 'payment_plan.set',
+      entityType: 'payment_plans',
+      entityId: plan.id,
+      after: planAudit(plan, openingCount),
+    });
   }
 
   /**
@@ -204,14 +222,20 @@ export class EnrollmentsService {
     if (latest.sessionsPerCycle === dto.plan.sessionsPerCycle && latest.amount.equals(amount)) {
       return;
     }
-    await this.plans.createForStudent({
+    const created = await this.plans.createForStudent({
       studentId,
       version: latest.version + 1,
       sessionsPerCycle: dto.plan.sessionsPerCycle,
       amount,
       effectiveFromCycle: open.cycleNumber + 1,
     });
-    // TODO(US-35): audit log, the student's plan changed (NFR-06).
+    await this.audit.record({
+      action: 'payment_plan.changed',
+      entityType: 'payment_plans',
+      entityId: created.id,
+      before: planAudit(latest),
+      after: planAudit(created),
+    });
   }
 
   private async findGroupOrThrow(id: string): Promise<GroupRow> {

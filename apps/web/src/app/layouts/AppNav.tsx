@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/students', label: 'الطلاب', permission: 'students.read' },
   { to: '/instructors', label: 'المدرسين', permission: 'instructors.read' },
   { to: '/payments', label: 'المدفوعات', permission: 'payments.read', scope: 'any' },
+  { to: '/audit-log', label: 'سجل التغييرات', permission: 'audit.read', scope: 'any' },
 ];
 
 /**
