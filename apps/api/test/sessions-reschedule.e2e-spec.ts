@@ -140,7 +140,6 @@ describe('Rescheduling sessions (e2e)', () => {
       status: 'scheduled',
       sessionNumber: null,
       scheduledAt: '2026-11-05T09:30:00.000Z',
-      occurrenceDate: session.occurrenceDate?.toISOString().slice(0, 10),
       durationMin: session.durationMin,
     });
     const row = await prisma.unscoped.session.findUniqueOrThrow({ where: { id: session.id } });
@@ -149,6 +148,8 @@ describe('Rescheduling sessions (e2e)', () => {
       sessionNumber: null,
       statusChangedById: null,
       statusChangedAt: null,
+      occurrenceDate: session.occurrenceDate,
+      durationMin: session.durationMin,
     });
   });
 
