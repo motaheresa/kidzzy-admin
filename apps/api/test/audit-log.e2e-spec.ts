@@ -132,6 +132,15 @@ describe('The audit log (e2e)', () => {
     return session;
   }
 
+  /** The group's first session, moved to a past day so it can be marked Held. */
+  async function pastSession(groupId: string) {
+    const session = await firstSession(groupId);
+    return prisma.unscoped.session.update({
+      where: { id: session.id },
+      data: { scheduledAt: new Date('2026-10-10T08:00:00.000Z') },
+    });
+  }
+
   const hold = (id: string, token = adminToken) =>
     request(server())
       .post(api(`/sessions/${id}/held`))
@@ -154,7 +163,7 @@ describe('The audit log (e2e)', () => {
         .set(as(adminToken))
         .send({ groupId: group.id, sessionsPerCycle: 4, amount: '2000.00', openingCount: 1 })
         .expect(201);
-      const session = await firstSession(group.id);
+      const session = await pastSession(group.id);
 
       await hold(session.id).expect(200);
 
@@ -200,7 +209,7 @@ describe('The audit log (e2e)', () => {
       const group = await newGroup();
       const studentId = await newStudent();
       await enroll(group.id, studentId, 1, 0).expect(201);
-      const session = await firstSession(group.id);
+      const session = await pastSession(group.id);
       await hold(session.id).expect(200);
       const cycle = await prisma.unscoped.paymentCycle.findFirstOrThrow({
         where: { studentId, cycleNumber: 1 },
