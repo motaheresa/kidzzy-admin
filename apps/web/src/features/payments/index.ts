@@ -4,6 +4,7 @@ export { paymentKeys } from './api/payments.keys';
 export { InstructorCycles, MyCycles } from './components/InstructorCycles';
 export { PaymentsOverview } from './components/PaymentsOverview';
 export { PlanForm } from './components/PlanForm';
+export { EditStartingPointButton } from './components/EditStartingPointButton';
 export { RecordPaymentButton } from './components/RecordPaymentButton';
 export { PlanHistory } from './components/PlanHistory';
 export type { Payee, PaymentPlan } from './types';

@@ -765,3 +765,157 @@ describe('recording a payment (US-23)', () => {
     await waitFor(() => expect(reads).toBeGreaterThan(1));
   });
 });
+
+describe('editing the starting point of a first cycle (US-36)', () => {
+  const ana: InstructorDetail = {
+    id: '2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a',
+    name: 'Ana',
+    email: 'ana@test.local',
+    phone: null,
+    isActive: true,
+    createdAt: '2026-10-16T08:30:00.000Z',
+    groups: [],
+  };
+  const first: PaymentCycle = {
+    id: 'cycle-first',
+    payeeType: 'instructor',
+    payeeId: ana.id,
+    payeeName: ana.name,
+    groupId: 'g-a',
+    groupName: 'جروب أ',
+    cycleNumber: 1,
+    sessionsPerCycle: 8,
+    amount: '1500.00',
+    openingCount: 3,
+    sessionsCounted: 5,
+    status: 'in_progress',
+    dueAt: null,
+    paidAt: null,
+  };
+  const page = (data: PaymentCycle[]) => ({
+    data,
+    meta: { page: 1, pageSize: 100, total: data.length },
+  });
+  const instructorPage = (cycles: () => PaymentCycle[]): Record<string, Handler> => ({
+    [`GET /instructors/${ana.id}`]: () => json(200, ana),
+    'GET /payment-plans': () => json(200, { data: [] }),
+    'GET /payment-cycles': () => json(200, page(cycles())),
+  });
+  const path = `PUT /payment-cycles/${first.id}/starting-point`;
+  const puts = () => calls.filter((c) => c.method === 'PUT');
+  const editButtons = () => screen.queryAllByRole('button', { name: /عدّل نقطة البداية/ });
+
+  const openDialog = async () => {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /عدّل نقطة البداية/ }));
+    await screen.findByRole('alertdialog');
+    return user;
+  };
+
+  it('is offered on a first cycle in progress only, to whoever holds payments.manage', async () => {
+    api(
+      admin,
+      instructorPage(() => [
+        { ...first, id: 'c-second', cycleNumber: 2, openingCount: 0, sessionsCounted: 1 },
+        { ...first, id: 'c-due', groupName: 'جروب ب', status: 'due', sessionsCounted: 8 },
+        first,
+      ]),
+    );
+    renderAt(`/instructors/${ana.id}`);
+
+    await screen.findAllByText(/من 8 سيشن/);
+    expect(editButtons()).toHaveLength(1);
+  });
+
+  it('is not offered to an instructor reading their own cycles', async () => {
+    api(instructorUser, { 'GET /payment-cycles': () => json(200, page([first])) });
+    renderAt('/');
+
+    await screen.findByText(/من 8 سيشن/);
+    expect(editButtons()).toHaveLength(0);
+  });
+
+  it('shows the result before saving, then sends the number', async () => {
+    api(admin, {
+      ...instructorPage(() => [first]),
+      [path]: () => json(200, { ...first, openingCount: 5, sessionsCounted: 7 }),
+    });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    const dialog = within(screen.getByRole('alertdialog'));
+    const input = dialog.getByLabelText('السيشنات اللي اتاخدت قبل السيستم');
+    // 3 from before the system + 2 counted since = 5 of 8 today.
+    expect(input).toHaveValue(3);
+    expect(dialog.getByText('هتبقى الدورة 5 من 8 سيشن')).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, '6');
+    expect(dialog.getByText('هتبقى الدورة 8 من 8 سيشن')).toBeInTheDocument();
+    expect(puts()).toHaveLength(0);
+    await user.clear(input);
+    await user.type(input, '5');
+    await user.click(dialog.getByRole('button', { name: 'احفظ' }));
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]?.body).toEqual({ openingCount: 5 });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+
+  it('does not send a number that would complete the cycle', async () => {
+    api(admin, { ...instructorPage(() => [first]), [path]: () => json(200, first) });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    const dialog = within(screen.getByRole('alertdialog'));
+    const input = dialog.getByLabelText('السيشنات اللي اتاخدت قبل السيستم');
+    await user.clear(input);
+    await user.type(input, '6');
+    await user.click(dialog.getByRole('button', { name: 'احفظ' }));
+
+    expect(dialog.getByText('لازم يفضل اقل من عدد سيشنات الدورة')).toBeInTheDocument();
+    expect(puts()).toHaveLength(0);
+  });
+
+  it.each([
+    ['STARTING_POINT_OUT_OF_RANGE', 422, 'نقطة البداية لازم تكون اقل من عدد سيشنات الدورة'],
+    ['STARTING_POINT_LOCKED', 409, 'نقطة البداية بتتغير في اول دورة بس، وطول ما هي شغالة'],
+  ])('shows %s under the field and keeps the dialog open', async (code, status, message) => {
+    api(admin, { ...instructorPage(() => [first]), [path]: () => problem(status, code) });
+    renderAt(`/instructors/${ana.id}`);
+
+    const user = await openDialog();
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'احفظ' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('is on the student profile too, and reloads the profile after saving', async () => {
+    const studentCycle: PaymentCycle = {
+      ...first,
+      id: 'cycle-student',
+      payeeType: 'student',
+      payeeId: mona.id,
+      payeeName: mona.name,
+      groupId: null,
+      groupName: null,
+    };
+    let reads = 0;
+    api(admin, {
+      [`GET /students/${mona.id}`]: () => {
+        reads += 1;
+        return json(200, { ...mona, currentCycle: studentCycle });
+      },
+      [`GET /students/${mona.id}/enrollments`]: () => json(200, { data: [] }),
+      'GET /payment-plans': () => json(200, { data: [] }),
+      'PUT /payment-cycles/cycle-student/starting-point': () => json(200, studentCycle),
+    });
+    renderAt(`/students/${mona.id}`);
+
+    const user = await openDialog();
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'احفظ' }));
+
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    await waitFor(() => expect(reads).toBeGreaterThan(1));
+  });
+});

@@ -13,7 +13,7 @@ import {
   Skeleton,
 } from '@/components/ui';
 import { usePermissions } from '@/features/auth';
-import { RecordPaymentButton } from '@/features/payments';
+import { EditStartingPointButton, RecordPaymentButton } from '@/features/payments';
 import { useQueryClient } from '@/lib/query';
 import { studentKeys } from '../api/students.keys';
 import { useStudent } from '../hooks/useStudents';
@@ -105,12 +105,20 @@ export function StudentProfile({ id }: { id: string }) {
         <CycleCard
           cycle={data.currentCycle}
           action={
-            <RecordPaymentButton
-              cycle={data.currentCycle}
-              onRecorded={() =>
-                void queryClient.invalidateQueries({ queryKey: studentKeys.detail(id) })
-              }
-            />
+            <>
+              <RecordPaymentButton
+                cycle={data.currentCycle}
+                onRecorded={() =>
+                  void queryClient.invalidateQueries({ queryKey: studentKeys.detail(id) })
+                }
+              />
+              <EditStartingPointButton
+                cycle={data.currentCycle}
+                onChanged={() =>
+                  void queryClient.invalidateQueries({ queryKey: studentKeys.detail(id) })
+                }
+              />
+            </>
           }
         />
       )}

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AcademiesModule } from '../academies/academies.module';
+import { AuditModule } from '../audit/audit.module';
 import { GroupsModule } from '../groups/groups.module';
 import { InstructorsModule } from '../instructors/instructors.module';
 import { SessionsModule } from '../sessions/sessions.module';
@@ -21,7 +22,14 @@ import { PaymentPlansService } from './payment-plans.service';
  * from the global AuthModule.
  */
 @Module({
-  imports: [AcademiesModule, StudentsModule, InstructorsModule, GroupsModule, SessionsModule],
+  imports: [
+    AcademiesModule,
+    AuditModule,
+    StudentsModule,
+    InstructorsModule,
+    GroupsModule,
+    SessionsModule,
+  ],
   controllers: [PaymentPlansController, PaymentCyclesController, PaymentsController],
   providers: [
     PaymentPlanRepository,

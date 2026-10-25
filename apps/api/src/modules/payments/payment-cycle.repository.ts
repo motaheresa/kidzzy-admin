@@ -213,6 +213,22 @@ export class PaymentCycleRepository {
       FOR UPDATE`;
   }
 
+  /** How many sessions the cycle counted (its cycle_sessions rows). */
+  countSessions(cycleId: string): Promise<number> {
+    return this.txHost.tx.cycleSession.count({ where: { cycleId } });
+  }
+
+  /**
+   * Sets the starting point and the counter together, in one UPDATE, because the check
+   * constraints tie sessions_counted to opening_count and to N. Call it with the cycle locked.
+   */
+  async setStartingPoint(id: string, openingCount: number, sessionsCounted: number): Promise<void> {
+    await this.txHost.tx.paymentCycle.update({
+      where: { id },
+      data: { openingCount, sessionsCounted },
+    });
+  }
+
   /** Marks a Due cycle paid. One UPDATE: a check constraint ties status to paid_at. */
   async markPaid(id: string, paidAt: Date): Promise<void> {
     await this.txHost.tx.paymentCycle.update({ where: { id }, data: { status: 'paid', paidAt } });
