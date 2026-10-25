@@ -1513,6 +1513,18 @@ paths:
       tags:
         - Payments
       summary: Set the starting point of a first cycle
+      description: >
+        Corrects the starting point (BR-14, AC-10): the sessions the payee had taken before the system. Only the
+        payee's FIRST cycle (cycle number 1; for an instructor, the first cycle of that group, ADR-0015), and only
+        while it is in progress, even after Held sessions counted in it. Any other cycle, or a Due or paid one, is
+        409 STARTING_POINT_LOCKED.
+
+
+        The counter is recomputed: sessionsCounted = openingCount + the sessions the cycle counted. The starting
+        point must be 0 to sessionsPerCycle - 1, and the result must stay below sessionsPerCycle too, otherwise 422
+        STARTING_POINT_OUT_OF_RANGE on openingCount: a correction never makes a cycle Due by itself. The cycle row is
+        locked and read again first, so a Held session counting into it at the same time is not lost. The change is
+        written to the audit log (payment_cycle.starting_point_set). An unknown cycle, or another academy's, is 404.
       operationId: setCycleStartingPoint
       x-permission: payments.manage
       x-story: US-36
@@ -2459,8 +2471,9 @@ components:
             $ref: '#/components/schemas/Problem'
     PlanChangeRefused:
       description:
-        The student has no plan yet (STUDENT_HAS_NO_PLAN, students only), or the plan is the same as the latest
-        version (PLAN_UNCHANGED)
+        The student has no plan yet (STUDENT_HAS_NO_PLAN, students only), the plan is the same as the latest
+        version (PLAN_UNCHANGED), or a starting point was sent with a later plan of an instructor and group
+        (STARTING_POINT_LOCKED, a state conflict, 409 everywhere)
       content:
         application/problem+json:
           schema:

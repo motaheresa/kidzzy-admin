@@ -40,7 +40,7 @@ export function CycleCard({ cycle, action }: { cycle: PaymentCycle; action?: Rea
             },
           ]}
         />
-        {action && <div className="mt-4">{action}</div>}
+        {action && <div className="mt-4 flex flex-wrap gap-2">{action}</div>}
       </CardContent>
     </Card>
   );

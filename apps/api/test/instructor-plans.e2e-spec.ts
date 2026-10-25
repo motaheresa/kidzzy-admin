@@ -319,7 +319,7 @@ describe('Instructor plans per group (e2e)', () => {
       expect((await versions(instructor, other.id)).map((p) => p.effectiveFromCycle)).toEqual([1]);
     });
 
-    it('refuses a starting point (422 STARTING_POINT_LOCKED), and the same plan of the group (409 PLAN_UNCHANGED)', async () => {
+    it('refuses a starting point (409 STARTING_POINT_LOCKED), and the same plan of the group (409 PLAN_UNCHANGED)', async () => {
       const instructor = await newInstructor();
       const group = await newGroup(instructor);
       await setPlan(instructor, { ...first, groupId: group.id }).expect(201);
@@ -328,7 +328,7 @@ describe('Instructor plans per group (e2e)', () => {
         amount: '3500.00',
         groupId: group.id,
         openingCount: 1,
-      }).expect(422);
+      }).expect(409);
       expect(locked.body).toMatchObject({ code: 'STARTING_POINT_LOCKED' });
       const same = await setPlan(instructor, { ...first, groupId: group.id }).expect(409);
       expect(same.body).toMatchObject({ code: 'PLAN_UNCHANGED' });

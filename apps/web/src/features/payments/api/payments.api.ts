@@ -78,3 +78,14 @@ export function listPayments(
 export function recordPayment(cycleId: string, input: PaymentCreate): Promise<Payment> {
   return http.post<Payment>('/payment-cycles/' + encodeURIComponent(cycleId) + '/payments', input);
 }
+
+/**
+ * PUT /payment-cycles/{id}/starting-point: corrects the starting point of a payee's first cycle
+ * while it is in progress (US-36). The API recomputes the counter and answers with the cycle.
+ */
+export function setStartingPoint(cycleId: string, openingCount: number): Promise<PaymentCycle> {
+  return http.put<PaymentCycle>(
+    '/payment-cycles/' + encodeURIComponent(cycleId) + '/starting-point',
+    { openingCount },
+  );
+}

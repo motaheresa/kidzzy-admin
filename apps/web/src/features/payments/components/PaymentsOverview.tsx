@@ -30,6 +30,7 @@ import {
 import type { Payment, PaymentCycle } from '../types';
 import { CycleStatusBadge } from './CycleStatusBadge';
 import { paymentMethodLabel } from './PaymentMethodLabel';
+import { EditStartingPointButton } from './EditStartingPointButton';
 import { RecordPaymentButton } from './RecordPaymentButton';
 
 const PAGE_SIZE = 20;
@@ -213,6 +214,7 @@ function CyclesTable({ cycles, instructors }: { cycles: PaymentCycle[]; instruct
             </TableCell>
             <TableCell>
               <RecordPaymentButton cycle={cycle} />
+              <EditStartingPointButton cycle={cycle} />
             </TableCell>
           </TableRow>
         ))}

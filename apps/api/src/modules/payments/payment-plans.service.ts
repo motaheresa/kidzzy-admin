@@ -166,7 +166,7 @@ export class PaymentPlansService {
     if (openingCount !== 0) {
       throw new AppException(
         ErrorCode.StartingPointLocked,
-        HttpStatus.UNPROCESSABLE_ENTITY,
+        HttpStatus.CONFLICT,
         'The starting point only applies to the first plan of the group',
       );
     }

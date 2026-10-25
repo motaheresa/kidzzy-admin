@@ -13,6 +13,7 @@ import { formatMoney, formatNumber } from '@/lib/format';
 import { useCycles } from '../hooks/useCycles';
 import { CycleStatusBadge } from './CycleStatusBadge';
 import { PaymentsList } from './PaymentsList';
+import { EditStartingPointButton } from './EditStartingPointButton';
 import { RecordPaymentButton } from './RecordPaymentButton';
 import type { PaymentCycle } from '../types';
 
@@ -116,6 +117,7 @@ function CycleRow({ cycle }: { cycle: PaymentCycle }) {
         <span className="numeric text-muted-foreground">{formatMoney(cycle.amount)}</span>
       </div>
       <RecordPaymentButton cycle={cycle} />
+      <EditStartingPointButton cycle={cycle} />
       {cycle.openingCount > 0 && (
         <p className="text-xs text-muted-foreground">
           بدأت من {formatNumber(cycle.openingCount)} سيشن (اتاخدوا قبل السيستم)

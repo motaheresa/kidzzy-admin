@@ -389,3 +389,23 @@ describe('an instructor’s payments next to their cycles (US-25)', () => {
     expect(paymentCalls()[0]?.url.searchParams.get('instructorId')).toBe('inst-1');
   });
 });
+
+describe('the starting point on the Payments screen (US-36)', () => {
+  it('offers the edit on a first cycle in progress only', async () => {
+    api(admin, {
+      'GET /payment-cycles': () =>
+        json(
+          200,
+          page([
+            cycle('a', { status: 'in_progress', sessionsCounted: 1 }),
+            cycle('b', { status: 'in_progress', cycleNumber: 2, sessionsCounted: 1 }),
+            cycle('c', { status: 'due' }),
+          ]),
+        ),
+    });
+    renderAt('/payments?status=in_progress');
+
+    await screen.findByText('طالب a');
+    expect(screen.getAllByRole('button', { name: /عدّل نقطة البداية/ })).toHaveLength(1);
+  });
+});
