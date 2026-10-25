@@ -1280,6 +1280,23 @@ paths:
       tags:
         - Sessions
       summary: Return a Held session to Scheduled
+      description: >
+        For the admin only (sessions.undo_held), with no time limit (BR-13). In one transaction the session goes
+        back to Scheduled with no number and the attendance recorded for it is deleted; the cycles that counted it
+        take it out (the counters drop, a Due cycle returns to In progress, and the cycle opened after it is
+        deleted when it counted nothing); the later Held sessions of the group are renumbered, each one number
+        lower; and the change is written to the audit log (action session.held_undone). If anything refuses,
+        nothing changes.
+
+
+        409 SESSION_NOT_HELD when the session is not Held. 409 CYCLE_ALREADY_PAID when a cycle that counted it is
+        already paid (undoing a payment does not exist yet). 409 SESSION_IN_LATER_CYCLE when a later cycle of the
+        same payee already counts sessions, so a cycle would have to be dealt again: undo the newest sessions
+        first. Another academy's session is 404.
+
+
+        The session can be marked Held again only when no later session of the group is Held (the order rule,
+        SESSION_OUT_OF_ORDER); otherwise undo the later ones first, or cancel it.
       operationId: undoSessionHeld
       x-permission: sessions.undo_held
       x-story: US-17

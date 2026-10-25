@@ -1,6 +1,7 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import type { CycleChange } from '@kidzzy/shared';
+import { ErrorCode, type CycleChange } from '@kidzzy/shared';
+import { AppException } from '../../common/errors/app.exception';
 import { AcademyRepository } from '../academies/academy.repository';
 import { EnrollmentRepository } from '../enrollments/enrollment.repository';
 import { PaymentCycleRepository, type CountableCycle } from '../payments/payment-cycle.repository';
@@ -64,6 +65,63 @@ export class CycleCountingService implements SessionHeldHook, OnModuleInit {
     const changes: CycleChange[] = [];
     for (const cycle of counted) changes.push(await this.count(cycle, session, at));
     return changes;
+  }
+
+  /**
+   * Takes the session out of every cycle that counted it (US-17): the counters drop and a Due
+   * cycle returns to In progress. The cycle opened after a completed one is deleted when it
+   * counted nothing. It refuses (409), changing nothing, when a cycle is already paid
+   * (CYCLE_ALREADY_PAID: undoing a payment does not exist yet) or when a later cycle of the same
+   * payee already counts sessions (SESSION_IN_LATER_CYCLE: undo the newest sessions first, so no
+   * cycle has to be dealt again). A session no cycle counted (a payee without a plan) has nothing
+   * to undo here.
+   */
+  async onUndone(session: SessionRow): Promise<void> {
+    const { counting, later } = await this.lockForUndo(session.id);
+    if (counting.length === 0) return;
+
+    if (counting.some((cycle) => cycle.status === 'paid')) {
+      throw new AppException(
+        ErrorCode.CycleAlreadyPaid,
+        HttpStatus.CONFLICT,
+        'A cycle that counted this session is already paid',
+      );
+    }
+    if (later.some((cycle) => cycle.sessionsCounted > cycle.openingCount)) {
+      throw new AppException(
+        ErrorCode.SessionInLaterCycle,
+        HttpStatus.CONFLICT,
+        'A later cycle already counts sessions: undo the newest sessions first',
+      );
+    }
+
+    // The empty later cycles go first: only one cycle per payee can be In progress.
+    for (const cycle of later) await this.cycles.deleteEmpty(cycle.id);
+    for (const cycle of counting) {
+      await this.cycles.removeSession(cycle.id, session.id);
+      await this.cycles.setCountAfterUndo(cycle.id, cycle.sessionsCounted - 1);
+    }
+  }
+
+  /**
+   * The cycles that counted the session and the cycles after them, locked in one statement in id
+   * order and read again after the lock, like counting does.
+   */
+  private async lockForUndo(
+    sessionId: string,
+  ): Promise<{ counting: CountableCycle[]; later: CountableCycle[] }> {
+    const locked = new Set<string>();
+    for (let round = 0; round < MAX_LOCK_ROUNDS; round += 1) {
+      const counting = await this.cycles.findCountingSession(sessionId);
+      const later = (
+        await Promise.all(counting.map((cycle) => this.cycles.findLater(cycle)))
+      ).flat();
+      const ids = [...new Set([...counting, ...later].map((cycle) => cycle.id))].sort();
+      if (ids.every((id) => locked.has(id))) return { counting, later };
+      await this.cycles.lockAny(ids);
+      for (const id of ids) locked.add(id);
+    }
+    throw new Error('The cycles kept changing while they were locked');
   }
 
   /**

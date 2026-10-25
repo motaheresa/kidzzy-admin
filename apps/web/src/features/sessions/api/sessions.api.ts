@@ -38,3 +38,8 @@ export function markSessionHeld(id: string): Promise<HeldResult> {
 export function cancelSession(id: string, reason: string): Promise<Session> {
   return http.post<Session>(path(id) + '/cancel', { reason });
 }
+
+/** POST /sessions/{id}/undo-held: a Held session goes back to Scheduled (the admin only). */
+export function undoSessionHeld(id: string): Promise<Session> {
+  return http.post<Session>(`${path(id)}/undo-held`);
+}

@@ -38,6 +38,8 @@ const COUNTABLE_SELECT = {
   cycleNumber: true,
   sessionsPerCycle: true,
   sessionsCounted: true,
+  openingCount: true,
+  status: true,
 } as const satisfies Prisma.PaymentCycleSelect;
 
 /** What GET /payment-cycles can filter by. The filters are combined with AND. */
@@ -260,6 +262,66 @@ export class PaymentCycleRepository {
       where: { id: { in: ids } },
       select: COUNTABLE_SELECT,
       orderBy: { id: 'asc' },
+    });
+  }
+
+  /** The cycles that counted this session (one per payee it was counted for), by id. */
+  findCountingSession(sessionId: string): Promise<CountableCycle[]> {
+    return this.txHost.tx.paymentCycle.findMany({
+      where: { sessions: { some: { sessionId } } },
+      select: COUNTABLE_SELECT,
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /** The cycles of the same payee after this one (a student's, or an instructor's for the same group). */
+  findLater(cycle: CountableCycle): Promise<CountableCycle[]> {
+    return this.txHost.tx.paymentCycle.findMany({
+      where: {
+        ...(cycle.studentId
+          ? { studentId: cycle.studentId }
+          : { instructorId: cycle.instructorId, groupId: cycle.groupId }),
+        cycleNumber: { gt: cycle.cycleNumber },
+      },
+      select: COUNTABLE_SELECT,
+      orderBy: { cycleNumber: 'asc' },
+    });
+  }
+
+  /**
+   * Locks these cycles, whatever their status, in ONE statement and in id order, the same order
+   * as lockOpen, so an undo and a Held session that share cycles cannot deadlock.
+   */
+  async lockAny(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.txHost.tx.$queryRaw`
+      SELECT id FROM payment_cycles
+      WHERE id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})
+        AND academy_id = ${this.tenant.requireAcademyId()}::uuid
+      ORDER BY id
+      FOR UPDATE`;
+  }
+
+  /** Deletes a cycle that counted nothing (the one opened after a completed cycle). */
+  async deleteEmpty(id: string): Promise<void> {
+    await this.txHost.tx.paymentCycle.delete({ where: { id } });
+  }
+
+  /** Takes the session out of the cycle (its cycle_sessions row). */
+  async removeSession(cycleId: string, sessionId: string): Promise<void> {
+    await this.txHost.tx.cycleSession.delete({
+      where: { cycleId_sessionId: { cycleId, sessionId } },
+    });
+  }
+
+  /**
+   * Sets the counter after a session was taken out, and puts the cycle back In progress with no
+   * due date, in one UPDATE: a check constraint ties the status to the counter and to due_at.
+   */
+  async setCountAfterUndo(id: string, sessionsCounted: number): Promise<void> {
+    await this.txHost.tx.paymentCycle.update({
+      where: { id },
+      data: { sessionsCounted, status: 'in_progress', dueAt: null },
     });
   }
 

@@ -788,3 +788,90 @@ describe('sessions that need marking (SCRUM-73)', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('undoing a Held session (US-17)', () => {
+  const undoer: Me = { ...admin, permissions: [...admin.permissions, 'sessions.undo_held:any'] };
+  const heldNumbered: Session = { ...heldSession, sessionNumber: 3 };
+  const detailPath = `/sessions/${session.id}`;
+  const undoPath = `POST /sessions/${session.id}/undo-held`;
+  const undoPosts = () =>
+    calls.filter((c) => c.method === 'POST' && c.url.pathname.endsWith('/undo-held'));
+  const confirm = async () => {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'رجّع الحصة لمجدولة' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'ايوه، رجّعها' }),
+    );
+  };
+
+  it('is offered on a Held session to whoever holds sessions.undo_held', async () => {
+    api(undoer, { [`GET ${detailPath}`]: () => json(200, heldNumbered) });
+    renderAt(detailPath);
+
+    expect(await screen.findByRole('button', { name: 'رجّع الحصة لمجدولة' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a Scheduled session', undoer, session],
+    ['a Cancelled session', undoer, { ...session, status: 'cancelled', cancelReason: 'x' }],
+    ['someone without the permission', admin, heldNumbered],
+    ['an instructor', instructorUser, heldNumbered],
+  ])('is not offered for %s', async (_label, me, shown) => {
+    api(me, { [`GET ${detailPath}`]: () => json(200, shown) });
+    renderAt(detailPath);
+
+    await screen.findByRole('heading', { name: 'جروب A' });
+    expect(screen.queryByRole('button', { name: 'رجّع الحصة لمجدولة' })).not.toBeInTheDocument();
+  });
+
+  it('says what follows, asks, then shows the session as Scheduled with no number', async () => {
+    let undone = false;
+    api(undoer, {
+      [`GET ${detailPath}`]: () =>
+        json(
+          200,
+          undone
+            ? { ...session, ...startedSession, status: 'scheduled', sessionNumber: null }
+            : heldNumbered,
+        ),
+      [undoPath]: () => {
+        undone = true;
+        return json(200, { ...startedSession, status: 'scheduled', sessionNumber: null });
+      },
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'رجّع الحصة لمجدولة' }));
+    const dialog = within(await screen.findByRole('alertdialog'));
+    expect(dialog.getByText(/حضورها وتقييماتها هيتمسحوا/)).toBeInTheDocument();
+    expect(undoPosts()).toHaveLength(0);
+    await user.click(dialog.getByRole('button', { name: 'ايوه، رجّعها' }));
+
+    await waitFor(() => expect(undoPosts()).toHaveLength(1));
+    expect(await screen.findByText('مجدولة')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'رجّع الحصة لمجدولة' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'SESSION_IN_LATER_CYCLE',
+      'الحصة دي محسوبة في دورة وبعدها دورة بدأت تحسب حصص. رجّع الحصص الاحدث الاول',
+    ],
+    ['CYCLE_ALREADY_PAID', 'الدورة دي اتدفعت بالفعل'],
+    ['SESSION_NOT_HELD', 'الحصة دي لسه ما اتعملتش'],
+  ])('shows %s in the dialog and keeps the session Held', async (code, message) => {
+    api(undoer, {
+      [`GET ${detailPath}`]: () => json(200, heldNumbered),
+      [undoPath]: () => problem(409, code),
+    });
+    renderAt(detailPath);
+
+    await confirm();
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText('اتعملت')).toBeInTheDocument();
+  });
+});
