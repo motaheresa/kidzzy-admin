@@ -6,6 +6,7 @@ import { usePermissions, useSession } from '@/features/auth';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { useSessionDetail } from '../hooks/useSessions';
 import { CancelSessionButton } from './CancelSessionButton';
+import { RescheduleSessionButton } from './RescheduleSessionButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { UndoHeldButton } from './UndoHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
@@ -63,6 +64,7 @@ export function SessionDetails({ id }: { id: string }) {
         actions={
           <>
             <MarkHeldButton session={data} />
+            <RescheduleSessionButton session={data} />
             <CancelSessionButton session={data} />
             <UndoHeldButton session={data} />
             {can('groups.read') && (

@@ -7,6 +7,7 @@ import { AccessContext } from '../auth/access-context';
 import { AuditService } from '../audit/audit.service';
 import { Clock } from './clock';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
+import type { RescheduleSessionDto } from './dto/reschedule-session.dto';
 import { toSession } from './session.mapper';
 import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRepository, type SessionRow } from './session.repository';
@@ -217,6 +218,42 @@ export class SessionsService {
     }
     // TODO(US-35): write the audit log for this status change.
     return toSession(cancelled);
+  }
+
+  /**
+   * Moves a Scheduled session to another time (US-15, FR-10). Only scheduled_at changes: the
+   * session stays Scheduled with no number, and keeps its occurrence_date (the slot occurrence it
+   * stands for) and its duration. status_changed_* is left alone, because it records who last
+   * changed the STATUS and a reschedule is not one; the audit entry says who moved it. The new
+   * time is not checked against the future or against other sessions (decided for SCRUM-28).
+   * Reminders (SCRUM-44) will be computed from scheduled_at, so they move with the session.
+   * Same write scope and group lock as marking Held and cancelling.
+   */
+  @Transactional()
+  async reschedule(id: string, dto: RescheduleSessionDto): Promise<Session> {
+    const row = await this.loadForWrite(id);
+    if (row.status !== 'scheduled') {
+      throw new AppException(
+        ErrorCode.SessionNotScheduled,
+        HttpStatus.CONFLICT,
+        'Only a scheduled session can be rescheduled',
+      );
+    }
+    const scheduledAt = new Date(dto.scheduledAt);
+    await this.sessions.setScheduledAt(id, scheduledAt);
+    await this.audit.record({
+      action: 'session.rescheduled',
+      entityType: 'sessions',
+      entityId: id,
+      before: { scheduledAt: row.scheduledAt.toISOString() },
+      after: { scheduledAt: scheduledAt.toISOString() },
+    });
+
+    const moved = await this.sessions.findById(id);
+    if (!moved) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    return toSession(moved);
   }
 
   /**

@@ -43,3 +43,8 @@ export function cancelSession(id: string, reason: string): Promise<Session> {
 export function undoSessionHeld(id: string): Promise<Session> {
   return http.post<Session>(`${path(id)}/undo-held`);
 }
+
+/** POST /sessions/{id}/reschedule: a Scheduled session moves to another instant (UTC ISO 8601). */
+export function rescheduleSession(id: string, scheduledAt: string): Promise<Session> {
+  return http.post<Session>(path(id) + '/reschedule', { scheduledAt });
+}

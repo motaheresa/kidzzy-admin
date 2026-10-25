@@ -353,6 +353,11 @@ export class SessionRepository {
     });
   }
 
+  /** Moves a session to another instant. Only scheduled_at changes; the status columns do not. */
+  async setScheduledAt(id: string, scheduledAt: Date): Promise<void> {
+    await this.txHost.tx.session.update({ where: { id }, data: { scheduledAt } });
+  }
+
   private where(filter: SessionListFilter): Prisma.SessionWhereInput {
     return {
       ...(filter.from || filter.to

@@ -85,6 +85,7 @@ export const FIELD_MESSAGES: Record<string, string> = {
   parentPhone: 'اكتب رقم موبايل صحيح لولي الامر',
   notes: 'الملاحظات 1000 حرف على الاكتر',
   reason: 'اكتب سبب الالغاء، 500 حرف على الاكتر',
+  scheduledAt: 'اختار تاريخ وساعة صح',
   groupId: 'اختار الجروب',
   level: 'اكتب المستوى او الكورس',
   instructorId: 'اختار المدرس',

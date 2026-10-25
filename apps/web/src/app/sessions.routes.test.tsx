@@ -1,5 +1,5 @@
 import type { Me, Page, Session } from '@kidzzy/shared';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -873,5 +873,152 @@ describe('undoing a Held session (US-17)', () => {
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(screen.getByText('اتعملت')).toBeInTheDocument();
+  });
+});
+
+describe('changing the time of a session (US-15)', () => {
+  const detailPath = `/sessions/${session.id}`;
+  const overdue: Session = {
+    ...session,
+    id: '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e',
+    scheduledAt: '2026-10-21T14:00:00.000Z',
+  };
+  const button = /غيّر ميعاد حصة جروب A/;
+  const posts = () => calls.filter((c) => c.method === 'POST');
+  const fill = (date: string, time: string) => {
+    fireEvent.change(screen.getByLabelText('التاريخ'), { target: { value: date } });
+    fireEvent.change(screen.getByLabelText('الساعة'), { target: { value: time } });
+  };
+
+  it('is offered on a Scheduled session only, to whoever may update it', async () => {
+    api(admin, { [`GET ${detailPath}`]: () => json(200, session) });
+    renderAt(detailPath);
+    expect(await screen.findByRole('button', { name: button })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a Held session', heldSession],
+    ['a Cancelled session', { ...session, status: 'cancelled' as const, cancelReason: 'x' }],
+  ])('is not offered on %s', async (_name, other) => {
+    api(admin, { [`GET ${detailPath}`]: () => json(200, other) });
+    renderAt(detailPath);
+    await screen.findByText(/جروب A/);
+    expect(screen.queryByRole('button', { name: button })).not.toBeInTheDocument();
+  });
+
+  it('is not offered without sessions.update', async () => {
+    api(readOnlyAdmin, { [`GET ${detailPath}`]: () => json(200, session) });
+    renderAt(detailPath);
+    await screen.findByText(/جروب A/);
+    expect(screen.queryByRole('button', { name: button })).not.toBeInTheDocument();
+  });
+
+  it('starts from the academy-local date and time, and sends the UTC instant', async () => {
+    const moved: Session = { ...session, scheduledAt: '2026-10-30T15:00:00.000Z' };
+    api(admin, {
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`POST ${detailPath}/reschedule`]: () => json(200, moved),
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    // 14:00 UTC on the 22nd is 17:00 in Cairo (UTC+3).
+    expect(screen.getByLabelText('التاريخ')).toHaveValue('2026-10-22');
+    expect(screen.getByLabelText('الساعة')).toHaveValue('17:00');
+    // 17:00 on 2026-10-30 is after Egypt leaves DST (UTC+2): 15:00 UTC, not 14:00.
+    fill('2026-10-30', '17:00');
+    await user.click(screen.getByRole('button', { name: 'غيّر الميعاد' }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toEqual({ scheduledAt: '2026-10-30T15:00:00.000Z' });
+    // The detail shows the new time and the dialog is closed.
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(await screen.findByText(/30 أكتوبر 2026/)).toBeInTheDocument();
+  });
+
+  it('uses the offset in force the day before the DST change', async () => {
+    api(admin, {
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`POST ${detailPath}/reschedule`]: () => json(200, session),
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    fill('2026-10-29', '17:00');
+    await user.click(screen.getByRole('button', { name: 'غيّر الميعاد' }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toEqual({ scheduledAt: '2026-10-29T14:00:00.000Z' });
+  });
+
+  it('sends nothing while the date or the time is empty', async () => {
+    api(admin, { [`GET ${detailPath}`]: () => json(200, session) });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    fill('', '17:00');
+    await user.click(screen.getByRole('button', { name: 'غيّر الميعاد' }));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('shows the Arabic message when the session is no longer Scheduled, and keeps the dialog open', async () => {
+    api(admin, {
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`POST ${detailPath}/reschedule`]: () => problem(409, 'SESSION_NOT_SCHEDULED'),
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    await user.click(screen.getByRole('button', { name: 'غيّر الميعاد' }));
+
+    expect(await screen.findByText('الحصة دي مش في حالة مجدولة')).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('moves a missed session to the future: it leaves “needs marking”', async () => {
+    let moved = false;
+    api(admin, {
+      'GET /sessions': (url) =>
+        json(200, page(url.searchParams.get('status') === 'scheduled' && !moved ? [overdue] : [])),
+      [`POST /sessions/${overdue.id}/reschedule`]: () => {
+        moved = true;
+        return json(200, { ...overdue, scheduledAt: '2026-10-25T14:00:00.000Z' });
+      },
+    });
+    renderAt('/');
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/سيشنات محتاجة تتسجل/)).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: button }));
+    fill('2026-10-25', '17:00');
+    await user.click(screen.getByRole('button', { name: 'غيّر الميعاد' }));
+
+    await waitFor(() => expect(screen.queryByText(/سيشنات محتاجة تتسجل/)).not.toBeInTheDocument());
+    expect(posts()[0]?.body).toEqual({ scheduledAt: '2026-10-25T14:00:00.000Z' });
+  });
+
+  it('moves a session from today to another day: it leaves today’s list', async () => {
+    let moved = false;
+    api(admin, {
+      'GET /sessions': () => json(200, page(moved ? [] : [session])),
+      [`POST /sessions/${session.id}/reschedule`]: () => {
+        moved = true;
+        return json(200, { ...session, scheduledAt: '2026-10-23T14:00:00.000Z' });
+      },
+    });
+    renderAt('/');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: button }));
+    fill('2026-10-23', '17:00');
+    await user.click(screen.getByRole('button', { name: 'غيّر الميعاد' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: /جروب A/ })).not.toBeInTheDocument(),
+    );
   });
 });

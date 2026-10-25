@@ -6,6 +6,7 @@ import { formatDateTime, formatNumber } from '@/lib/format';
 import { useCurrentMinute } from '../hooks/useCurrentMinute';
 import { useSessions } from '../hooks/useSessions';
 import { CancelSessionButton } from './CancelSessionButton';
+import { RescheduleSessionButton } from './RescheduleSessionButton';
 import { MarkHeldButton } from './MarkHeldButton';
 
 /**
@@ -69,6 +70,7 @@ function NeedsMarkingList({ timeZone }: { timeZone: string }) {
               </Link>
               <span className="flex flex-wrap items-center gap-2">
                 <MarkHeldButton session={session} />
+                <RescheduleSessionButton session={session} />
                 <CancelSessionButton session={session} />
               </span>
             </li>

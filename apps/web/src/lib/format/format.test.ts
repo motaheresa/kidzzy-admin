@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatMoney, formatNumber, localToday, zonedDayRange } from '.';
+import {
+  formatDate,
+  formatMoney,
+  formatNumber,
+  localToday,
+  zonedDateAndTime,
+  zonedDayRange,
+  zonedInstantUtc,
+} from '.';
 
 const ARABIC_INDIC_DIGITS = /[٠-٩۰-۹]/;
 
@@ -53,6 +61,38 @@ describe('format', () => {
     expect(zonedDayRange('Africa/Cairo', new Date('2027-04-30T12:00:00.000Z'))).toEqual({
       from: '2027-04-29T22:00:00.000Z',
       to: '2027-04-30T21:00:00.000Z',
+    });
+  });
+
+  it('turns an academy-local date and time into the UTC instant, across the DST change', () => {
+    // Egypt leaves DST at the turn of 2026-10-29 to 10-30: UTC+3 before it, UTC+2 after.
+    expect(zonedInstantUtc('2026-10-29', '17:00', 'Africa/Cairo').toISOString()).toBe(
+      '2026-10-29T14:00:00.000Z',
+    );
+    expect(zonedInstantUtc('2026-10-30', '17:00', 'Africa/Cairo').toISOString()).toBe(
+      '2026-10-30T15:00:00.000Z',
+    );
+    expect(zonedInstantUtc('2026-10-30', '00:30', 'Africa/Cairo').toISOString()).toBe(
+      '2026-10-29T22:30:00.000Z',
+    );
+    // The same wall clock in another zone is another instant: the browser's zone never counts.
+    expect(zonedInstantUtc('2026-10-30', '17:00', 'UTC').toISOString()).toBe(
+      '2026-10-30T17:00:00.000Z',
+    );
+  });
+
+  it('gives the academy-local date and time of an instant, the inverse of the above', () => {
+    expect(zonedDateAndTime('2026-10-29T14:00:00.000Z', 'Africa/Cairo')).toEqual({
+      date: '2026-10-29',
+      time: '17:00',
+    });
+    expect(zonedDateAndTime('2026-10-30T15:00:00.000Z', 'Africa/Cairo')).toEqual({
+      date: '2026-10-30',
+      time: '17:00',
+    });
+    expect(zonedDateAndTime('2026-10-29T22:30:00.000Z', 'Africa/Cairo')).toEqual({
+      date: '2026-10-30',
+      time: '00:30',
     });
   });
 });
