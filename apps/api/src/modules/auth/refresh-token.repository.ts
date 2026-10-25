@@ -10,6 +10,8 @@ export interface StoredRefreshToken {
   userId: string;
   familyId: string;
   expiresAt: Date;
+  /** The end of the whole session (30 days after the login); no token outlives it. */
+  sessionExpiresAt: Date;
   usedAt: Date | null;
   revokedAt: Date | null;
   user: { isActive: boolean };
@@ -44,6 +46,7 @@ export class RefreshTokenRepository {
         userId: true,
         familyId: true,
         expiresAt: true,
+        sessionExpiresAt: true,
         usedAt: true,
         revokedAt: true,
         user: { select: { isActive: true } },
@@ -58,6 +61,7 @@ export class RefreshTokenRepository {
     familyId: string;
     tokenHash: string;
     expiresAt: Date;
+    sessionExpiresAt: Date;
   }): Promise<void> {
     await this.txHost.tx.refreshToken.create({ data: token });
   }

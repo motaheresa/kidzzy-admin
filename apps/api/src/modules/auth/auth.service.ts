@@ -4,12 +4,18 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { ErrorCode, type Me } from '@kidzzy/shared';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AppException } from '../../common/errors/app.exception';
+import { Clock } from '../sessions/clock';
 import { TenantContext } from '../tenancy/tenant-context';
 import { UserRepository } from '../users/user.repository';
-import { REFRESH_TOKEN_TTL_SECONDS, type AccessTokenPayload } from './auth.config';
+import {
+  isAccessTokenPayload,
+  REFRESH_TOKEN_TTL_SECONDS,
+  SESSION_MAX_AGE_SECONDS,
+  type AccessTokenPayload,
+} from './auth.config';
 import { toMe } from './me.mapper';
 import { PasswordService } from './password.service';
-import { RefreshTokenRepository } from './refresh-token.repository';
+import { RefreshTokenRepository, type StoredRefreshToken } from './refresh-token.repository';
 
 export interface IssuedTokens {
   accessToken: string;
@@ -32,6 +38,7 @@ export class AuthService {
     private readonly tenant: TenantContext,
     private readonly jwt: JwtService,
     private readonly passwords: PasswordService,
+    private readonly clock: Clock,
   ) {}
 
   /**
@@ -58,20 +65,41 @@ export class AuthService {
     // From here on this request belongs to the user's academy, so every query below is scoped.
     this.tenant.set(user.academyId, user.id);
     const me = await this.loadMe(user.id);
-    const tokens = await this.issueTokens(user.id, user.academyId, randomUUID(), me);
+    const tokens = await this.issueTokens(user.id, user.academyId, randomUUID(), me, undefined);
     return { me, tokens };
   }
 
   /**
    * Exchanges a refresh token for a new pair (rotation). Each refresh token works once:
    * presenting one that was already used means it leaked, so the whole session is revoked.
+   *
+   * A session also has an absolute end, 30 days after its login (SCRUM-54): after it the refresh
+   * is 401 however recently the token was issued, and rotation never extends it.
+   *
+   * `rawTokens` is every refresh cookie the request carried, in the order the browser sent them.
+   * There is normally one; two can arrive right after the deploy that moved the cookie's path
+   * (the legacy one and the new one). The one that still works is used, so a stale duplicate does
+   * not look like a reuse and sign the user out. If none works, the first is judged as before.
    */
-  async refresh(rawToken: string | undefined): Promise<IssuedTokens> {
-    if (!rawToken) throw unauthenticated();
+  async refresh(rawTokens: readonly string[]): Promise<IssuedTokens> {
+    const now = this.clock.now();
+    const candidates = rawTokens.filter(Boolean);
+    if (candidates.length === 0) throw unauthenticated();
 
-    const token = await this.refreshTokens.findForRefresh(sha256(rawToken));
-    const now = new Date();
-    if (!token || token.revokedAt || token.expiresAt <= now) throw unauthenticated();
+    let token: StoredRefreshToken | null = null;
+    let first: StoredRefreshToken | null = null;
+    for (const raw of candidates) {
+      const found = await this.refreshTokens.findForRefresh(sha256(raw));
+      first ??= found;
+      if (found && isUsable(found, now)) {
+        token = found;
+        break;
+      }
+    }
+    token ??= first;
+    if (!token || token.revokedAt || token.expiresAt <= now || token.sessionExpiresAt <= now) {
+      throw unauthenticated();
+    }
 
     // The token names its academy: the rest of this request is scoped to it.
     this.tenant.set(token.academyId, token.userId);
@@ -98,7 +126,13 @@ export class AuthService {
    */
   @Transactional()
   private async rotate(
-    token: { id: string; userId: string; academyId: string; familyId: string },
+    token: {
+      id: string;
+      userId: string;
+      academyId: string;
+      familyId: string;
+      sessionExpiresAt: Date;
+    },
     now: Date,
   ): Promise<IssuedTokens | null> {
     // Atomic claim: if two requests race with the same token, only one wins.
@@ -107,7 +141,13 @@ export class AuthService {
     // changed since the last token applies from now on (ADR-0013). loadMe also refuses a user
     // deactivated meanwhile.
     const me = await this.loadMe(token.userId);
-    return this.issueTokens(token.userId, token.academyId, token.familyId, me);
+    return this.issueTokens(
+      token.userId,
+      token.academyId,
+      token.familyId,
+      me,
+      token.sessionExpiresAt,
+    );
   }
 
   /**
@@ -151,12 +191,40 @@ export class AuthService {
     await this.users.setPassword(userId, passwordHash, false);
     await this.refreshTokens.revokeAllForUser(userId);
     const me = await this.loadMe(userId);
-    return this.issueTokens(userId, this.tenant.requireAcademyId(), randomUUID(), me);
+    return this.issueTokens(userId, this.tenant.requireAcademyId(), randomUUID(), me, undefined);
   }
 
-  /** Ends the session: every refresh token since this login stops working. */
-  async logout(sessionId: string): Promise<void> {
-    await this.refreshTokens.revokeSession(sessionId);
+  /**
+   * Ends the session, from whatever the request carries (SCRUM-54). The access token may have
+   * expired long ago, so the session is found from the refresh cookie (a lookup by hash, then the
+   * whole family is revoked) and, when the access token is still valid, from its sid. Either one
+   * is enough. Nothing found is not an error: logging out is idempotent and says nothing about
+   * which tokens exist.
+   */
+  async logout(refreshTokens: readonly string[], accessToken: string | undefined): Promise<void> {
+    for (const raw of refreshTokens) {
+      if (!raw) continue;
+      const token = await this.refreshTokens.findForRefresh(sha256(raw));
+      if (!token) continue;
+      // The token names its academy: the revocation below is scoped to it.
+      this.tenant.set(token.academyId, token.userId);
+      await this.refreshTokens.revokeSession(token.familyId);
+    }
+    const payload = accessToken ? await this.verifyAccessToken(accessToken) : null;
+    if (payload) {
+      this.tenant.set(payload.aid, payload.sub);
+      await this.refreshTokens.revokeSession(payload.sid);
+    }
+  }
+
+  /** The payload of a valid (signed, unexpired, well-formed) access token, or null. */
+  private async verifyAccessToken(token: string): Promise<AccessTokenPayload | null> {
+    try {
+      const payload = await this.jwt.verifyAsync<object>(token);
+      return isAccessTokenPayload(payload) ? payload : null;
+    } catch {
+      return null; // expired, tampered with, or signed with another secret
+    }
   }
 
   /**
@@ -183,6 +251,7 @@ export class AuthService {
     academyId: string,
     sessionId: string,
     access: Pick<Me, 'permissions' | 'mustChangePassword'>,
+    sessionExpiresAt: Date | undefined,
   ): Promise<IssuedTokens> {
     const payload: AccessTokenPayload = {
       sub: userId,
@@ -196,12 +265,18 @@ export class AuthService {
     // The refresh token is random, not a JWT: the database decides whether it is still valid,
     // and only its hash is stored, so a database leak does not leak usable tokens.
     const refreshToken = randomBytes(32).toString('base64url');
+    const now = this.clock.now();
+    // A new session ends 30 days from now; a rotated token keeps the end of its session, and
+    // never expires after it (the idle expiry is cut short by the session's end).
+    const sessionEnd = sessionExpiresAt ?? new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000);
+    const idleEnd = new Date(now.getTime() + REFRESH_TOKEN_TTL_SECONDS * 1000);
     await this.refreshTokens.create({
       academyId,
       userId,
       familyId: sessionId,
       tokenHash: sha256(refreshToken),
-      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
+      expiresAt: idleEnd < sessionEnd ? idleEnd : sessionEnd,
+      sessionExpiresAt: sessionEnd,
     });
     return { accessToken, refreshToken };
   }
@@ -217,4 +292,12 @@ function invalidCredentials(): AppException {
 
 function unauthenticated(): AppException {
   return new AppException(ErrorCode.Unauthenticated, HttpStatus.UNAUTHORIZED, 'Sign in again');
+}
+
+/** A token the refresh can still use: not revoked, not used, not expired, session not over. */
+function isUsable(
+  token: { revokedAt: Date | null; usedAt: Date | null; expiresAt: Date; sessionExpiresAt: Date },
+  now: Date,
+): boolean {
+  return !token.revokedAt && !token.usedAt && token.expiresAt > now && token.sessionExpiresAt > now;
 }

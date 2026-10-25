@@ -18,6 +18,8 @@ import {
   ACCESS_COOKIE_PATH,
   ACCESS_TOKEN_TTL_SECONDS,
   cookieOptions,
+  cookieValues,
+  LEGACY_REFRESH_COOKIE_PATH,
   REFRESH_COOKIE,
   REFRESH_COOKIE_PATH,
   REFRESH_TOKEN_TTL_SECONDS,
@@ -62,9 +64,10 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.NO_CONTENT)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
-    const cookies = req.cookies as Record<string, string | undefined>;
     try {
-      this.setCookies(res, await this.auth.refresh(cookies[REFRESH_COOKIE]));
+      // Every refresh cookie sent, not just the first: see AuthService.refresh.
+      const tokens = cookieValues(req.headers.cookie, REFRESH_COOKIE);
+      this.setCookies(res, await this.auth.refresh(tokens));
     } catch (error) {
       this.clearCookies(res); // a dead refresh token is useless; drop it from the browser
       throw error;
@@ -102,19 +105,35 @@ export class AuthController {
     this.setCookies(res, tokens);
   }
 
-  @SignedIn()
-  @AllowedDuringPasswordChange() // signing out is always possible
+  /**
+   * POST /auth/logout. @Public() on purpose: the access token lasts 15 minutes, and a user whose
+   * token has expired (or whose cookie was cleared) must still be able to end the session, so
+   * this route cannot demand a valid access token. It finds the session itself, from the refresh
+   * cookie (which the browser now sends here: its path is /api/v1/auth) and, when valid, from the
+   * access token. It always clears both cookies and answers 204, also when nothing was found, so
+   * it is idempotent and tells nothing about which tokens exist. Being public also means it works
+   * while a temporary password must still be changed, so it needs no
+   * @AllowedDuringPasswordChange().
+   *
+   * Cross-site requests cannot misuse it: the cookies are SameSite=Strict, so the browser does
+   * not send them with a request started from another site, and without them the call revokes
+   * nothing.
+   */
+  @Public()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(
-    @Req() req: AuthenticatedRequest,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<void> {
-    await this.auth.logout(req.auth.sessionId);
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
+    const cookies = req.cookies as Record<string, string | undefined>;
+    await this.auth.logout(
+      cookieValues(req.headers.cookie, REFRESH_COOKIE),
+      cookies[ACCESS_COOKIE],
+    );
     this.clearCookies(res);
   }
 
   private setCookies(res: Response, tokens: IssuedTokens): void {
+    // The legacy cookie is expired first, the new one is set last (same name, different path).
+    this.clearLegacyRefreshCookie(res);
     res.cookie(
       ACCESS_COOKIE,
       tokens.accessToken,
@@ -131,5 +150,15 @@ export class AuthController {
     // A cookie is only removed when path and flags match the ones it was set with.
     res.clearCookie(ACCESS_COOKIE, cookieOptions(this.secureCookies, ACCESS_COOKIE_PATH));
     res.clearCookie(REFRESH_COOKIE, cookieOptions(this.secureCookies, REFRESH_COOKIE_PATH));
+    this.clearLegacyRefreshCookie(res);
+  }
+
+  /**
+   * Before SCRUM-54 the refresh cookie had the path /api/v1/auth/refresh. A browser still holds
+   * that cookie next to the new one (a different path is a different cookie), so every login,
+   * refresh and logout also expires it (Max-Age=0 with the old path).
+   */
+  private clearLegacyRefreshCookie(res: Response): void {
+    res.clearCookie(REFRESH_COOKIE, cookieOptions(this.secureCookies, LEGACY_REFRESH_COOKIE_PATH));
   }
 }

@@ -118,6 +118,7 @@ describe('Transactions (e2e)', () => {
             familyId,
             tokenHash,
             expiresAt: new Date(Date.now() + 60_000),
+            sessionExpiresAt: new Date(Date.now() + 60_000),
           });
           await txHost.tx.user.create({
             data: {
@@ -150,6 +151,7 @@ describe('Transactions (e2e)', () => {
           familyId: randomUUID(),
           tokenHash,
           expiresAt: new Date(Date.now() + 60_000),
+          sessionExpiresAt: new Date(Date.now() + 60_000),
         }),
       ),
     );

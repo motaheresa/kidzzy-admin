@@ -168,6 +168,7 @@ ADR-0013 has the reasons. Permission keys are `resource.action:scope` (`packages
 - Environment variables are validated at startup in `src/common/config/env.validation.ts`; add a new variable there first and read it with `ConfigService`, which returns the typed value. Tests never change `process.env` at runtime; `createTestApp` takes overrides instead.
 - App code logs through Nest's `Logger`, never `console` (ESLint `no-console`).
 - Tokens only travel as httpOnly cookies; no endpoint returns a token in a body.
+- A session is a family of refresh tokens (ADR-0005): it ends 30 days after login whatever the refreshes (`session_expires_at`), and a token idles out after 7 days. `POST /auth/logout` is `@Public()` and finds the session from the refresh cookie (path `/api/v1/auth`), so it works with an expired access token.
 
 ## API conventions
 

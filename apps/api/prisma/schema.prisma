@@ -156,6 +156,11 @@ model RefreshToken {
   familyId  String    @map("family_id") @db.Uuid
   tokenHash String    @unique @map("token_hash")
   expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  /// When the whole session ends, however often it is refreshed: 30 days after the login (SCRUM-54).
+  /// Copied unchanged from token to token on rotation, and no token expires after it. The default
+  /// is only a safety net for the deploy: the migration runs while the previous API, which does not
+  /// know the column, still serves logins. The app always writes the value itself.
+  sessionExpiresAt DateTime @default(dbgenerated("(now() + '30 days'::interval)")) @map("session_expires_at") @db.Timestamptz(3)
   /// Set when the token is exchanged for a new one.
   usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
   /// Set on logout, on reuse detection, or when the user is deactivated.
