@@ -179,6 +179,27 @@ describe('logout and unknown paths', () => {
     expect(router.state.location.pathname).toBe('/login');
   });
 
+  it('logs out to /login when the API answers 204, with one call and no refresh (SCRUM-54)', async () => {
+    const seen: string[] = [];
+    api({
+      '/auth/me': () => json(200, me),
+      '/auth/logout': () => {
+        seen.push('logout');
+        return new Response(null, { status: 204 });
+      },
+      '/auth/refresh': () => {
+        seen.push('refresh');
+        return new Response(null, { status: 204 });
+      },
+    });
+    const router = renderAt('/');
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'تسجيل الخروج' }));
+
+    expect(await screen.findByLabelText('كلمة السر')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/login');
+    expect(seen).toEqual(['logout']);
+  });
+
   it('shows the not-found page for an unknown path', async () => {
     api({});
     renderAt('/no-such-page');

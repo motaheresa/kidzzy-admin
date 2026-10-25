@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { Clock } from '../sessions/clock';
 import { UsersModule } from '../users/users.module';
 import { AccessContext } from './access-context';
 import { ACCESS_TOKEN_TTL_SECONDS } from './auth.config';
@@ -49,6 +50,9 @@ import { RefreshTokenRepository } from './refresh-token.repository';
     PasswordService,
     RefreshTokenRepository,
     AccessContext,
+    // The clock behind token expiry, so a test can fix the time (createTestApp({ now }) overrides
+    // this class wherever it is provided). Stateless, so a second instance is harmless.
+    Clock,
     // Registered globally, in this order: JwtAuthGuard authenticates (every route needs a login
     // unless it is @Public()), then PermissionsGuard enforces the route's declared access rule.
     { provide: APP_GUARD, useClass: JwtAuthGuard },

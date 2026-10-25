@@ -69,7 +69,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/InvalidCredentials'
         '429':
           $ref: '#/components/responses/TooManyRequests'
   /auth/refresh:
@@ -77,6 +77,15 @@ paths:
       tags:
         - Auth
       summary: Rotate the access and refresh cookies
+      description: >
+        Exchanges the refresh cookie for a new pair; each refresh token works once, and presenting a used one
+        revokes the whole session (the token family started at login). The refresh cookie (httpOnly,
+        SameSite=Strict) has the path /api/v1/auth, so the browser sends it to this endpoint and to /auth/logout and
+        to nothing else. A session also ends 30 days after its login, however often it is refreshed (rotation never
+        extends it), and a token unused for 7 days expires: both answer 401 UNAUTHENTICATED and the user logs in
+        again. If the request carries two refresh cookies (the one from before the path moved, and the new one), the
+        one that still works is used. Every login, refresh and logout also expires the legacy cookie with the path
+        /api/v1/auth/refresh.
       operationId: refresh
       x-permission: refresh cookie
       x-story: US-01
@@ -91,14 +100,20 @@ paths:
       tags:
         - Auth
       summary: Revoke the session and clear cookies
+      description: >
+        Ends the session even when the access token has expired or is missing: it finds the session from the
+        refresh cookie (the browser sends it, its path is /api/v1/auth) and, when valid, from the access token, and
+        revokes the whole token family. It always clears both cookies (and the legacy refresh cookie) and answers
+        204, also when nothing was found, so it is idempotent and tells nothing about which tokens exist. It needs
+        no sign-in for that reason, and it works while a temporary password must be changed. The cookies are
+        SameSite=Strict, so a request started from another site carries none of them and revokes nothing.
       operationId: logout
-      x-permission: signed in
+      x-permission: public
       x-story: US-01
+      security: []
       responses:
         '204':
           description: No Content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
   /auth/me:
     get:
       tags:
@@ -161,8 +176,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
   /instructors:
     get:
       tags:
@@ -2491,6 +2504,14 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    InvalidCredentials:
+      description:
+        The login or password is wrong, or the account is deactivated (INVALID_CREDENTIALS). The three cases answer
+        the same, so the response never tells which accounts exist or are active.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Forbidden:
       description:
         Missing permission or not the user's own record (FORBIDDEN), or a temporary password must be changed first
@@ -2662,10 +2683,12 @@ components:
       properties:
         login:
           type: string
+          maxLength: 200
           description: Email or phone
         password:
           type: string
           minLength: 8
+          maxLength: 200
       additionalProperties: false
       required:
         - login

@@ -162,7 +162,7 @@ describe('http client: refresh on 401 UNAUTHENTICATED', () => {
     expect(calls).toEqual([`POST ${path}`]);
   });
 
-  it('refreshes and retries logout, so an expired access token still revokes the session', async () => {
+  it('refreshes and retries a call once after a 401, so an expired access token is renewed', async () => {
     let refreshed = false;
     routeFetch((path) => {
       if (path === '/auth/refresh') {
@@ -171,8 +171,8 @@ describe('http client: refresh on 401 UNAUTHENTICATED', () => {
       }
       return refreshed ? new Response(null, { status: 204 }) : problem(401, 'UNAUTHENTICATED');
     });
-    await expect(http.post('/auth/logout')).resolves.toBeUndefined();
-    expect(calls).toEqual(['POST /auth/logout', 'POST /auth/refresh', 'POST /auth/logout']);
+    await expect(http.post('/x')).resolves.toBeUndefined();
+    expect(calls).toEqual(['POST /x', 'POST /auth/refresh', 'POST /x']);
   });
 
   it('does not refresh for a 401 with another code, or for other statuses', async () => {

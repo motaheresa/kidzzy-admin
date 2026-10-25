@@ -29,8 +29,11 @@ export async function createTestApp(
   options: {
     loginRateLimit?: number;
     passwordRateLimit?: number;
-    /** Fixes the time the API sees (Clock), so generation does not depend on the day of the run. */
-    now?: Date;
+    /**
+     * Fixes the time the API sees (Clock), so generation does not depend on the day of the run.
+     * A function lets a test move the time while the app runs.
+     */
+    now?: Date | (() => Date);
     extraControllers?: Type<unknown>[];
   } = {},
 ): Promise<INestApplication<App>> {
@@ -46,7 +49,9 @@ export async function createTestApp(
   }
   if (options.now) {
     const now = options.now;
-    builder.overrideProvider(Clock).useValue({ now: () => new Date(now) });
+    builder
+      .overrideProvider(Clock)
+      .useValue({ now: () => new Date(typeof now === 'function' ? now() : now) });
   }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();

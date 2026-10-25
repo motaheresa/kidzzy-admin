@@ -113,11 +113,11 @@ describe('Auth (e2e)', () => {
       }
     });
 
-    it('sets httpOnly, SameSite=Strict cookies, the refresh one only for /auth/refresh', async () => {
+    it('sets httpOnly, SameSite=Strict cookies, the refresh one only for /auth (refresh and logout)', async () => {
       const res = await login({ login: email, password }).expect(200);
       const cookies = readCookies(res.headers['set-cookie']);
       expect(cookies.access_token.attributes).toMatch(/Path=\/api;/);
-      expect(cookies.refresh_token.attributes).toMatch(/Path=\/api\/v1\/auth\/refresh/);
+      expect(cookies.refresh_token.attributes).toMatch(/Path=\/api\/v1\/auth;/);
       for (const { attributes } of Object.values(cookies)) {
         expect(attributes).toMatch(/HttpOnly/);
         expect(attributes).toMatch(/SameSite=Strict/);
@@ -147,12 +147,13 @@ describe('Auth (e2e)', () => {
   });
 
   describe('signed-in routes', () => {
+    // POST /auth/logout is public (SCRUM-54), so GET /auth/me stands for a signed-in route here.
     it('reject a request without a valid access token', async () => {
       const server = app.getHttpServer();
-      const none = await request(server).post('/api/v1/auth/logout').expect(401);
+      const none = await request(server).get('/api/v1/auth/me').expect(401);
       expect(none.body).toMatchObject({ code: 'UNAUTHENTICATED' });
       await request(server)
-        .post('/api/v1/auth/logout')
+        .get('/api/v1/auth/me')
         .set('Cookie', 'access_token=not-a-jwt')
         .expect(401);
     });
@@ -161,10 +162,8 @@ describe('Auth (e2e)', () => {
       let claims: Record<string, unknown>;
       let secret: string;
       const now = () => Math.floor(Date.now() / 1000);
-      const logoutWith = (token: string) =>
-        request(app.getHttpServer())
-          .post('/api/v1/auth/logout')
-          .set('Cookie', `access_token=${token}`);
+      const meWith = (token: string) =>
+        request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', `access_token=${token}`);
 
       beforeAll(async () => {
         const admin = await prisma.unscoped.user.findFirstOrThrow({ where: { email } });
@@ -182,7 +181,7 @@ describe('Auth (e2e)', () => {
       // Control: the hand-made token is valid when signed correctly, so the refusals below
       // come from the forgery and not from a broken helper.
       it('accepts a correctly signed token', async () => {
-        await logoutWith(signTestJwt({ ...claims, exp: now() + 60 }, secret)).expect(204);
+        await meWith(signTestJwt({ ...claims, exp: now() + 60 }, secret)).expect(200);
       });
 
       it.each([
@@ -190,7 +189,7 @@ describe('Auth (e2e)', () => {
         ['with alg none and no signature', () => signTestJwt({ ...claims }, '', 'none')],
         ['expired', () => signTestJwt({ ...claims, exp: now() - 60 }, secret)],
       ])('rejects a token %s', async (_label, forge) => {
-        const res = await logoutWith(forge()).expect(401);
+        const res = await meWith(forge()).expect(401);
         expect(res.body).toMatchObject({ code: 'UNAUTHENTICATED' });
       });
     });

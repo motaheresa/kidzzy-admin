@@ -72,6 +72,7 @@ describe('Route access declarations (e2e)', () => {
       .filter((r) => r.allowedDuringPasswordChange)
       .map((r) => r.route)
       .sort();
-    expect(allowed).toEqual(['GET /auth/me', 'POST /auth/change-password', 'POST /auth/logout']);
+    // POST /auth/logout is @Public() (SCRUM-54), so it never waits on a password change.
+    expect(allowed).toEqual(['GET /auth/me', 'POST /auth/change-password']);
   });
 });
