@@ -336,6 +336,24 @@ export interface PaymentCycle {
   paidAt: string | null;
 }
 
+/**
+ * One entry of the audit log (openapi.yaml: AuditLog): who changed what and when, with the values
+ * before and after. before and after are objects of the fields that matter, or null.
+ */
+export interface AuditLog {
+  id: string;
+  actor: GroupRef;
+  /** For example session.cancelled or payment.recorded. */
+  action: string;
+  /** The kind of record: sessions, students, payment_cycles, payment_plans. */
+  entityType: string;
+  entityId: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  /** ISO 8601, UTC */
+  createdAt: string;
+}
+
 /** The payment that settled a cycle (openapi.yaml: Payment). amount: "1500.00". */
 export interface Payment {
   id: string;

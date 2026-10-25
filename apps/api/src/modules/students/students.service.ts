@@ -4,6 +4,7 @@ import { ErrorCode, type Page, type Student } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
 import { AcademyRepository } from '../academies/academy.repository';
+import { AuditService } from '../audit/audit.service';
 import { AccessContext } from '../auth/access-context';
 import { Clock } from '../sessions/clock';
 import { dateToString } from '../sessions/dates';
@@ -29,6 +30,7 @@ export class StudentsService {
     private readonly access: AccessContext,
     private readonly academies: AcademyRepository,
     private readonly clock: Clock,
+    private readonly audit: AuditService,
   ) {}
 
   async list(query: ListStudentsQueryDto): Promise<Page<Student>> {
@@ -92,8 +94,18 @@ export class StudentsService {
     const lastDay = open
       ? laterDate(addDays(today, -1), addDays(dateToString(open.startDate), -1))
       : today;
-    // TODO(US-35): audit log, the enrollment ended by the deactivation.
-    return toStudent(await this.students.deactivate(id, lastDay));
+    const deactivated = await this.students.deactivate(id, lastDay);
+    // Only when there was an open enrollment to end: deactivating again changes nothing.
+    if (open) {
+      await this.audit.record({
+        action: 'enrollment.ended',
+        entityType: 'students',
+        entityId: id,
+        before: { groupId: open.group.id, startDate: dateToString(open.startDate), endDate: null },
+        after: { groupId: open.group.id, endDate: lastDay },
+      });
+    }
+    return toStudent(deactivated);
   }
 
   private async findOrThrow(id: string): Promise<StudentRow> {

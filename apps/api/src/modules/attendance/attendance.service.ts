@@ -99,7 +99,8 @@ export class AttendanceService {
       });
     }
 
-    // TODO(US-35): write the audit log for this change.
+    // Not audited on purpose: attendance and ratings change often and move no money. What counts
+    // for a payment cycle is the Held session, and that is in the log (session.held).
     return toSessionAttendance(sessionId, students, await this.attendance.findBySession(sessionId));
   }
 

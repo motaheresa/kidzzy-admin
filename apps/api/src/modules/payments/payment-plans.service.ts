@@ -3,6 +3,7 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { ErrorCode, type PaymentPlan } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { AccessContext } from '../auth/access-context';
+import { AuditService } from '../audit/audit.service';
 import { GroupRepository } from '../groups/group.repository';
 import { InstructorRepository } from '../instructors/instructor.repository';
 import { toDecimal } from '../prisma/money';
@@ -12,6 +13,7 @@ import type { InstructorPlanDto } from './dto/instructor-plan.dto';
 import type { PlanInputDto } from './dto/plan-input.dto';
 import { PaymentCycleRepository } from './payment-cycle.repository';
 import { toPaymentPlan } from './payment-plan.mapper';
+import { planAudit } from './plan-audit';
 import { PaymentPlanRepository } from './payment-plan.repository';
 
 /**
@@ -35,6 +37,7 @@ export class PaymentPlansService {
     private readonly instructors: InstructorRepository,
     private readonly groups: GroupRepository,
     private readonly access: AccessContext,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -107,7 +110,13 @@ export class PaymentPlansService {
       amount,
       effectiveFromCycle: open.cycleNumber + 1,
     });
-    // TODO(US-35): audit log, the student's plan changed (NFR-06).
+    await this.audit.record({
+      action: 'payment_plan.changed',
+      entityType: 'payment_plans',
+      entityId: created.id,
+      before: planAudit(latest),
+      after: planAudit(created),
+    });
     return toPaymentPlan(created);
   }
 
@@ -159,7 +168,12 @@ export class PaymentPlansService {
         effectiveFromCycle: 1,
       });
       await this.cycles.createFirstForInstructor(instructorId, group.id, first, openingCount);
-      // TODO(US-35): audit log, the instructor's plan for the group was set (NFR-06).
+      await this.audit.record({
+        action: 'payment_plan.set',
+        entityType: 'payment_plans',
+        entityId: first.id,
+        after: planAudit(first, openingCount),
+      });
       return toPaymentPlan(first);
     }
 
@@ -192,7 +206,13 @@ export class PaymentPlansService {
       amount,
       effectiveFromCycle: open.cycleNumber + 1,
     });
-    // TODO(US-35): audit log, the instructor's plan for the group changed (NFR-06).
+    await this.audit.record({
+      action: 'payment_plan.changed',
+      entityType: 'payment_plans',
+      entityId: created.id,
+      before: planAudit(latest),
+      after: planAudit(created),
+    });
     return toPaymentPlan(created);
   }
 

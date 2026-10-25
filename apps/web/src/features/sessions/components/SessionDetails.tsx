@@ -1,3 +1,4 @@
+import { AuditHistoryLink } from '@/features/audit';
 import { CalendarOffIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Alert, Button, DetailList, EmptyState, PageHeader, Skeleton } from '@/components/ui';
@@ -71,6 +72,7 @@ export function SessionDetails({ id }: { id: string }) {
             <RescheduleSessionButton session={data} />
             <CancelSessionButton session={data} />
             <UndoHeldButton session={data} />
+            <AuditHistoryLink entityType="sessions" entityId={data.id} />
             {can('groups.read') && (
               <Button asChild variant="outline">
                 <Link to={`/groups/${data.group.id}`}>ارجع للجروب</Link>
