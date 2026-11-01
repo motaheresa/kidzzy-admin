@@ -43,10 +43,10 @@ export function ProtectedLayout() {
               <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:ms-auto sm:w-auto">
                 <NotificationBell />
                 <EnableNotifications />
-                <Button asChild variant="ghost">
-                  <Link to={CHANGE_PASSWORD_PATH}>
+                <Button asChild variant="ghost" size="icon" className="sm:w-auto sm:px-4">
+                  <Link to={CHANGE_PASSWORD_PATH} title="تغيير كلمة السر">
                     <KeyRoundIcon aria-hidden="true" />
-                    تغيير كلمة السر
+                    <span className="sr-only sm:not-sr-only">تغيير كلمة السر</span>
                   </Link>
                 </Button>
               </div>
