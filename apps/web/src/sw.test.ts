@@ -29,8 +29,13 @@ describe('service worker', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('listens to install and activate only: no fetch handler, so nothing is served from cache', () => {
-    expect([...listeners.keys()].sort()).toEqual(['activate', 'install']);
+  it('has no fetch handler, so nothing is served from cache', () => {
+    expect([...listeners.keys()].sort()).toEqual([
+      'activate',
+      'install',
+      'notificationclick',
+      'push',
+    ]);
   });
 
   it('takes over at once on install', () => {

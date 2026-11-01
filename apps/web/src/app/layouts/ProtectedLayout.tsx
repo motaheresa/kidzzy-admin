@@ -2,6 +2,7 @@ import { KeyRoundIcon } from 'lucide-react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router';
 import { Button, FullScreenMessage } from '@/components/ui';
 import { useSession } from '@/features/auth';
+import { EnableNotifications, NotificationBell } from '@/features/notifications';
 import { CHANGE_PASSWORD_PATH, changePasswordPathFor, loginPathFor } from '@/lib/routing';
 import { AppNav } from './AppNav';
 
@@ -39,12 +40,16 @@ export function ProtectedLayout() {
               <span className="text-xs text-muted-foreground">{session.data.academy.name}</span>
             </div>
             {!mustChange && (
-              <Button asChild variant="ghost" className="ms-auto">
-                <Link to={CHANGE_PASSWORD_PATH}>
-                  <KeyRoundIcon aria-hidden="true" />
-                  تغيير كلمة السر
-                </Link>
-              </Button>
+              <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
+                <NotificationBell />
+                <EnableNotifications />
+                <Button asChild variant="ghost">
+                  <Link to={CHANGE_PASSWORD_PATH}>
+                    <KeyRoundIcon aria-hidden="true" />
+                    تغيير كلمة السر
+                  </Link>
+                </Button>
+              </div>
             )}
           </div>
           {!mustChange && <AppNav />}

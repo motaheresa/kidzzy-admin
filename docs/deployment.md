@@ -32,6 +32,7 @@ The `deploy` user already owns the clone and the PM2 process. These are the piec
 - Node 22 is installed with nvm for the `deploy` user (`~/.nvm/versions/node/v22.*`), with `pnpm` (corepack) and `pm2` in the same `bin`. `curl`, `git` and `rsync` are on the default `PATH` (`/usr/bin`). The runner's rsync starts an rsync on the server too, which the preflight checks before anything is copied.
 - The clone is `/www/wwwroot/kidzzy-admin`, with `origin` pointing at this repository, and the `deploy` user can `git fetch`.
 - `apps/api/.env` exists, mode `600`, and is never committed. `NODE_ENV=production`, `DATABASE_URL` and `JWT_ACCESS_SECRET` are set there. `COOKIE_SECURE` stays true.
+- Web push needs a VAPID key pair in that same file, generated once on a trusted machine (`npx web-push generate-vapid-keys`) and copied in by hand. Never commit the keys, and never put them in GitHub: the API reads them only from this file. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (`mailto:` plus an address you control). The process refuses to start without them, so add them before the first deploy of the notification code or the health check fails. Changing the pair later invalidates every subscription already stored: the tick deletes the dead ones, and each device has to enable notifications again.
 - PM2 was started once from the API directory, so restarts keep reading that `.env`:
 
   ```bash

@@ -15,6 +15,16 @@ import {
 /** The placeholder in apps/api/.env.example; a real environment must replace it. */
 export const EXAMPLE_JWT_SECRET = 'change-me-to-a-long-random-string';
 
+/**
+ * Placeholders in apps/api/.env.example. They are long enough to pass the shape check, so the
+ * failure the developer sees is "still the example", the same way JWT_ACCESS_SECRET works.
+ * A real pair comes from `npx web-push generate-vapid-keys`.
+ */
+export const EXAMPLE_VAPID_PUBLIC_KEY =
+  'replace-with-vapid-public-key-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+export const EXAMPLE_VAPID_PRIVATE_KEY = 'replace-with-vapid-private-key-aaaaaaaaaa';
+export const EXAMPLE_VAPID_SUBJECT = 'mailto:replace-me@example.com';
+
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENVS)[number];
 
@@ -60,6 +70,35 @@ export class EnvironmentVariables {
   @MinLength(32, { message: 'JWT_ACCESS_SECRET must be at least 32 characters long' })
   @IsString({ message: 'JWT_ACCESS_SECRET is required' })
   JWT_ACCESS_SECRET!: string;
+
+  @NotEquals(EXAMPLE_VAPID_PUBLIC_KEY, {
+    message: 'VAPID_PUBLIC_KEY still has the example value from .env.example; generate a real pair',
+  })
+  @Matches(/^[A-Za-z0-9_-]{80,}$/, {
+    message: 'VAPID_PUBLIC_KEY must be the base64url public key from web-push generate-vapid-keys',
+  })
+  @IsString({ message: 'VAPID_PUBLIC_KEY is required' })
+  VAPID_PUBLIC_KEY!: string;
+
+  @NotEquals(EXAMPLE_VAPID_PRIVATE_KEY, {
+    message:
+      'VAPID_PRIVATE_KEY still has the example value from .env.example; generate a real pair',
+  })
+  @Matches(/^[A-Za-z0-9_-]{40,}$/, {
+    message:
+      'VAPID_PRIVATE_KEY must be the base64url private key from web-push generate-vapid-keys',
+  })
+  @IsString({ message: 'VAPID_PRIVATE_KEY is required' })
+  VAPID_PRIVATE_KEY!: string;
+
+  @NotEquals(EXAMPLE_VAPID_SUBJECT, {
+    message: 'VAPID_SUBJECT still has the example value from .env.example; set a real mailto:',
+  })
+  @Matches(/^mailto:[^\s@]+@[^\s@]+$/, {
+    message: 'VAPID_SUBJECT must be a mailto: address, for example mailto:admin@kidzzy-coders.com',
+  })
+  @IsString({ message: 'VAPID_SUBJECT is required' })
+  VAPID_SUBJECT!: string;
 
   @Transform(({ value }) => toInteger(value))
   @Min(1, { message: 'LOGIN_RATE_LIMIT must be at least 1' })

@@ -29,9 +29,10 @@ export class AcademyRepository {
   }
 
   /**
-   * EVERY ACADEMY, UNSCOPED ON PURPOSE: a background job (session generation) has no request and
-   * so no tenant yet; it lists the academies, then runs its work for each inside tenant.run().
-   * The only place besides login and refresh that crosses academies.
+   * EVERY ACADEMY, UNSCOPED ON PURPOSE: a background job (session generation, the reminder tick)
+   * has no request and so no tenant yet; it lists the academies, then runs its work for each
+   * inside tenant.run(). Login, refresh, and the push-subscription endpoint lookup are the
+   * other reads that cross academies.
    */
   listForJobs(): Promise<AcademyForJobs[]> {
     return this.prisma.unscoped.academy.findMany({
