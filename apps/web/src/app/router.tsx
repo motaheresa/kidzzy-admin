@@ -13,6 +13,7 @@ import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage';
 import { AuditLogPage } from '@/pages/audit/AuditLogPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { NotificationsPage } from '@/pages/notifications/NotificationsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { PaymentsPage } from '@/pages/payments/PaymentsPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
@@ -83,6 +84,8 @@ export const routes: RouteObject[] = [
           },
           // Every signed-in user may change their password: no RequirePermission (US-02).
           { path: '/change-password', element: <ChangePasswordPage /> },
+          // Every signed-in user has a notification center: no extra permission (TS-02).
+          { path: '/notifications', element: <NotificationsPage /> },
           {
             element: <RequirePermission permission="groups.read" />,
             children: [

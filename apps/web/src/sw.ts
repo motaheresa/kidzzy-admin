@@ -26,8 +26,65 @@ sw.addEventListener('activate', (event) => {
   );
 });
 
-// ── Web push (TS-02) ─────────────────────────────────────────────────────────────────────────
-// The 'push' and 'notificationclick' handlers go here when web push is built (ADR-0008).
-// Do not add a 'fetch' handler or any caching: offline support is out of scope by decision.
+// ── Web push (TS-02, ADR-0008) ───────────────────────────────────────────────────────────────
+// Shows a notification the server pushed. No caching and no request handler: the app stays online.
+
+interface PushData {
+  title?: string;
+  body?: string;
+  url?: string;
+}
+
+function readPush(event: PushEvent): PushData {
+  if (!event.data) return {};
+  try {
+    return event.data.json() as PushData;
+  } catch {
+    return { body: event.data.text() };
+  }
+}
+
+function sameSitePath(raw: unknown): string | undefined {
+  if (
+    typeof raw !== 'string' ||
+    !raw.startsWith('/') ||
+    raw.startsWith('//') ||
+    raw.startsWith('/\\')
+  ) {
+    return undefined;
+  }
+  if (raw.includes('\\')) return undefined;
+  return raw;
+}
+
+sw.addEventListener('push', (event) => {
+  const payload = readPush(event);
+  const url = sameSitePath(payload.url);
+  event.waitUntil(
+    sw.registration.showNotification(payload.title || 'كيدزي كودرز', {
+      body: payload.body,
+      icon: '/pwa-192x192.png',
+      data: url ? { url } : {},
+    }),
+  );
+});
+
+sw.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = sameSitePath((event.notification.data as { url?: unknown } | undefined)?.url);
+  if (!url) return;
+  const absolute = new URL(url, sw.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const open = windows.find((client) => client.url === absolute);
+      if (open) {
+        await open.focus();
+        return;
+      }
+      await sw.clients.openWindow(absolute);
+    })(),
+  );
+});
 
 export {};

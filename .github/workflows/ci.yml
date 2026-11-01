@@ -38,6 +38,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://kidzzy:kidzzy@localhost:5432/kidzzy_test?schema=public
       JWT_ACCESS_SECRET: ci-only-secret-not-used-anywhere-else
+      # CI-only VAPID pair. Not the production keys; those live in the server's apps/api/.env.
+      VAPID_PUBLIC_KEY: BLAB_p8NsCC8UdPrLd7TevAJZ3TYb_TOMoC_4bX2UWey_C7kZX9SeMCx8LV96dvPSDigs83WKxSSnNEzb6iW7aM
+      VAPID_PRIVATE_KEY: Wy9t0UMOY1bGPXZFVY7zQqGn2z4rZtM4H41U7g7Bpnc
+      VAPID_SUBJECT: mailto:ci@kidzzy.test
       HUSKY: 0
 
     steps:

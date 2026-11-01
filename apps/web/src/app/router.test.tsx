@@ -24,12 +24,19 @@ const unauthenticated = () =>
 let fetchMock: MockInstance<typeof fetch>;
 let calls: string[];
 
-/** Answers each API path; anything not listed is "signed out". */
+/**
+ * Answers each API path; anything not listed is "signed out". The header bell asks for the
+ * unread count on every signed-in screen, so that one path defaults to zero instead of a 401
+ * (a 401 would refresh the session and hide what the test is actually checking).
+ */
 function api(answers: Record<string, () => Response>) {
   fetchMock.mockImplementation((input, init = {}) => {
     const path = String(input).replace('/api/v1', '');
     calls.push(`${init.method ?? 'GET'} ${path}`);
-    return Promise.resolve((answers[path] ?? unauthenticated)());
+    const answer =
+      answers[path] ??
+      (path === '/notifications/unread-count' ? () => json(200, { count: 0 }) : unauthenticated);
+    return Promise.resolve(answer());
   });
 }
 
@@ -91,7 +98,12 @@ describe('ProtectedLayout', () => {
     renderAt('/');
 
     expect(await screen.findByText('اهلا Mohamed')).toBeInTheDocument();
-    expect(calls).toEqual(['GET /auth/me', 'POST /auth/refresh', 'GET /auth/me']);
+    expect(calls).toEqual([
+      'GET /auth/me',
+      'POST /auth/refresh',
+      'GET /auth/me',
+      'GET /notifications/unread-count',
+    ]);
   });
 
   it('sends the user to /login when the session expires while they are on a screen', async () => {

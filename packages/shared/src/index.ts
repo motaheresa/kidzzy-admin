@@ -43,6 +43,44 @@ export const NotificationType = {
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
+/** One in-app notification (openapi.yaml: Notification). */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  /** ISO 8601, UTC. Null while unread. */
+  readAt: string | null;
+  /** ISO 8601, UTC */
+  createdAt: string;
+}
+
+/** GET /notifications/unread-count (openapi.yaml: UnreadCount). */
+export interface UnreadCount {
+  count: number;
+}
+
+/** GET /push/public-key (openapi.yaml: PublicKey). */
+export interface PushPublicKey {
+  publicKey: string;
+}
+
+/** POST /push-subscriptions body (openapi.yaml: PushSubscriptionCreate). */
+export interface PushSubscriptionCreate {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  userAgent?: string;
+}
+
+/** A registered device (openapi.yaml: PushSubscription). */
+export interface PushSubscription {
+  id: string;
+  userAgent: string | null;
+  /** ISO 8601, UTC */
+  createdAt: string;
+}
+
 /** Stable error codes returned in Problem Details responses (API Design V1, Errors). */
 export const ErrorCode = {
   ValidationFailed: 'VALIDATION_FAILED',

@@ -1,9 +1,17 @@
-import { EXAMPLE_JWT_SECRET, validateEnv } from './env.validation';
+import {
+  EXAMPLE_JWT_SECRET,
+  EXAMPLE_VAPID_PUBLIC_KEY,
+  EXAMPLE_VAPID_SUBJECT,
+  validateEnv,
+} from './env.validation';
 
 const valid = {
   NODE_ENV: 'development',
   DATABASE_URL: 'postgresql://kidzzy:kidzzy@localhost:5432/kidzzy_admin?schema=public',
   JWT_ACCESS_SECRET: 'a'.repeat(32),
+  VAPID_PUBLIC_KEY: 'A'.repeat(87),
+  VAPID_PRIVATE_KEY: 'B'.repeat(43),
+  VAPID_SUBJECT: 'mailto:ci@kidzzy.test',
 };
 
 describe('validateEnv', () => {
@@ -54,6 +62,14 @@ describe('validateEnv', () => {
     ],
     ['JWT_ACCESS_SECRET short', { JWT_ACCESS_SECRET: 'a'.repeat(31) }, /at least 32 characters/],
     ['JWT_ACCESS_SECRET the example', { JWT_ACCESS_SECRET: EXAMPLE_JWT_SECRET }, /example value/],
+    ['VAPID_PUBLIC_KEY missing', { VAPID_PUBLIC_KEY: undefined }, /VAPID_PUBLIC_KEY is required/],
+    [
+      'VAPID_PUBLIC_KEY the example',
+      { VAPID_PUBLIC_KEY: EXAMPLE_VAPID_PUBLIC_KEY },
+      /example value/,
+    ],
+    ['VAPID_SUBJECT not mailto', { VAPID_SUBJECT: 'admin@kidzzy.test' }, /mailto:/],
+    ['VAPID_SUBJECT the example', { VAPID_SUBJECT: EXAMPLE_VAPID_SUBJECT }, /example value/],
     ['LOGIN_RATE_LIMIT empty', { LOGIN_RATE_LIMIT: '' }, /LOGIN_RATE_LIMIT must be a whole number/],
     ['LOGIN_RATE_LIMIT a typo', { LOGIN_RATE_LIMIT: '5a' }, /LOGIN_RATE_LIMIT must be a whole/],
     [

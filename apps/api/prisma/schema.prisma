@@ -44,8 +44,11 @@ model Academy {
   paymentCycles PaymentCycle[]
   attendance    Attendance[]
   cycleSessions CycleSession[]
-  payments      Payment[]
-  auditLogs     AuditLog[]
+  payments          Payment[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  reminderJobs      ReminderJob[]
 
   @@map("academies")
 }
@@ -77,6 +80,8 @@ model User {
   recordedAttendance   Attendance[]   @relation("AttendanceRecorder")
   recordedPayments     Payment[]      @relation("PaymentRecorder")
   auditLogs            AuditLog[]     @relation("AuditActor")
+  notifications        Notification[]
+  pushSubscriptions    PushSubscription[]
   instructorPlans      PaymentPlan[]
   instructorCycles     PaymentCycle[]
 
@@ -588,4 +593,75 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// In-app notification types (openapi.yaml: Notification.type).
+enum NotificationType {
+  session_reminder
+  student_payment
+  instructor_payment
+  payment_recorded
+  session_report
+  announcement
+
+  @@map("notification_type")
+}
+
+/// One row in the notification center (TS-02). Delivery to a device is a reminder job, not this row.
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  academyId String           @map("academy_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String
+  body      String
+  /// Extra fields for the client, for example `{ "url": "/sessions/…" }`.
+  data      Json             @default("{}")
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+/// One browser registered for web push. `endpoint` is unique across academies: a browser has one.
+model PushSubscription {
+  id         String    @id @default(uuid()) @db.Uuid
+  academyId  String    @map("academy_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@map("push_subscriptions")
+}
+
+/// A due piece of background work (ADR-0007). This story has one kind: deliver a notification by web push.
+model ReminderJob {
+  id        String    @id @default(uuid()) @db.Uuid
+  academyId String    @map("academy_id") @db.Uuid
+  kind      String
+  payload   Json
+  runAt     DateTime  @map("run_at") @db.Timestamptz(3)
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(3)
+  attempts  Int       @default(0)
+  lastError String?   @map("last_error")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@index([sentAt, runAt])
+  @@map("reminder_jobs")
 }

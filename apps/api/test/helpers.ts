@@ -11,6 +11,7 @@ import { configureApp } from '../src/app.setup';
 import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
 import { normalizeSearchText } from '../src/common/normalize/search-text';
 import { Clock } from '../src/modules/sessions/clock';
+import { PUSH_SENDER, type PushSender } from '../src/modules/notifications/push-sender';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /**
@@ -35,6 +36,8 @@ export async function createTestApp(
      */
     now?: Date | (() => Date);
     extraControllers?: Type<unknown>[];
+    /** Replaces the web-push sender so a test never calls the push service. */
+    pushSender?: PushSender;
   } = {},
 ): Promise<INestApplication<App>> {
   const builder = Test.createTestingModule({
@@ -46,6 +49,9 @@ export async function createTestApp(
       { name: 'login', ttl: 60_000, limit: options.loginRateLimit ?? 1000 },
       { name: 'password', ttl: 60_000, limit: options.passwordRateLimit ?? 1000 },
     ]);
+  }
+  if (options.pushSender) {
+    builder.overrideProvider(PUSH_SENDER).useValue(options.pushSender);
   }
   if (options.now) {
     const now = options.now;
@@ -101,6 +107,9 @@ export async function createUser(
 /** Deletes everything a test academy owns, in foreign-key order. */
 export async function removeAcademy(prisma: PrismaService, academyId: string): Promise<void> {
   const where = { academyId };
+  await prisma.unscoped.reminderJob.deleteMany({ where });
+  await prisma.unscoped.pushSubscription.deleteMany({ where });
+  await prisma.unscoped.notification.deleteMany({ where });
   await prisma.unscoped.attendance.deleteMany({ where });
   await prisma.unscoped.auditLog.deleteMany({ where });
   await prisma.unscoped.payment.deleteMany({ where });

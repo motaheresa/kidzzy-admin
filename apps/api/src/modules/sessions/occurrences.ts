@@ -9,8 +9,9 @@ import { DateTime } from 'luxon';
 //
 // Luxon, not the Temporal polyfill: it is stable and small, and it takes the zone rules from the
 // runtime's ICU data, so Node's tzdata decides. For a local time that does not exist (the hour
-// skipped when the clocks go forward) it moves forward by the gap; for one that happens twice (the
-// hour repeated when they go back) it takes the first, daylight-saving, one. tests: occurrences.spec.
+// skipped when the clocks go forward) it moves forward by the gap. For one that happens twice (the
+// hour repeated when they go back) current ICU keeps the later offset, so occurrenceInstant steps
+// back an hour when that hour has the same wall time and keeps the earlier one. tests: occurrences.spec.
 
 /** A slot, as generation needs it. weekday: 0 = Sunday … 6 = Saturday. */
 export interface SlotRule {
@@ -49,7 +50,12 @@ function toDateTime(instant: Date, zone: string): DateTime {
 export function occurrenceInstant(date: string, time: string, zone: string): Date {
   const value = DateTime.fromISO(`${date}T${time}`, { zone });
   if (!value.isValid) throw new Error(`Invalid local time ${date} ${time} in ${zone}`);
-  return value.toUTC().toJSDate();
+  // The fall-back hour happens twice. ICU keeps the later offset; an hour earlier then has the
+  // same wall time, and that earlier instant is the one the schedule means.
+  const earlier = value.minus({ hours: 1 });
+  const wall = 'yyyy-MM-dd HH:mm';
+  const chosen = earlier.toFormat(wall) === value.toFormat(wall) ? earlier : value;
+  return chosen.toUTC().toJSDate();
 }
 
 /** Every date from `from` to `to` (inclusive, YYYY-MM-DD) that falls on `weekday`. */
