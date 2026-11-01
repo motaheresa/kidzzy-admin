@@ -4,6 +4,11 @@ import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
 import { MAX_PUSH_ATTEMPTS, NOTIFICATION_PUSH } from './push.constants';
 
+/** The payload of a notification.push job. `pendingSubscriptionIds` is set after a failed try. */
+export type PushJobPayload = { notificationId: string; pendingSubscriptionIds?: string[] };
+
+export type JobFailure = { lastError: string; runAt: Date; payload: PushJobPayload };
+
 /** Locks and updates reminder jobs. Raw SQL filters academy_id itself. */
 @Injectable()
 export class ReminderJobRepository {
@@ -43,10 +48,10 @@ export class ReminderJobRepository {
     return rows[0]?.id ?? null;
   }
 
-  findPayload(id: string): Promise<{ id: string; payload: unknown } | null> {
+  findPayload(id: string): Promise<{ payload: unknown; attempts: number } | null> {
     return this.txHost.tx.reminderJob.findUnique({
       where: { id },
-      select: { id: true, payload: true },
+      select: { payload: true, attempts: true },
     });
   }
 
@@ -57,10 +62,19 @@ export class ReminderJobRepository {
     });
   }
 
-  async recordFailure(id: string, lastError: string): Promise<void> {
+  /**
+   * Counts a failed try, moves run_at forward and keeps only the subscriptions that still have to
+   * receive the push, so a retry never sends to a browser that already got it.
+   */
+  async recordFailure(id: string, failure: JobFailure): Promise<void> {
     await this.txHost.tx.reminderJob.update({
       where: { id },
-      data: { attempts: { increment: 1 }, lastError },
+      data: {
+        attempts: { increment: 1 },
+        lastError: failure.lastError,
+        runAt: failure.runAt,
+        payload: failure.payload,
+      },
     });
   }
 }

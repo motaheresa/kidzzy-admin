@@ -9,6 +9,7 @@ import {
   type PushMessage,
   type PushTarget,
 } from '../src/modules/notifications/push-sender';
+import { ReminderDelivery } from '../src/modules/notifications/reminder.delivery';
 import { ReminderJob } from '../src/modules/notifications/reminder.job';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { TenantContext } from '../src/modules/tenancy/tenant-context';
@@ -43,6 +44,7 @@ describe('Notifications and the reminder tick (e2e)', () => {
   let prisma: PrismaService;
   let notifications: NotificationsService;
   let tick: ReminderJob;
+  let delivery: ReminderDelivery;
   let tenant: TenantContext;
   let subscriptions: PushSubscriptionRepository;
   const push = new FakePush();
@@ -75,6 +77,7 @@ describe('Notifications and the reminder tick (e2e)', () => {
     prisma = app.get(PrismaService);
     notifications = app.get(NotificationsService);
     tick = app.get(ReminderJob);
+    delivery = app.get(ReminderDelivery);
     tenant = app.get(TenantContext);
     subscriptions = app.get(PushSubscriptionRepository);
     academyId = await createAcademy(prisma, 'notes');
@@ -116,6 +119,19 @@ describe('Notifications and the reminder tick (e2e)', () => {
       where: { academyId: { in: [academyId, otherAcademyId] }, sentAt: null },
     });
   }
+
+  /** A failed job waits before its next try. Tests that retry move it back into the past. */
+  async function makeDue(): Promise<void> {
+    await prisma.unscoped.reminderJob.updateMany({
+      where: { academyId: { in: [academyId, otherAcademyId] }, sentAt: null },
+      data: { runAt: new Date(Date.now() - 1000) },
+    });
+  }
+
+  const jobOf = (notificationId: string) =>
+    prisma.unscoped.reminderJob.findFirstOrThrow({
+      where: { payload: { path: ['notificationId'], equals: notificationId } },
+    });
 
   function device(endpoint: string) {
     return { endpoint, keys: { p256dh: 'key', auth: 'auth' }, userAgent: 'Test' };
@@ -294,11 +310,15 @@ describe('Notifications and the reminder tick (e2e)', () => {
     push.reset();
     push.status = 500;
     const retry = await notify(mona, 'retry');
-    for (let attempt = 0; attempt < 5; attempt += 1) await tick.deliverDue();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await makeDue();
+      await tick.deliverDue();
+    }
     const retryCalls = () =>
       push.calls.filter((call) => call.endpoint === 'https://push.example/retry');
     expect(retryCalls()).toHaveLength(5);
     const callsAfterLimit = push.calls.length;
+    await makeDue();
     await tick.deliverDue();
     expect(push.calls).toHaveLength(callsAfterLimit);
     expect(retryCalls()).toHaveLength(5);
@@ -335,29 +355,109 @@ describe('Notifications and the reminder tick (e2e)', () => {
     expect(once).toHaveLength(1);
   });
 
-  it('keeps going when one academy throws', async () => {
-    await request(server())
-      .post(api('/push-subscriptions'))
-      .set(as(otherToken))
-      .send(device('https://push.example/boom'))
-      .expect(201);
+  it('records a timeout and still sends the next job of the same academy in one tick', async () => {
+    await clearUnsent();
+    await prisma.unscoped.pushSubscription.deleteMany({ where: { userId: { in: [mona, nour] } } });
     await request(server())
       .post(api('/push-subscriptions'))
       .set(as(monaToken))
-      .send(device('https://push.example/fine'))
+      .send(device('https://push.example/boom-slow'))
       .expect(201);
-    const broken = await notify(otherUser, 'broken', otherAcademyId);
-    const fine = await notify(mona, 'fine');
+    await request(server())
+      .post(api('/push-subscriptions'))
+      .set(as(nourToken))
+      .send(device('https://push.example/next'))
+      .expect(201);
+    const stuck = await notify(mona, 'stuck');
+    const next = await notify(nour, 'next');
     push.reset();
     push.boom = true;
     await tick.deliverDue();
-    const brokenJob = await prisma.unscoped.reminderJob.findFirstOrThrow({
-      where: { payload: { path: ['notificationId'], equals: broken.id } },
+    const stuckJob = await jobOf(stuck.id);
+    expect(stuckJob.sentAt).toBeNull();
+    expect(stuckJob.attempts).toBe(1);
+    expect(stuckJob.lastError).toBe('Error');
+    expect((await jobOf(next.id)).sentAt).not.toBeNull();
+    // The failed job is no longer first in line: a second tick does not call it again.
+    push.calls = [];
+    await tick.deliverDue();
+    expect(push.calls).toHaveLength(0);
+  });
+
+  it('moves run_at forward by 1, 5, 15 and 60 minutes and stops at the limit', async () => {
+    await clearUnsent();
+    await prisma.unscoped.pushSubscription.deleteMany({ where: { userId: mona } });
+    await request(server())
+      .post(api('/push-subscriptions'))
+      .set(as(monaToken))
+      .send(device('https://push.example/boom-backoff'))
+      .expect(201);
+    const created = await notify(mona, 'backoff');
+    push.reset();
+    push.boom = true;
+    for (const minutes of [1, 5, 15, 60]) {
+      await makeDue();
+      const before = Date.now();
+      await tick.deliverDue();
+      const job = await jobOf(created.id);
+      const waited = (job.runAt.getTime() - before) / 60_000;
+      expect(waited).toBeGreaterThan(minutes - 0.5);
+      expect(waited).toBeLessThan(minutes + 0.5);
+    }
+    await makeDue();
+    await tick.deliverDue();
+    const last = await jobOf(created.id);
+    expect(last.attempts).toBe(5);
+    expect(last.sentAt).toBeNull();
+    expect(last.lastError).toBe('Error');
+    push.calls = [];
+    await makeDue();
+    await tick.deliverDue();
+    expect(push.calls).toHaveLength(0);
+  });
+
+  it('retries only the subscriptions that failed', async () => {
+    await clearUnsent();
+    await prisma.unscoped.pushSubscription.deleteMany({ where: { userId: mona } });
+    for (const name of ['good', 'boom-retry']) {
+      await request(server())
+        .post(api('/push-subscriptions'))
+        .set(as(monaToken))
+        .send(device(`https://push.example/${name}`))
+        .expect(201);
+    }
+    const created = await notify(mona, 'partial');
+    push.reset();
+    push.boom = true;
+    await tick.deliverDue();
+    expect(push.calls.map((call) => call.endpoint).sort()).toEqual([
+      'https://push.example/boom-retry',
+      'https://push.example/good',
+    ]);
+    expect((await jobOf(created.id)).sentAt).toBeNull();
+
+    push.calls = [];
+    push.boom = false;
+    await makeDue();
+    await tick.deliverDue();
+    expect(push.calls.map((call) => call.endpoint)).toEqual(['https://push.example/boom-retry']);
+    expect((await jobOf(created.id)).sentAt).not.toBeNull();
+  });
+
+  it('keeps going when one academy throws', async () => {
+    await clearUnsent();
+    await notify(otherUser, 'broken', otherAcademyId);
+    const fine = await notify(mona, 'fine');
+    const original = delivery.deliverOne.bind(delivery);
+    const spy = jest.spyOn(delivery, 'deliverOne').mockImplementation(() => {
+      if (tenant.requireAcademyId() === otherAcademyId) return Promise.reject(new Error('bug'));
+      return original();
     });
-    const fineJob = await prisma.unscoped.reminderJob.findFirstOrThrow({
-      where: { payload: { path: ['notificationId'], equals: fine.id } },
-    });
-    expect(brokenJob.sentAt).toBeNull();
-    expect(fineJob.sentAt).not.toBeNull();
+    try {
+      await tick.deliverDue();
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await jobOf(fine.id)).sentAt).not.toBeNull();
   });
 });

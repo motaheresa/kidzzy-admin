@@ -3,7 +3,8 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { NotificationRepository } from './notification.repository';
 import { safeAppPath } from './safe-path';
 import { PushSubscriptionRepository } from './push-subscription.repository';
-import { ReminderJobRepository } from './reminder-job.repository';
+import { ReminderJobRepository, type PushJobPayload } from './reminder-job.repository';
+import { MAX_PUSH_ATTEMPTS, PUSH_RETRY_DELAY_MINUTES } from './push.constants';
 import { PUSH_SENDER, PushRejectedError, type PushSender } from './push-sender';
 
 /**
@@ -29,21 +30,25 @@ export class ReminderDelivery {
     if (!id) return false;
 
     const job = await this.jobs.findPayload(id);
-    const notificationId = notificationIdOf(job?.payload);
-    if (!notificationId) {
+    const payload = payloadOf(job?.payload);
+    if (!job || !payload) {
       await this.jobs.markSent(id, now);
       return true;
     }
 
-    const notification = await this.notifications.findById(notificationId);
+    const notification = await this.notifications.findById(payload.notificationId);
     if (!notification) {
       await this.jobs.markSent(id, now);
       return true;
     }
 
     const url = safeAppPath(dataUrl(notification.data));
-    const targets = await this.subscriptions.listForUser(notification.userId);
-    let failed = false;
+    // The first try goes to every subscription. A retry goes only to the ones that failed.
+    const pending = payload.pendingSubscriptionIds;
+    const targets = (await this.subscriptions.listForUser(notification.userId)).filter(
+      (target) => !pending || pending.includes(target.id),
+    );
+    const failedIds: string[] = [];
     let lastError = '';
     for (const target of targets) {
       try {
@@ -58,22 +63,48 @@ export class ReminderDelivery {
           await this.subscriptions.deleteOwned(target.id);
           continue;
         }
-        // A rejected push is this subscription's problem: record it and keep the job for a retry.
-        // Anything else (the push service throwing) rolls the transaction back and stops this
-        // academy's tick. The job's catch still runs the next academy.
-        if (!(error instanceof PushRejectedError)) throw error;
-        failed = true;
-        lastError = String(error.statusCode);
+        // Any failure of one send (a status, a timeout, a network error) is this subscription's
+        // problem. It is recorded below and must never leave this loop, or the same job would be
+        // first in line on every tick and block the academy's later notifications.
+        failedIds.push(target.id);
+        lastError = describeFailure(error);
         this.logger.warn(
-          `Push failed notification=${notification.id} subscription=${target.id} status=${error.statusCode}`,
+          `Push failed notification=${notification.id} subscription=${target.id} error=${lastError}`,
         );
       }
     }
 
-    if (failed) await this.jobs.recordFailure(id, lastError);
-    else await this.jobs.markSent(id, now);
+    if (failedIds.length === 0) {
+      await this.jobs.markSent(id, now);
+      return true;
+    }
+
+    const attempts = job.attempts + 1;
+    await this.jobs.recordFailure(id, {
+      lastError,
+      runAt: new Date(now.getTime() + retryDelayMs(attempts)),
+      payload: { notificationId: notification.id, pendingSubscriptionIds: failedIds },
+    });
+    if (attempts >= MAX_PUSH_ATTEMPTS) {
+      this.logger.warn(
+        `Push gave up job=${id} notification=${notification.id} attempts=${attempts}`,
+      );
+    }
     return true;
   }
+}
+
+/** The status for a refusal, otherwise the error's class name. Never the message: it may hold an endpoint. */
+function describeFailure(error: unknown): string {
+  if (error instanceof PushRejectedError) return String(error.statusCode);
+  return error instanceof Error ? error.name : 'unknown';
+}
+
+/** Wait before the next try after `attempts` failed tries. Past the table, the longest wait. */
+function retryDelayMs(attempts: number): number {
+  const delays = PUSH_RETRY_DELAY_MINUTES;
+  const minutes = delays[Math.min(attempts, delays.length) - 1] ?? 0;
+  return minutes * 60_000;
 }
 
 function isGone(error: unknown): boolean {
@@ -82,12 +113,19 @@ function isGone(error: unknown): boolean {
   );
 }
 
-function notificationIdOf(payload: unknown): string | undefined {
+function payloadOf(payload: unknown): PushJobPayload | undefined {
   if (typeof payload !== 'object' || payload === null || !('notificationId' in payload)) {
     return undefined;
   }
-  const id = payload.notificationId;
-  return typeof id === 'string' ? id : undefined;
+  const { notificationId } = payload;
+  if (typeof notificationId !== 'string') return undefined;
+  const pending = 'pendingSubscriptionIds' in payload ? payload.pendingSubscriptionIds : undefined;
+  return Array.isArray(pending)
+    ? {
+        notificationId,
+        pendingSubscriptionIds: pending.filter((item): item is string => typeof item === 'string'),
+      }
+    : { notificationId };
 }
 
 function dataUrl(data: unknown): unknown {
