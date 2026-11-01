@@ -1,3 +1,4 @@
+import { BellOffIcon, BellRingIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Alert, Button } from '@/components/ui';
 import { pushPublicKey } from '../api/notifications.api';
@@ -99,14 +100,26 @@ export function EnableNotifications() {
       {state === 'on' ? (
         <Button
           variant="outline"
+          size="icon"
+          className="sm:w-auto sm:px-4"
+          title="إيقاف الإشعارات"
           loading={remove.isPending || save.isPending}
           onClick={() => void disable()}
         >
-          إيقاف الإشعارات
+          <BellOffIcon aria-hidden="true" className="in-aria-busy:hidden" />
+          <span className="sr-only sm:not-sr-only">إيقاف الإشعارات</span>
         </Button>
       ) : (
-        <Button variant="outline" loading={save.isPending} onClick={() => void enable()}>
-          تفعيل الإشعارات
+        <Button
+          variant="outline"
+          size="icon"
+          className="sm:w-auto sm:px-4"
+          title="تفعيل الإشعارات"
+          loading={save.isPending}
+          onClick={() => void enable()}
+        >
+          <BellRingIcon aria-hidden="true" className="in-aria-busy:hidden" />
+          <span className="sr-only sm:not-sr-only">تفعيل الإشعارات</span>
         </Button>
       )}
     </div>
