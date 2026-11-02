@@ -127,6 +127,18 @@ describe('notification center', () => {
     expect(screen.queryByRole('button', { name: 'إيقاف الإشعارات' })).not.toBeInTheDocument();
   });
 
+  it('hides the header button once push is on and offers the stop control on the page', async () => {
+    getSubscription.mockResolvedValue(subscription);
+    api({
+      'GET /notifications/unread-count': () => json(200, { count: 0 }),
+      'GET /notifications': () => json(200, page([])),
+    });
+    renderAt('/notifications');
+    expect(await screen.findByText('إشعارات الموبايل شغالة على الجهاز ده.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'تفعيل الإشعارات' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'إيقاف إشعارات الموبايل' })).toBeInTheDocument();
+  });
+
   it('marks a notification read and opens its path', async () => {
     api({
       'GET /notifications/unread-count': () => json(200, { count: 1 }),
@@ -180,12 +192,13 @@ describe('notification center', () => {
     getSubscription.mockResolvedValue(subscription);
     api({
       'GET /notifications/unread-count': () => json(200, { count: 0 }),
+      'GET /notifications': () => json(200, page([])),
       'POST /push-subscriptions': () =>
         json(201, { id: 'sub-2', userAgent: null, createdAt: note.createdAt }),
       'DELETE /push-subscriptions/sub-2': () => new Response(null, { status: 204 }),
     });
-    renderAt('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'إيقاف الإشعارات' }));
+    renderAt('/notifications');
+    await userEvent.click(await screen.findByRole('button', { name: 'إيقاف إشعارات الموبايل' }));
     await waitFor(() =>
       expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(
         expect.arrayContaining(['POST /push-subscriptions', 'DELETE /push-subscriptions/sub-2']),
@@ -194,13 +207,19 @@ describe('notification center', () => {
     expect(subscription.unsubscribe).toHaveBeenCalled();
   });
 
-  it('explains iPhone Safari that is not installed, and shows no enable button', async () => {
+  it('explains iPhone Safari that is not installed on the page, not in the header', async () => {
     Object.defineProperty(navigator, 'userAgent', {
       configurable: true,
       value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
     });
-    api({ 'GET /notifications/unread-count': () => json(200, { count: 0 }) });
+    api({
+      'GET /notifications/unread-count': () => json(200, { count: 0 }),
+      'GET /notifications': () => json(200, page([])),
+    });
     renderAt('/');
+    expect(await screen.findByRole('link', { name: 'الإشعارات' })).toBeInTheDocument();
+    expect(screen.queryByText(/الآيفون/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'الإشعارات' }));
     expect(
       await screen.findByText('الإشعارات على الآيفون بتشتغل بعد ما تضيف التطبيق لشاشة البداية.'),
     ).toBeInTheDocument();

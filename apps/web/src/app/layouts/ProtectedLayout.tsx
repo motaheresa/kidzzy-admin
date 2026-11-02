@@ -2,7 +2,7 @@ import { KeyRoundIcon } from 'lucide-react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router';
 import { Button, FullScreenMessage } from '@/components/ui';
 import { useSession } from '@/features/auth';
-import { EnableNotifications, NotificationBell } from '@/features/notifications';
+import { EnableNotifications, NotificationBell, PushProvider } from '@/features/notifications';
 import { CHANGE_PASSWORD_PATH, changePasswordPathFor, loginPathFor } from '@/lib/routing';
 import { AppNav } from './AppNav';
 
@@ -31,33 +31,35 @@ export function ProtectedLayout() {
     }
 
     return (
-      <div className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
-          <div className="mx-auto flex min-h-16 w-full max-w-5xl flex-wrap items-center gap-3 px-4 py-2">
-            <img src="/pwa-64x64.png" alt="" width={40} height={40} className="size-10" />
-            <div className="grid leading-tight">
-              <span className="font-display text-lg font-bold text-primary">كيدزي كودرز</span>
-              <span className="text-xs text-muted-foreground">{session.data.academy.name}</span>
-            </div>
-            {!mustChange && (
-              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:ms-auto sm:w-auto">
-                <NotificationBell />
-                <EnableNotifications />
-                <Button asChild variant="ghost" size="icon" className="sm:w-auto sm:px-4">
-                  <Link to={CHANGE_PASSWORD_PATH} title="تغيير كلمة السر">
-                    <KeyRoundIcon aria-hidden="true" />
-                    <span className="sr-only sm:not-sr-only">تغيير كلمة السر</span>
-                  </Link>
-                </Button>
+      <PushProvider>
+        <div className="flex min-h-dvh flex-col">
+          <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
+            <div className="mx-auto flex min-h-16 w-full max-w-5xl flex-wrap items-center gap-3 px-4 py-2">
+              <img src="/pwa-64x64.png" alt="" width={40} height={40} className="size-10" />
+              <div className="grid leading-tight">
+                <span className="font-display text-lg font-bold text-primary">كيدزي كودرز</span>
+                <span className="text-xs text-muted-foreground">{session.data.academy.name}</span>
               </div>
-            )}
+              {!mustChange && (
+                <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:ms-auto sm:w-auto">
+                  <NotificationBell />
+                  <EnableNotifications />
+                  <Button asChild variant="ghost" size="icon" className="sm:w-auto sm:px-4">
+                    <Link to={CHANGE_PASSWORD_PATH} title="تغيير كلمة السر">
+                      <KeyRoundIcon aria-hidden="true" />
+                      <span className="sr-only sm:not-sr-only">تغيير كلمة السر</span>
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+            {!mustChange && <AppNav />}
+          </header>
+          <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-8">
+            <Outlet />
           </div>
-          {!mustChange && <AppNav />}
-        </header>
-        <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-8">
-          <Outlet />
         </div>
-      </div>
+      </PushProvider>
     );
   }
 
