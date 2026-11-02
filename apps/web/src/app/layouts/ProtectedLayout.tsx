@@ -34,24 +34,38 @@ export function ProtectedLayout() {
       <PushProvider>
         <div className="flex min-h-dvh flex-col">
           <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
-            <div className="mx-auto flex min-h-16 w-full max-w-5xl flex-wrap items-center gap-3 px-4 py-2">
-              <img src="/pwa-64x64.png" alt="" width={40} height={40} className="size-10" />
-              <div className="grid leading-tight">
-                <span className="font-display text-lg font-bold text-primary">كيدزي كودرز</span>
-                <span className="text-xs text-muted-foreground">{session.data.academy.name}</span>
-              </div>
-              {!mustChange && (
-                <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:ms-auto sm:w-auto">
-                  <NotificationBell />
-                  <EnableNotifications />
-                  <Button asChild variant="ghost" size="icon" className="sm:w-auto sm:px-4">
-                    <Link to={CHANGE_PASSWORD_PATH} title="تغيير كلمة السر">
-                      <KeyRoundIcon aria-hidden="true" />
-                      <span className="sr-only sm:not-sr-only">تغيير كلمة السر</span>
-                    </Link>
-                  </Button>
+            <div className="mx-auto grid h-16 w-full max-w-5xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <img
+                  src="/pwa-64x64.png"
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="size-10 shrink-0"
+                />
+                <div className="grid min-w-0 leading-tight">
+                  <span className="truncate font-display text-lg font-bold text-primary">
+                    كيدزي كودرز
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {session.data.academy.name}
+                  </span>
                 </div>
-              )}
+              </div>
+              <div className="flex justify-center">{!mustChange && <NotificationBell />}</div>
+              <div className="flex items-center justify-end gap-1">
+                {!mustChange && (
+                  <>
+                    <EnableNotifications />
+                    <Button asChild variant="ghost" size="icon" className="sm:w-auto sm:px-4">
+                      <Link to={CHANGE_PASSWORD_PATH} title="تغيير كلمة السر">
+                        <KeyRoundIcon aria-hidden="true" />
+                        <span className="sr-only sm:not-sr-only">تغيير كلمة السر</span>
+                      </Link>
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
             {!mustChange && <AppNav />}
           </header>
