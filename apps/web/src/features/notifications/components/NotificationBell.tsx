@@ -4,7 +4,7 @@ import { Button } from '@/components/ui';
 import { formatNumber } from '@/lib/format';
 import { useUnreadCount } from '../hooks/useNotifications';
 
-/** The header bell, centered on the logo's row. The count refetches every minute and on focus. */
+/** The header bell, beside the password key on the logo's row. The count refetches every minute and on focus. */
 export function NotificationBell() {
   const unread = useUnreadCount(true);
   const count = unread.data?.count ?? 0;
