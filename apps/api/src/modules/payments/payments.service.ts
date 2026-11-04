@@ -1,17 +1,18 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
 import { DateTime } from 'luxon';
-import { ErrorCode, type Page, type Payment } from '@kidzzy/shared';
+import { ErrorCode, NotificationType, type Page, type Payment } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
 import { AcademyRepository } from '../academies/academy.repository';
 import { AccessContext } from '../auth/access-context';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { toDecimal, toMoney } from '../prisma/money';
 import { Clock } from '../sessions/clock';
 import type { ListPaymentsQueryDto } from './dto/list-payments.query';
 import type { PaymentCreateDto } from './dto/payment-create.dto';
-import { PaymentCycleRepository } from './payment-cycle.repository';
+import { PaymentCycleRepository, type PaymentCycleRow } from './payment-cycle.repository';
 import { toPayment } from './payment.mapper';
 import { PaymentRepository } from './payment.repository';
 
@@ -32,6 +33,7 @@ export class PaymentsService {
     private readonly clock: Clock,
     private readonly access: AccessContext,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -137,8 +139,8 @@ export class PaymentsService {
       recordedById: this.access.userId,
     });
     await this.cycles.markPaid(cycleId, now);
+    await this.notifyInstructor(cycle, created.id, toMoney(amount));
 
-    // TODO(US-28): tell the instructor their payment was recorded (an instructor's cycle).
     // The note is free text and stays out of the log; the money and the cycle's status are in.
     await this.audit.record({
       action: 'payment.recorded',
@@ -154,5 +156,25 @@ export class PaymentsService {
       },
     });
     return toPayment(created);
+  }
+
+  /**
+   * US-28: the instructor of this cycle, even after they stop teaching the group. A student's
+   * cycle has no account to notify. notify joins this transaction: it only writes the notification
+   * and its job. The tick sends the push later, so a push failure cannot undo the payment, and a
+   * refused payment never leaves a notification behind.
+   */
+  private async notifyInstructor(
+    cycle: PaymentCycleRow,
+    paymentId: string,
+    amount: string,
+  ): Promise<void> {
+    if (cycle.payeeType !== 'instructor' || !cycle.instructorId || !cycle.group) return;
+    await this.notifications.notify(cycle.instructorId, {
+      type: NotificationType.PaymentRecorded,
+      title: 'اتسجلتلك دفعة',
+      body: `${amount} جنيه عن جروب ${cycle.group.name}، دورة رقم ${cycle.cycleNumber}`,
+      data: { url: '/', cycleId: cycle.id, paymentId },
+    });
   }
 }

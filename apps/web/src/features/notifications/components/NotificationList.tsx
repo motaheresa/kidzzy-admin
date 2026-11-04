@@ -25,7 +25,9 @@ export function NotificationList() {
     const url = notification.data?.url;
     if (typeof url === 'string') {
       const path = safeReturnTo(url);
-      if (path !== '/') await navigate(path);
+      // '/' is home (an instructor's cycles). safeReturnTo also returns '/' for an unsafe value,
+      // and that one must not leave this page.
+      if (path !== '/' || url === '/') await navigate(path);
     }
   }
 
