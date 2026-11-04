@@ -4,6 +4,7 @@ import { SystemRole, type Payment, type PaymentCycle } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { Prisma } from '../src/generated/prisma/client';
+import { AuditService } from '../src/modules/audit/audit.service';
 import { ReminderJob } from '../src/modules/notifications/reminder.job';
 import type { PushMessage, PushTarget } from '../src/modules/notifications/push-sender';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
@@ -451,6 +452,23 @@ describe('Recording a payment (e2e)', () => {
       const wrongAmount = await dueInstructor();
       await pay(wrongAmount.cycle.id, { ...valid, amount: '1499.99' }).expect(422);
       expect(await notesOf(wrongAmount.instructorId)).toHaveLength(0);
+    });
+
+    it('rolls the notification and its job back when the payment fails after they were written', async () => {
+      const { instructorId, cycle } = await dueInstructor();
+      const jobsBefore = await prisma.unscoped.reminderJob.count({ where: { academyId } });
+      const spy = jest
+        .spyOn(app.get(AuditService), 'record')
+        .mockRejectedValueOnce(new Error('boom'));
+      try {
+        await pay(cycle.id, valid).expect(500);
+        expect(await payments(cycle.id)).toHaveLength(0);
+        expect(await cycleRow(cycle.id)).toMatchObject({ status: 'due', paidAt: null });
+        expect(await notesOf(instructorId)).toHaveLength(0);
+        expect(await prisma.unscoped.reminderJob.count({ where: { academyId } })).toBe(jobsBefore);
+      } finally {
+        spy.mockRestore();
+      }
     });
 
     it('still notifies the instructor of the cycle after they leave the group, and nobody else', async () => {

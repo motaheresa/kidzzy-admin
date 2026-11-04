@@ -8,7 +8,6 @@ import { AcademyRepository } from '../academies/academy.repository';
 import { AccessContext } from '../auth/access-context';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { safeAppPath } from '../notifications/safe-path';
 import { toDecimal, toMoney } from '../prisma/money';
 import { Clock } from '../sessions/clock';
 import type { ListPaymentsQueryDto } from './dto/list-payments.query';
@@ -171,12 +170,11 @@ export class PaymentsService {
     amount: string,
   ): Promise<void> {
     if (cycle.payeeType !== 'instructor' || !cycle.instructorId || !cycle.group) return;
-    const url = safeAppPath('/');
     await this.notifications.notify(cycle.instructorId, {
       type: NotificationType.PaymentRecorded,
       title: 'اتسجلتلك دفعة',
       body: `${amount} جنيه عن جروب ${cycle.group.name}، دورة رقم ${cycle.cycleNumber}`,
-      data: { ...(url ? { url } : {}), cycleId: cycle.id, paymentId },
+      data: { url: '/', cycleId: cycle.id, paymentId },
     });
   }
 }
