@@ -28,3 +28,7 @@ Login and every refresh write the user's current permission keys into the access
 ## Amendment (2026-10-17, SCRUM-16): the mustChangePassword claim
 
 The same mechanism carries one more claim. Login and every refresh write `mustChangePassword` from the user row, and a token without it is invalid (401). While it is true, `PermissionsGuard` answers 403 `PASSWORD_CHANGE_REQUIRED` to every non-public route except the three marked `@AllowedDuringPasswordChange()`: `GET /auth/me`, `POST /auth/logout` and `POST /auth/change-password`. Still no database query per request. An admin's password reset revokes every session of the instructor, so no device keeps a token without the flag beyond its 15 minutes; a change of password revokes them too and gives the current device a new session. `test/route-declarations.e2e-spec.ts` pins the list of allowed routes. This extends the decision above without changing it, so it is a note here rather than a new ADR.
+
+## Note (2026-11-04, SCRUM-54): logout is public
+
+The amendment above lists three allowed routes. Since SCRUM-54, `POST /auth/logout` is `@Public()` (it finds the session from the refresh cookie, so it works with an expired access token) and is no longer marked `@AllowedDuringPasswordChange()`. Only `GET /auth/me` and `POST /auth/change-password` are. A public route never waits on a password change, so the behavior for a user with a temporary password is unchanged: they can still sign out. `test/route-declarations.e2e-spec.ts` pins the two routes.
