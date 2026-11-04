@@ -125,15 +125,15 @@ route (app/router.tsx) -> layout (Public / Protected) -> page -> feature compone
 ADR-0013 has the reasons. Permission keys are `resource.action:scope` (`packages/shared/src/permissions.ts`).
 
 - Every route declares **exactly one** access rule (fail closed):
-  - `@Public()` for anyone (login, refresh, health)
-  - `@SignedIn()` for any signed-in user (`/auth/me`, `/auth/logout`)
+  - `@Public()` for anyone (login, refresh, logout, health)
+  - `@SignedIn()` for any signed-in user (`/auth/me`, `/auth/change-password`)
   - `@RequirePermission('groups.read')` for an action without its scope, matching `x-permission` in openapi.yaml
 - `test/route-declarations.e2e-spec.ts` walks every route and fails, naming it, when one declares none or several. `PermissionsGuard` also refuses such a route at runtime.
 - `PermissionsGuard` (global, after `JwtAuthGuard`) checks the token's `perms` claim, with no database query:
   - the caller holds `action:any` or `action:own` → it passes
   - otherwise → 403 `FORBIDDEN`
 - Login and every refresh put the current keys into the token, so a role change applies within 15 minutes.
-- **Temporary passwords** (US-02, ADR-0013 amendment): the token also carries `mustChangePassword`. While it is true, every non-public route answers 403 `PASSWORD_CHANGE_REQUIRED`, except the routes marked `@AllowedDuringPasswordChange()`: `/auth/me`, `/auth/logout` and `/auth/change-password`. The route-declarations test pins that list, so never add the decorator to a route that reads or changes data.
+- **Temporary passwords** (US-02, ADR-0013 amendment): the token also carries `mustChangePassword`. While it is true, every non-public route answers 403 `PASSWORD_CHANGE_REQUIRED`, except the routes marked `@AllowedDuringPasswordChange()`: `/auth/me` and `/auth/change-password`. Logout is `@Public()`, so it never waits on a password change. The route-declarations test pins that list, so never add the decorator to a route that reads or changes data.
 - The scope pattern: the service asks `AccessContext` and the repository filters.
 
   ```ts
