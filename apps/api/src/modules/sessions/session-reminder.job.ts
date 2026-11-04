@@ -42,11 +42,20 @@ export class SessionReminderJob {
     }
   }
 
-  /** One academy: list, then one transaction per lead. A duplicate claim does not throw. */
+  /**
+   * One academy: list, then one transaction per lead. A duplicate claim does not throw.
+   * A failure of one session stays in this loop. The list is soonest-first, so a session that
+   * keeps failing would otherwise stay first and block the later ones until its window ends.
+   */
   private async remindAcademy(): Promise<void> {
     const due = await this.reminders.listDue();
     for (const reminder of due) {
-      await this.reminders.sendOne(reminder);
+      try {
+        await this.reminders.sendOne(reminder);
+      } catch {
+        // The session id only. The error can carry the reminder text, and that stays out of the log.
+        this.logger.error(`Session reminder failed for session ${reminder.id}`);
+      }
     }
   }
 }

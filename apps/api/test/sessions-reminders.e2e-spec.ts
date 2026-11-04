@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { SystemRole } from '@kidzzy/shared';
 import { DateTime } from 'luxon';
 import type { App } from 'supertest/types';
+import { NotificationsService } from '../src/modules/notifications/notifications.service';
 import { QUARTER_HOUR_CRON } from '../src/modules/notifications/quarter-hour';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { SessionReminderJob } from '../src/modules/sessions/session-reminder.job';
@@ -287,6 +288,30 @@ describe('Session reminders (e2e)', () => {
       spy.mockRestore();
     }
     expect(await claims(session.id)).toHaveLength(1);
+  });
+
+  it('sends the later session when an earlier one fails', async () => {
+    now = cairo('2026-11-08T12:00:00');
+    const broken = await addSession({ at: new Date(now.getTime() + 35 * 60_000), name: 'معطوبة' });
+    const healthy = await addSession({ at: new Date(now.getTime() + 50 * 60_000), name: 'سليمة' });
+    const notifications = app.get(NotificationsService);
+    const original = notifications.notify.bind(notifications);
+    const spy = jest.spyOn(notifications, 'notify').mockImplementation((userId, input) => {
+      const sessionId = input.data?.sessionId;
+      if (sessionId === broken.id) return Promise.reject(new Error('boom'));
+      return original(userId, input);
+    });
+    try {
+      await job.remindAll();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await claims(broken.id)).toHaveLength(0);
+    expect((await notes(instructorId)).some((note) => note.body.includes('معطوبة'))).toBe(false);
+    expect(await claims(healthy.id)).toHaveLength(1);
+    expect((await notes(instructorId)).filter((note) => note.body.includes('سليمة'))).toHaveLength(
+      1,
+    );
   });
 
   it('sends the 50 earliest sessions and leaves the latest for the next run', async () => {
