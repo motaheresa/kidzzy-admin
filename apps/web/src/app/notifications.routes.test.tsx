@@ -155,6 +155,30 @@ describe('notification center', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/groups/g1'));
   });
 
+  it('opens home when the notification url is /', async () => {
+    const home = {
+      ...note,
+      id: '22222222-2222-4222-8222-222222222222',
+      type: 'payment_recorded' as const,
+      title: 'اتسجلتلك دفعة',
+      body: '1500.00 جنيه عن جروب أ، دورة رقم 1',
+      data: { url: '/' },
+    };
+    api({
+      'GET /notifications/unread-count': () => json(200, { count: 1 }),
+      'GET /notifications': () => json(200, page([home])),
+      [`POST /notifications/${home.id}/read`]: () => new Response(null, { status: 204 }),
+    });
+    const router = renderAt('/notifications');
+    await userEvent.click(await screen.findByRole('button', { name: /اتسجلتلك دفعة/ }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'POST' && call.path.endsWith('/read'))).toBe(
+        true,
+      ),
+    );
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+  });
+
   it('marks every notification read', async () => {
     api({
       'GET /notifications/unread-count': () => json(200, { count: 1 }),

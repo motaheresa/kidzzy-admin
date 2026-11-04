@@ -1634,6 +1634,12 @@ paths:
         becoming paid are one transaction, so two requests for the same cycle give one 201 and one 409. The
         database also holds a UNIQUE on the cycle as a last safety net. Undoing or editing a payment is not
         part of this operation. An unknown cycle, or another academy's, is 404.
+
+
+        Paying an instructor's cycle also notifies that instructor in the app and by web push (US-28). The
+        notification and its delivery job are written in the same transaction as the payment; the push is sent
+        later, so a push failure cannot undo the payment. The instructor of the cycle is notified even if they
+        no longer teach the group. A student's cycle is not notified, because students have no accounts.
       operationId: recordPayment
       x-permission: payments.manage
       x-story: US-23

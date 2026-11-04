@@ -4,6 +4,8 @@ import { SystemRole, type Payment, type PaymentCycle } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { Prisma } from '../src/generated/prisma/client';
+import { ReminderJob } from '../src/modules/notifications/reminder.job';
+import type { PushMessage, PushTarget } from '../src/modules/notifications/push-sender';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
 
@@ -16,9 +18,25 @@ const NOW = new Date('2026-10-24T22:30:00.000Z');
 const TODAY = '2026-10-25';
 type ErrorResponse = { code: string; errors?: { field: string }[] };
 
+class FakePush {
+  calls: PushTarget[] = [];
+
+  send(target: PushTarget, message: PushMessage): Promise<void> {
+    void message;
+    this.calls.push(target);
+    return Promise.resolve();
+  }
+
+  reset(): void {
+    this.calls = [];
+  }
+}
+
 describe('Recording a payment (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let tick: ReminderJob;
+  const push = new FakePush();
   let academyId: string;
   let otherAcademyId: string;
   let adminId: string;
@@ -134,8 +152,9 @@ describe('Recording a payment (e2e)', () => {
     prisma.unscoped.paymentCycle.findUniqueOrThrow({ where: { id } });
 
   beforeAll(async () => {
-    app = await createTestApp({ loginRateLimit: 1000, now: NOW });
+    app = await createTestApp({ loginRateLimit: 1000, now: NOW, pushSender: push });
     prisma = app.get(PrismaService);
+    tick = app.get(ReminderJob);
     academyId = await createAcademy(prisma, 'payments-record');
     otherAcademyId = await createAcademy(prisma, 'payments-record-other');
     adminId = await createUser(prisma, academyId, {
@@ -160,6 +179,8 @@ describe('Recording a payment (e2e)', () => {
     anaToken = await signIn(mail('ana'));
     otherAdminToken = await signIn(mail('other-admin'));
   });
+
+  beforeEach(() => push.reset());
 
   afterAll(async () => {
     await removeAcademy(prisma, academyId);
@@ -367,6 +388,110 @@ describe('Recording a payment (e2e)', () => {
         }),
       ).rejects.toThrow();
       expect(await payments(cycleId)).toHaveLength(1);
+    });
+  });
+
+  describe('telling the instructor (US-28)', () => {
+    const notesOf = (userId: string) =>
+      prisma.unscoped.notification.findMany({ where: { academyId, userId } });
+    const noteCount = () => prisma.unscoped.notification.count({ where: { academyId } });
+
+    /** A Due instructor cycle, with the person and the group the notification must name. */
+    async function dueInstructor(amount = '1500.00') {
+      const instructorId = await newInstructor();
+      const group = await newGroup(instructorId);
+      await request(server())
+        .post(api(`/instructors/${instructorId}/payment-plans`))
+        .set(as(adminToken))
+        .send({ groupId: group.id, sessionsPerCycle: 4, amount })
+        .expect(201);
+      const cycle = await prisma.unscoped.paymentCycle.findFirstOrThrow({
+        where: { instructorId, groupId: group.id },
+      });
+      await makeDue(cycle.id);
+      return { instructorId, group, cycle };
+    }
+
+    it('notifies that instructor once, and queues one push without sending it', async () => {
+      const { instructorId, group, cycle } = await dueInstructor();
+      const res = await pay(cycle.id, valid).expect(201);
+
+      const notes = await notesOf(instructorId);
+      expect(notes).toHaveLength(1);
+      expect(notes[0]).toMatchObject({
+        type: 'payment_recorded',
+        title: 'اتسجلتلك دفعة',
+        body: `1500.00 جنيه عن جروب ${group.name}، دورة رقم ${cycle.cycleNumber}`,
+        data: { url: '/', cycleId: cycle.id, paymentId: (res.body as Payment).id },
+      });
+      const jobs = await prisma.unscoped.reminderJob.findMany({
+        where: { payload: { path: ['notificationId'], equals: notes[0]?.id } },
+      });
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0]).toMatchObject({ kind: 'notification.push', sentAt: null });
+      expect(push.calls).toHaveLength(0);
+    });
+
+    it('notifies nobody for a student’s cycle', async () => {
+      const before = await noteCount();
+      const cycleId = await studentCycle('900.00');
+      await pay(cycleId, { ...valid, amount: '900.00' }).expect(201);
+      expect(await noteCount()).toBe(before);
+    });
+
+    it('notifies nobody when the payment is refused', async () => {
+      const inProgress = await dueInstructor();
+      await prisma.unscoped.paymentCycle.update({
+        where: { id: inProgress.cycle.id },
+        data: { status: 'in_progress', sessionsCounted: 0, dueAt: null },
+      });
+      await pay(inProgress.cycle.id, valid).expect(409);
+      expect(await notesOf(inProgress.instructorId)).toHaveLength(0);
+
+      const wrongAmount = await dueInstructor();
+      await pay(wrongAmount.cycle.id, { ...valid, amount: '1499.99' }).expect(422);
+      expect(await notesOf(wrongAmount.instructorId)).toHaveLength(0);
+    });
+
+    it('still notifies the instructor of the cycle after they leave the group, and nobody else', async () => {
+      const { instructorId, group, cycle } = await dueInstructor();
+      const replacement = await newInstructor();
+      await prisma.unscoped.group.update({
+        where: { id: group.id },
+        data: { instructorId: replacement },
+      });
+
+      await pay(cycle.id, valid).expect(201);
+
+      expect(await notesOf(instructorId)).toHaveLength(1);
+      expect(await notesOf(replacement)).toHaveLength(0);
+    });
+
+    it('sends that queued push on the tick', async () => {
+      const { instructorId, cycle } = await dueInstructor();
+      const email = mail('paid-push');
+      await prisma.unscoped.user.update({ where: { id: instructorId }, data: { email } });
+      const token = await signIn(email);
+      const endpoint = 'https://push.example/instructor-paid';
+      await request(server())
+        .post(api('/push-subscriptions'))
+        .set(as(token))
+        .send({ endpoint, keys: { p256dh: 'key', auth: 'auth' }, userAgent: 'Test' })
+        .expect(201);
+      await prisma.unscoped.reminderJob.deleteMany({ where: { academyId, sentAt: null } });
+
+      const res = await pay(cycle.id, valid).expect(201);
+      await tick.deliverDue();
+
+      const note = await prisma.unscoped.notification.findFirstOrThrow({
+        where: { userId: instructorId, type: 'payment_recorded' },
+      });
+      expect(note.data).toMatchObject({ paymentId: (res.body as Payment).id });
+      const job = await prisma.unscoped.reminderJob.findFirstOrThrow({
+        where: { payload: { path: ['notificationId'], equals: note.id } },
+      });
+      expect(job.sentAt).not.toBeNull();
+      expect(push.calls.some((call) => call.endpoint === endpoint)).toBe(true);
     });
   });
 

@@ -3,6 +3,7 @@ import { AcademiesModule } from '../academies/academies.module';
 import { AuditModule } from '../audit/audit.module';
 import { GroupsModule } from '../groups/groups.module';
 import { InstructorsModule } from '../instructors/instructors.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { StudentsModule } from '../students/students.module';
 import { PaymentCycleRepository } from './payment-cycle.repository';
@@ -28,6 +29,7 @@ import { PaymentPlansService } from './payment-plans.service';
     StudentsModule,
     InstructorsModule,
     GroupsModule,
+    NotificationsModule,
     SessionsModule,
   ],
   controllers: [PaymentPlansController, PaymentCyclesController, PaymentsController],
