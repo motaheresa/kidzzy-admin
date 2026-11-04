@@ -49,6 +49,7 @@ model Academy {
   notifications     Notification[]
   pushSubscriptions PushSubscription[]
   reminderJobs      ReminderJob[]
+  sessionReminders  SessionReminder[]
 
   @@map("academies")
 }
@@ -82,6 +83,7 @@ model User {
   auditLogs            AuditLog[]     @relation("AuditActor")
   notifications        Notification[]
   pushSubscriptions    PushSubscription[]
+  sessionReminders     SessionReminder[]
   instructorPlans      PaymentPlan[]
   instructorCycles     PaymentCycle[]
 
@@ -357,6 +359,7 @@ model Session {
   makeups         Session[]      @relation("SessionCompensation")
   attendance      Attendance[]
   cycleSessions   CycleSession[]
+  reminders       SessionReminder[]
 
   /// Generation inserts with ON CONFLICT DO NOTHING against this: running twice, or the job and a
   /// request at once, never duplicates a day (AC). Rows with a null slot never conflict.
@@ -368,6 +371,8 @@ model Session {
   /// Composite key for tenant-safe foreign keys (later: attendance, cycle_sessions).
   @@unique([id, academyId])
   @@index([groupId, scheduledAt])
+  /// The reminder job filters academy, status and a scheduled_at range (SCRUM-44).
+  @@index([academyId, status, scheduledAt])
   @@map("sessions")
 }
 
@@ -664,4 +669,23 @@ model ReminderJob {
   @@unique([id, academyId])
   @@index([sentAt, runAt])
   @@map("reminder_jobs")
+}
+
+/// One lead already sent for a session (SCRUM-44). The unique key is the session and the lead,
+/// not the time: a reschedule does not send that lead again.
+model SessionReminder {
+  id           String   @id @default(uuid()) @db.Uuid
+  academyId    String   @map("academy_id") @db.Uuid
+  sessionId    String   @map("session_id") @db.Uuid
+  leadMinutes  Int      @map("lead_minutes") @db.SmallInt
+  instructorId String   @map("instructor_id") @db.Uuid
+  sentAt       DateTime @map("sent_at") @db.Timestamptz(3)
+
+  academy    Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  session    Session @relation(fields: [sessionId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor User    @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([sessionId, leadMinutes])
+  @@map("session_reminders")
 }

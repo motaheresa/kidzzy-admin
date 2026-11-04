@@ -1,13 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { scheduleStartupRun, RUN_JOBS_ON_STARTUP } from '../../common/jobs/startup-run';
 import { AcademyRepository } from '../academies/academy.repository';
 import { TenantContext } from '../tenancy/tenant-context';
 import { JOBS_PER_TICK } from './push.constants';
+import { QUARTER_HOUR_CRON } from './quarter-hour';
 import { ReminderDelivery } from './reminder.delivery';
 
 /**
- * The minute tick (ADR-0007). It calls deliverDue, which tests call directly: nothing here waits
- * on the interval. One academy's failure is logged and the next academy still runs.
+ * The quarter-hour push tick (ADR-0007, amended by ADR-0016). It calls deliverDue, which tests
+ * call directly: nothing here waits for the cron. One academy's failure is logged and the next
+ * academy still runs.
  */
 @Injectable()
 export class ReminderJob {
@@ -17,9 +20,12 @@ export class ReminderJob {
     private readonly academies: AcademyRepository,
     private readonly tenant: TenantContext,
     private readonly delivery: ReminderDelivery,
-  ) {}
+    @Inject(RUN_JOBS_ON_STARTUP) runOnStartup: boolean,
+  ) {
+    scheduleStartupRun(runOnStartup, () => this.deliverDue(), this.logger);
+  }
 
-  @Interval(60_000)
+  @Cron(QUARTER_HOUR_CRON)
   tick(): Promise<void> {
     return this.deliverDue();
   }

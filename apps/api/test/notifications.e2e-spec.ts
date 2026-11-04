@@ -15,7 +15,7 @@ import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { TenantContext } from '../src/modules/tenancy/tenant-context';
 import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
 
-// TS-02. The tick is called directly (deliverDue). Nothing in here waits for @Interval.
+// TS-02. The tick is called directly (deliverDue). Nothing in here waits for the quarter-hour cron.
 
 class FakePush {
   calls: PushTarget[] = [];
@@ -384,7 +384,7 @@ describe('Notifications and the reminder tick (e2e)', () => {
     expect(push.calls).toHaveLength(0);
   });
 
-  it('moves run_at forward by 1, 5, 15 and 60 minutes and stops at the limit', async () => {
+  it('moves run_at forward by 15, 30, 60 and 120 minutes and stops at the limit', async () => {
     await clearUnsent();
     await prisma.unscoped.pushSubscription.deleteMany({ where: { userId: mona } });
     await request(server())
@@ -395,7 +395,7 @@ describe('Notifications and the reminder tick (e2e)', () => {
     const created = await notify(mona, 'backoff');
     push.reset();
     push.boom = true;
-    for (const minutes of [1, 5, 15, 60]) {
+    for (const minutes of [15, 30, 60, 120]) {
       await makeDue();
       const before = Date.now();
       await tick.deliverDue();

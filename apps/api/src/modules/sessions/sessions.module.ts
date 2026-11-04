@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AcademiesModule } from '../academies/academies.module';
 import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { Clock } from './clock';
+import { SessionReminderJob } from './session-reminder.job';
+import { SessionReminderRepository } from './session-reminder.repository';
+import { SessionReminderService } from './session-reminder.service';
 import { GroupSessionsController } from './group-sessions.controller';
 import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRegeneration } from './session-regeneration';
@@ -18,7 +22,7 @@ import { SessionsService } from './sessions.service';
  * import GroupRepository back.
  */
 @Module({
-  imports: [AcademiesModule, AuditModule],
+  imports: [AcademiesModule, AuditModule, NotificationsModule],
   controllers: [SessionsController, GroupSessionsController],
   providers: [
     Clock,
@@ -26,6 +30,9 @@ import { SessionsService } from './sessions.service';
     SessionGenerator,
     SessionRegeneration,
     SessionGenerationJob,
+    SessionReminderRepository,
+    SessionReminderService,
+    SessionReminderJob,
     SessionsService,
     SessionHeldHooks,
   ],

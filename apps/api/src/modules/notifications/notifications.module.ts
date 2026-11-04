@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RUN_JOBS_ON_STARTUP } from '../../common/jobs/startup-run';
 import { AcademiesModule } from '../academies/academies.module';
 import { NotificationRepository } from './notification.repository';
 import { NotificationsController } from './notifications.controller';
@@ -10,8 +11,8 @@ import { ReminderJob } from './reminder.job';
 import { ReminderJobRepository } from './reminder-job.repository';
 
 /**
- * Notification center, web push and the minute reminder tick (TS-02, ADR-0007, ADR-0008).
- * Later stories call NotificationsService.notify. This module does not produce reminders itself.
+ * Notification center, web push and the quarter-hour push tick (TS-02, ADR-0007, ADR-0008, ADR-0016).
+ * Later stories call NotificationsService.notify. Session reminders are their own job.
  */
 @Module({
   imports: [AcademiesModule],
@@ -25,7 +26,8 @@ import { ReminderJobRepository } from './reminder-job.repository';
     ReminderJob,
     WebPushSender,
     { provide: PUSH_SENDER, useExisting: WebPushSender },
+    { provide: RUN_JOBS_ON_STARTUP, useValue: true },
   ],
-  exports: [NotificationsService],
+  exports: [NotificationsService, RUN_JOBS_ON_STARTUP],
 })
 export class NotificationsModule {}

@@ -5,13 +5,13 @@ export const NOTIFICATION_PUSH = 'notification.push';
 export const MAX_PUSH_ATTEMPTS = 5;
 
 /**
- * Minutes a failed job waits before its next try, indexed by attempts already made minus one: a
- * push-service outage of a few minutes does not use up every attempt, and a failing job leaves
- * the head of the queue. The last attempt (MAX_PUSH_ATTEMPTS) has no wait after it.
+ * Minutes a failed job waits before its next try, indexed by attempts already made minus one.
+ * The steps are 15, 30, 60 and 120 so each wait is at least one quarter-hour tick (ADR-0016).
+ * The last attempt (MAX_PUSH_ATTEMPTS) has no wait after it.
  */
-export const PUSH_RETRY_DELAY_MINUTES = [1, 5, 15, 60];
+export const PUSH_RETRY_DELAY_MINUTES = [15, 30, 60, 120];
 
-/** How many due jobs one academy sends in a single tick. The rest wait for the next minute. */
+/** How many due jobs one academy sends in a single tick. The rest wait for the next quarter hour. */
 export const JOBS_PER_TICK = 50;
 
 /** A slow push service must not hold the job's row lock longer than this. */
