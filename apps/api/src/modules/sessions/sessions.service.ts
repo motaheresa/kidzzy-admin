@@ -350,7 +350,8 @@ export class SessionsService {
    * stands for) and its duration. status_changed_* is left alone, because it records who last
    * changed the STATUS and a reschedule is not one; the audit entry says who moved it. The new
    * time is not checked against the future or against other sessions (decided for SCRUM-28).
-   * Reminders (SCRUM-44) will be computed from scheduled_at, so they move with the session.
+   * Reminders (SCRUM-44) are computed from scheduled_at when the job runs, so a lead that
+   * has not been sent yet follows the new time. A lead already sent is not sent again.
    * Same write scope and group lock as marking Held and cancelling.
    */
   @Transactional()

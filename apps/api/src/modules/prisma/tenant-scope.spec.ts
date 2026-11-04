@@ -21,6 +21,7 @@ describe('TENANT_MODELS', () => {
       'Role',
       'ScheduleSlot',
       'Session',
+      'SessionReminder',
       'Student',
       'User',
     ]);

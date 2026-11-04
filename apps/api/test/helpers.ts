@@ -10,6 +10,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { normalizeEmail, normalizePhone } from '../src/common/normalize/login-identifiers';
 import { normalizeSearchText } from '../src/common/normalize/search-text';
+import { RUN_JOBS_ON_STARTUP } from '../src/common/jobs/startup-run';
 import { Clock } from '../src/modules/sessions/clock';
 import { PUSH_SENDER, type PushSender } from '../src/modules/notifications/push-sender';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
@@ -38,6 +39,11 @@ export async function createTestApp(
     extraControllers?: Type<unknown>[];
     /** Replaces the web-push sender so a test never calls the push service. */
     pushSender?: PushSender;
+    /**
+     * The push tick and the session-reminder job each schedule one run a few seconds after boot.
+     * Tests leave this off: every e2e file boots the API against the shared database.
+     */
+    runJobsOnStartup?: boolean;
   } = {},
 ): Promise<INestApplication<App>> {
   const builder = Test.createTestingModule({
@@ -53,6 +59,7 @@ export async function createTestApp(
   if (options.pushSender) {
     builder.overrideProvider(PUSH_SENDER).useValue(options.pushSender);
   }
+  builder.overrideProvider(RUN_JOBS_ON_STARTUP).useValue(options.runJobsOnStartup ?? false);
   if (options.now) {
     const now = options.now;
     builder
@@ -107,6 +114,7 @@ export async function createUser(
 /** Deletes everything a test academy owns, in foreign-key order. */
 export async function removeAcademy(prisma: PrismaService, academyId: string): Promise<void> {
   const where = { academyId };
+  await prisma.unscoped.sessionReminder.deleteMany({ where });
   await prisma.unscoped.reminderJob.deleteMany({ where });
   await prisma.unscoped.pushSubscription.deleteMany({ where });
   await prisma.unscoped.notification.deleteMany({ where });
