@@ -6,14 +6,17 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
 import type { HeldResult, Page, Session } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
 import { CancelSessionDto } from './dto/cancel-session.dto';
+import { HeldSessionDto } from './dto/held-session.dto';
 import { ListSessionsQueryDto } from './dto/list-sessions.query';
 import { RescheduleSessionDto } from './dto/reschedule-session.dto';
+import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionsService } from './sessions.service';
 
 /**
@@ -39,8 +42,20 @@ export class SessionsController {
   @RequirePermission('sessions.update')
   @Post(':id/held')
   @HttpCode(HttpStatus.OK)
-  markHeld(@Param('id', ParseUUIDPipe) id: string): Promise<HeldResult> {
-    return this.sessions.markHeld(id);
+  markHeld(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: HeldSessionDto,
+  ): Promise<HeldResult> {
+    return this.sessions.markHeld(id, body);
+  }
+
+  @RequirePermission('sessions.update')
+  @Patch(':id')
+  updateTopic(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateSessionDto,
+  ): Promise<Session> {
+    return this.sessions.updateTopic(id, body);
   }
 
   @RequirePermission('sessions.update')

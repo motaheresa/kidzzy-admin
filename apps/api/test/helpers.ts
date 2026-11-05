@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication, Type } from '@nestjs/common';
 import { getOptionsToken } from '@nestjs/throttler';
 import { hash } from '@node-rs/argon2';
+import { DateTime } from 'luxon';
+import request from 'supertest';
 import type { App } from 'supertest/types';
 import { SystemRole } from '@kidzzy/shared';
 import { seedAccess } from '../prisma/seed/access.seed';
@@ -166,4 +168,64 @@ export function readCookies(
       ];
     }),
   );
+}
+
+/**
+ * The body of POST /sessions/{id}/held that every existing test needs now: a topic and every
+ * student of the session marked present (the roster rule of the API: the group's enrollments that
+ * cover the session's academy-local date).
+ */
+export async function heldBody(
+  prisma: PrismaService,
+  sessionId: string,
+): Promise<{ topic: string; attendance: { studentId: string; status: 'present' }[] }> {
+  const session = await prisma.unscoped.session.findUniqueOrThrow({
+    where: { id: sessionId },
+    select: { groupId: true, scheduledAt: true, academy: { select: { timezone: true } } },
+  });
+  const day = DateTime.fromJSDate(session.scheduledAt, {
+    zone: session.academy.timezone,
+  }).toISODate();
+  if (!day) throw new Error('The session time has no local date');
+  const date = new Date(`${day}T00:00:00.000Z`);
+  const enrollments = await prisma.unscoped.enrollment.findMany({
+    where: {
+      groupId: session.groupId,
+      startDate: { lte: date },
+      OR: [{ endDate: null }, { endDate: { gte: date } }],
+    },
+    select: { studentId: true },
+  });
+  return {
+    topic: 'Test topic',
+    attendance: enrollments.map((e) => ({ studentId: e.studentId, status: 'present' as const })),
+  };
+}
+
+/**
+ * POST /sessions/{id}/held with a complete body, built when the request is sent. It returns the
+ * supertest request at once, so a test keeps writing `.expect(200)` as before; the body is
+ * computed from the database just before the request goes out.
+ */
+export function postHeld(
+  server: App,
+  prisma: PrismaService,
+  sessionId: string,
+  token: string,
+): request.Test {
+  const req = request(server)
+    .post(`/api/v1/sessions/${sessionId}/held`)
+    .set({ Cookie: `access_token=${token}` });
+  const end = req.end.bind(req) as (callback: request.CallbackHandler) => request.Test;
+  req.end = ((callback: request.CallbackHandler) => {
+    heldBody(prisma, sessionId).then(
+      (body) => {
+        void req.send(body);
+        end(callback);
+      },
+      (error: unknown) => callback(error as Error, undefined as never),
+    );
+    return req;
+  }) as typeof req.end;
+  return req;
 }

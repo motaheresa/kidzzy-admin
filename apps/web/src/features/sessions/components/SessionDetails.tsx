@@ -8,6 +8,7 @@ import { formatDateTime, formatNumber } from '@/lib/format';
 import { useSessionDetail } from '../hooks/useSessions';
 import { CancelSessionButton } from './CancelSessionButton';
 import { RescheduleSessionButton } from './RescheduleSessionButton';
+import { EditTopicButton } from './EditTopicButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { UndoHeldButton } from './UndoHeldButton';
 import { SessionStatusBadge } from './SessionStatusBadge';
@@ -88,6 +89,19 @@ export function SessionDetails({ id }: { id: string }) {
             value: data.sessionNumber === null ? '—' : formatNumber(data.sessionNumber),
           },
           { label: 'المدة', value: `${formatNumber(data.durationMin)} دقيقة` },
+          ...(data.status === 'held'
+            ? [
+                {
+                  label: 'اللي اتشرح',
+                  value: (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span>{data.topic ?? 'ما اتسجلش'}</span>
+                      <EditTopicButton session={data} />
+                    </span>
+                  ),
+                },
+              ]
+            : []),
           { label: 'سبب الالغاء', value: data.cancelReason },
         ]}
       />

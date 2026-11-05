@@ -343,6 +343,9 @@ model Session {
   compensatesSessionId     String?       @map("compensates_session_id") @db.Uuid
   compensatesAcademyId     String?       @map("compensates_academy_id") @db.Uuid
   cancelReason             String?       @map("cancel_reason")
+  /// What the instructor taught, written when the session is marked Held (SCRUM-79). Null for a
+  /// session that is not Held, and for sessions held before this column existed. Cleared by an undo.
+  topic                    String?
   /// Who last changed the status, and when. The academy mirror is null exactly when the user is
   /// null, and otherwise equals academyId (optional composite foreign key; see the migration).
   statusChangedAt          DateTime?     @map("status_changed_at") @db.Timestamptz(3)
@@ -504,6 +507,9 @@ model Attendance {
   status            AttendanceStatus
   performanceRating Int?             @map("performance_rating") @db.SmallInt
   homeworkRating    Int?             @map("homework_rating") @db.SmallInt
+  /// A free note about the student in this session (SCRUM-79). It is about a child: only the
+  /// attendance endpoints return it, and it is never copied into a notification or an audit row.
+  note              String?
   /// Who saved this row last, and when.
   recordedById      String           @map("recorded_by") @db.Uuid
   recordedAt        DateTime         @map("recorded_at") @db.Timestamptz(3)

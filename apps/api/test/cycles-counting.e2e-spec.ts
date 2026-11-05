@@ -3,7 +3,14 @@ import { SystemRole, type Group, type HeldResult, type Student } from '@kidzzy/s
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 // US-22 (SCRUM-38) and SCRUM-72: a Held session is counted into the open cycle of every student
 // whose enrollment covers its date, and into the open cycle of the (instructor on the session,
@@ -128,10 +135,7 @@ describe('Counting Held sessions into payment cycles (e2e)', () => {
     });
   }
 
-  const hold = (id: string) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(adminToken));
+  const hold = (id: string) => postHeld(server(), prisma, id, adminToken);
 
   const studentCycles = (studentId: string) =>
     prisma.unscoped.paymentCycle.findMany({

@@ -11,6 +11,7 @@ const ATTENDANCE_SELECT = {
   status: true,
   performanceRating: true,
   homeworkRating: true,
+  note: true,
 } as const satisfies Prisma.AttendanceSelect;
 
 export type AttendanceRow = Prisma.AttendanceGetPayload<{ select: typeof ATTENDANCE_SELECT }>;
@@ -29,11 +30,13 @@ const HISTORY_SELECT = {
   status: true,
   performanceRating: true,
   homeworkRating: true,
+  note: true,
   session: {
     select: {
       id: true,
       scheduledAt: true,
       sessionNumber: true,
+      topic: true,
       group: { select: { id: true, name: true } },
     },
   },
@@ -50,6 +53,7 @@ export interface AttendanceWrite {
   status: AttendanceStatus;
   performanceRating: number | null;
   homeworkRating: number | null;
+  note: string | null;
   recordedById: string;
   recordedAt: Date;
 }
@@ -132,6 +136,7 @@ export class AttendanceRepository {
       status: write.status,
       performanceRating: write.performanceRating,
       homeworkRating: write.homeworkRating,
+      note: write.note,
       recordedById: write.recordedById,
       recordedAt: write.recordedAt,
     };

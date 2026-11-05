@@ -3,7 +3,14 @@ import { SystemRole, type Group, type Session, type Student } from '@kidzzy/shar
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 // US-17 (SCRUM-41): the admin returns a Held session to Scheduled (BR-13). In one transaction the
 // session loses its number, the cycles that counted it take it out, its attendance goes, the later
@@ -105,10 +112,7 @@ describe('Undoing a Held session (e2e)', () => {
     return sessions;
   }
 
-  const hold = (id: string) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(adminToken));
+  const hold = (id: string) => postHeld(server(), prisma, id, adminToken);
   const undo = (id: string, token = adminToken) =>
     request(server())
       .post(api(`/sessions/${id}/undo-held`))

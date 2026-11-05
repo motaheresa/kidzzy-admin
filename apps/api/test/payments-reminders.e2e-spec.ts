@@ -4,7 +4,14 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { StudentRepository } from '../src/modules/students/student.repository';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 // US-27 (SCRUM-45). A Held session that crosses 2 left, 1 left or Due tells the active admins
 // once. The summary is built before any claim, so a bug in the text does not undo the Held mark.
@@ -139,10 +146,7 @@ describe('Payment reminders (e2e)', () => {
     return picked;
   }
 
-  const hold = (id: string) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(adminToken));
+  const hold = (id: string) => postHeld(server(), prisma, id, adminToken);
 
   const notes = (userId: string) =>
     prisma.unscoped.notification.findMany({

@@ -7,8 +7,10 @@ import { AccessContext } from '../auth/access-context';
 import { AuditService } from '../audit/audit.service';
 import { Clock } from './clock';
 import type { CreateSessionDto } from './dto/create-session.dto';
+import type { HeldSessionDto } from './dto/held-session.dto';
 import type { ListSessionsQueryDto } from './dto/list-sessions.query';
 import type { RescheduleSessionDto } from './dto/reschedule-session.dto';
+import type { UpdateSessionDto } from './dto/update-session.dto';
 import { toSession } from './session.mapper';
 import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRepository, type SessionRow } from './session.repository';
@@ -112,10 +114,18 @@ export class SessionsService {
    * waits and then sees this write. Marking Held never renumbers sessions that are already Held.
    * Undo (SCRUM-41, BR-13) is what will renumber later.
    *
-   * The admin session report (FR-26) is a later notification, not part of this write.
+   * The topic and the attendance of every student come in the same request and are written in the
+   * same transaction (SCRUM-79): Held, the number, the topic, the attendance, the cycle counters and
+   * the payment reminders are one fact, so a refusal anywhere (a missing student, a rating on an
+   * absent one) puts all of it back. The checks run in this order: the session (404, 403, 409 for
+   * its state, the clock and the order rule), then the attendance against the session's students.
+   *
+   * The admin session report (FR-26) is a later notification, not part of this write. When it is
+   * built it must use the topic and the counts only: a student's note is about a child and is never
+   * copied into a notification, a push payload or an audit row.
    */
   @Transactional()
-  async markHeld(id: string): Promise<HeldResult> {
+  async markHeld(id: string, dto: HeldSessionDto): Promise<HeldResult> {
     const row = await this.loadForWrite(id);
 
     if (row.status !== 'scheduled') {
@@ -136,11 +146,24 @@ export class SessionsService {
     await this.ensureOrder(row);
 
     const sessionNumber = await this.sessions.nextSessionNumber(row.group.id);
-    await this.sessions.markHeld(id, sessionNumber, this.access.userId, now);
+    await this.sessions.markHeld(id, sessionNumber, dto.topic, this.access.userId, now);
     const held = await this.sessions.findById(id);
     if (!held) {
       throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
     }
+
+    // The attendance first, as its own step, so a refusal comes before anything is counted.
+    await this.heldHooks.recordAttendance(
+      held,
+      dto.attendance.map((record) => ({
+        studentId: record.studentId,
+        status: record.status,
+        performanceRating: record.performanceRating ?? null,
+        homeworkRating: record.homeworkRating ?? null,
+        note: record.note ?? null,
+      })),
+      now,
+    );
 
     // Counts the session into the payment cycles (US-22), in this same transaction.
     const cyclesUpdated = await this.heldHooks.run(held, now);
@@ -210,8 +233,15 @@ export class SessionsService {
       action: 'session.held_undone',
       entityType: 'sessions',
       entityId: id,
-      before: { status: 'held', sessionNumber: row.sessionNumber },
-      after: { status: 'scheduled', sessionNumber: null, laterSessionsRenumbered: renumbered },
+      // The topic is cleared with the status, so the log keeps what it was. The notes are about
+      // children and are not recorded here.
+      before: { status: 'held', sessionNumber: row.sessionNumber, topic: row.topic },
+      after: {
+        status: 'scheduled',
+        sessionNumber: null,
+        topic: null,
+        laterSessionsRenumbered: renumbered,
+      },
     });
 
     const undone = await this.sessions.findById(id);
@@ -219,6 +249,38 @@ export class SessionsService {
       throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
     }
     return toSession(undone);
+  }
+
+  /**
+   * Corrects what was taught in a Held session (SCRUM-79). Only the topic changes. The same write
+   * rule and group lock as marking Held (scope `own`: the instructor on the session; scope `any`:
+   * the admin). A session that is not Held is 409 SESSION_NOT_HELD. Audited with the topic before
+   * and after.
+   */
+  @Transactional()
+  async updateTopic(id: string, dto: UpdateSessionDto): Promise<Session> {
+    const row = await this.loadForWrite(id);
+    if (row.status !== 'held') {
+      throw new AppException(
+        ErrorCode.SessionNotHeld,
+        HttpStatus.CONFLICT,
+        'The topic is written for a Held session',
+      );
+    }
+    await this.sessions.setTopic(id, dto.topic);
+    await this.audit.record({
+      action: 'session.topic_changed',
+      entityType: 'sessions',
+      entityId: id,
+      before: { topic: row.topic },
+      after: { topic: dto.topic },
+    });
+
+    const updated = await this.sessions.findById(id);
+    if (!updated) {
+      throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
+    }
+    return toSession(updated);
   }
 
   /**

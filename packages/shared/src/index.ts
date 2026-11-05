@@ -106,6 +106,7 @@ export const ErrorCode = {
   StudentAlreadyEnrolled: 'STUDENT_ALREADY_ENROLLED',
   StudentCodeTaken: 'STUDENT_CODE_TAKEN',
   StudentAbsent: 'STUDENT_ABSENT',
+  AttendanceIncomplete: 'ATTENDANCE_INCOMPLETE',
   StudentNotInSession: 'STUDENT_NOT_IN_SESSION',
   InstructorNotInGroup: 'INSTRUCTOR_NOT_IN_GROUP',
   StudentNotEnrollable: 'STUDENT_NOT_ENROLLABLE',
@@ -195,6 +196,11 @@ export interface Session {
   isMakeup: boolean;
   compensatesSessionId: string | null;
   cancelReason: string | null;
+  /**
+   * What the instructor taught. Null until the session is Held, and for sessions held before the
+   * topic existed (SCRUM-79).
+   */
+  topic: string | null;
 }
 
 /**
@@ -227,6 +233,14 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   performanceRating: number | null;
   homeworkRating: number | null;
+  /** About the student in this session. Absent students can have one too. */
+  note?: string | null;
+}
+
+/** The body of POST /sessions/{id}/held (openapi.yaml: HeldRequest): the topic and every student. */
+export interface HeldRequest {
+  topic: string;
+  attendance: AttendanceRecord[];
 }
 
 /**
@@ -239,6 +253,8 @@ export interface SessionAttendanceRecord {
   status: AttendanceStatus | null;
   performanceRating: number | null;
   homeworkRating: number | null;
+  /** Null when there is no note, or nothing is recorded yet. */
+  note: string | null;
 }
 
 /** Every student of a session, recorded or not (openapi.yaml: SessionAttendance). */
@@ -277,9 +293,13 @@ export interface StudentAttendanceItem {
   scheduledAt: string;
   sessionNumber: number | null;
   group: GroupRef;
+  /** What the instructor taught in that session; null for a session held before the topic existed. */
+  topic: string | null;
   status: AttendanceStatus;
   performanceRating: number | null;
   homeworkRating: number | null;
+  /** This student's note for that session. */
+  note: string | null;
 }
 
 /** An instructor account (openapi.yaml: Instructor). */

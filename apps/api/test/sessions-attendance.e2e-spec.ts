@@ -3,7 +3,14 @@ import { SystemRole, type Group, type SessionAttendance } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 const NOW = new Date('2026-10-22T10:00:00.000Z');
 type ErrorResponse = { code: string; errors?: { field: string }[] };
@@ -70,10 +77,7 @@ describe('Session attendance (e2e)', () => {
     const [session] = await sessionsOf(groupId);
     if (!session) throw new Error('expected a generated session');
     await setTime(session.id, at);
-    await request(server())
-      .post(api(`/sessions/${session.id}/held`))
-      .set(as(adminToken))
-      .expect(200);
+    await postHeld(server(), prisma, session.id, adminToken).expect(200);
     return session;
   }
 
@@ -191,6 +195,7 @@ describe('Session attendance (e2e)', () => {
         status: 'present',
         performanceRating: 5,
         homeworkRating: 4,
+        note: null,
       },
       {
         studentId: mona,
@@ -198,6 +203,7 @@ describe('Session attendance (e2e)', () => {
         status: null,
         performanceRating: null,
         homeworkRating: null,
+        note: null,
       },
       {
         studentId: zed,
@@ -205,6 +211,7 @@ describe('Session attendance (e2e)', () => {
         status: 'absent',
         performanceRating: null,
         homeworkRating: null,
+        note: null,
       },
     ]);
     const stored = await prisma.unscoped.attendance.findFirstOrThrow({
@@ -417,10 +424,7 @@ describe('Session attendance (e2e)', () => {
     const [past, future] = await sessionsOf(group.id);
     if (!past || !future) throw new Error('expected generated sessions');
     await setTime(past.id, '2026-10-20T08:00:00.000Z');
-    await request(server())
-      .post(api(`/sessions/${past.id}/held`))
-      .set(as(adminToken))
-      .expect(200);
+    await postHeld(server(), prisma, past.id, adminToken).expect(200);
     const student = await newStudent('Amal');
     await enroll(student, group.id, '2026-10-01');
     await request(server())

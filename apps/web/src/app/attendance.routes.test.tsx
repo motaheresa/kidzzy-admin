@@ -44,6 +44,7 @@ const session = (id: string, scheduledAt: string, sessionNumber: number) => ({
   isMakeup: false,
   compensatesSessionId: null,
   cancelReason: null,
+  topic: null,
 });
 
 const grid: GroupAttendance = {
@@ -81,6 +82,8 @@ const item = (
   status,
   performanceRating: status === 'present' ? 4 : null,
   homeworkRating: null,
+  topic: null,
+  note: null,
 });
 
 type Handler = (url: URL) => Response;

@@ -3,7 +3,14 @@ import { SystemRole, type Group, type PaymentCycle, type Student } from '@kidzzy
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 // US-36 (SCRUM-39): correct the starting point of a payee's first cycle (BR-14, AC-10). The counter
 // is recomputed from cycle_sessions: sessions_counted = openingCount + the sessions counted.
@@ -113,10 +120,7 @@ describe('Setting a first cycle’s starting point (e2e)', () => {
     return sessions;
   }
 
-  const hold = (id: string) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(adminToken));
+  const hold = (id: string) => postHeld(server(), prisma, id, adminToken);
   const setPoint = (cycleId: string, body: unknown, token = adminToken) =>
     request(server())
       .put(api(`/payment-cycles/${cycleId}/starting-point`))

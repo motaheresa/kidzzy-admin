@@ -3,7 +3,14 @@ import { SystemRole, type Group, type Session } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 const NOW = new Date('2026-10-22T10:00:00.000Z');
 type ErrorResponse = { code: string };
@@ -406,10 +413,9 @@ describe('Adding make-up and extra sessions (e2e)', () => {
       scheduledAt: '2026-10-20T14:00:00.000Z',
       durationMin: 60,
     }).expect(201);
-    const held = await request(server())
-      .post(api(`/sessions/${(extra.body as Session).id}/held`))
-      .set(as(adminToken))
-      .expect(200);
+    const held = await postHeld(server(), prisma, (extra.body as Session).id, adminToken).expect(
+      200,
+    );
 
     expect(held.body).toMatchObject({ status: 'held', sessionNumber: 1, isMakeup: true });
     const cycle = await prisma.unscoped.paymentCycle.findFirstOrThrow({

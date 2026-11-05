@@ -286,6 +286,7 @@ describe('the history links', () => {
     isMakeup: false,
     compensatesSessionId: null,
     cancelReason: null,
+    topic: null,
   };
   const student = {
     id: 'student-9',

@@ -32,6 +32,17 @@ const readOnlyAdmin: Me = {
   permissions: ['sessions.read:any', 'groups.read:any'],
 };
 const noSessions: Me = { ...admin, permissions: ['groups.read:any'] };
+// Marking Held now also loads the session's students, which needs attendance.read.
+const marker: Me = { ...admin, permissions: [...admin.permissions, 'attendance.read:any'] };
+const noStudents = (sessionId: string) => ({ sessionId, records: [] });
+
+/** The Held dialog's confirm button stays off until the topic is typed. */
+async function confirmHeld(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(await screen.findByLabelText('شرحت ايه النهارده؟'), 'Loops');
+  const confirm = await screen.findByRole('button', { name: 'ايوه، سجّلها' });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  await user.click(confirm);
+}
 
 const session: Session = {
   id: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
@@ -45,6 +56,7 @@ const session: Session = {
   isMakeup: false,
   compensatesSessionId: null,
   cancelReason: null,
+  topic: null,
 };
 
 const startedSession: Session = { ...session, scheduledAt: '2026-10-22T09:00:00.000Z' };
@@ -173,8 +185,9 @@ describe('a group’s sessions', () => {
   it('shows Mark Held on an eligible row and refreshes its status and number after confirmation', async () => {
     let held = false;
     let groupFetches = 0;
-    api(admin, {
+    api(marker, {
       'GET /sessions': () => json(200, page([held ? heldSession : startedSession])),
+      [`GET /sessions/${session.id}/attendance`]: () => json(200, noStudents(session.id)),
       [`GET ${groupPath}`]: () => {
         groupFetches += 1;
         return json(200, groupData());
@@ -187,9 +200,9 @@ describe('a group’s sessions', () => {
     });
     renderAt(groupPath);
 
-    const markButton = await screen.findByRole('button', { name: /سجّل حصة جروب A/ });
-    await userEvent.setup().click(markButton);
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
+    await confirmHeld(user);
 
     await waitFor(() =>
       expect(
@@ -261,14 +274,16 @@ describe('session details', () => {
       'فيه حصة أقدم لسه مجدولة، أو الحصة دي قبل حصة اتسجلت بالفعل. افتح الجروب وفلتر «مجدولة». لو الحصة مش بتاعتك، الأدمن هو اللي يسجّلها.',
     ],
   ])('shows the Arabic message when marking Held returns %s', async (code, message) => {
-    api(admin, {
+    api(marker, {
       [`GET /sessions/${session.id}`]: () => json(200, startedSession),
+      [`GET /sessions/${session.id}/attendance`]: () => json(200, noStudents(session.id)),
       [`POST /sessions/${session.id}/held`]: () => problem(409, code),
     });
     renderAt(`/sessions/${session.id}`);
 
-    await userEvent.setup().click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
+    await confirmHeld(user);
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
 
@@ -458,7 +473,13 @@ describe('attendance on the session details', () => {
     expect(await screen.findByText('اتحفظ')).toBeInTheDocument();
     expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({
       records: [
-        { studentId: 's1', status: 'present', performanceRating: null, homeworkRating: null },
+        {
+          studentId: 's1',
+          status: 'present',
+          performanceRating: null,
+          homeworkRating: null,
+          note: null,
+        },
       ],
     });
     expect(screen.getByRole('button', { name: 'احفظ الحضور' })).toBeDisabled();
@@ -574,7 +595,13 @@ describe('attendance on the session details', () => {
       await waitFor(() => expect(sent()).toBeDefined());
       expect(sent()).toEqual({
         records: [
-          { studentId: 's1', status: 'present', performanceRating: 3, homeworkRating: null },
+          {
+            studentId: 's1',
+            status: 'present',
+            performanceRating: 3,
+            homeworkRating: null,
+            note: null,
+          },
         ],
       });
     });
@@ -593,7 +620,13 @@ describe('attendance on the session details', () => {
       await waitFor(() => expect(sent()).toBeDefined());
       expect(sent()).toEqual({
         records: [
-          { studentId: 's1', status: 'present', performanceRating: 5, homeworkRating: null },
+          {
+            studentId: 's1',
+            status: 'present',
+            performanceRating: 5,
+            homeworkRating: null,
+            note: null,
+          },
         ],
       });
     });
@@ -627,7 +660,13 @@ describe('attendance on the session details', () => {
       await waitFor(() => expect(sent()).toBeDefined());
       expect(sent()).toEqual({
         records: [
-          { studentId: 's1', status: 'absent', performanceRating: null, homeworkRating: null },
+          {
+            studentId: 's1',
+            status: 'absent',
+            performanceRating: null,
+            homeworkRating: null,
+            note: null,
+          },
         ],
       });
     });
@@ -703,7 +742,8 @@ describe('sessions that need marking (SCRUM-73)', () => {
 
   it('leaves the section after Mark Held, and today’s list is read again', async () => {
     let held = false;
-    home(admin, () => (held ? [] : [overdue]), {
+    home(marker, () => (held ? [] : [overdue]), {
+      [`GET /sessions/${overdue.id}/attendance`]: () => json(200, noStudents(overdue.id)),
       [`POST /sessions/${overdue.id}/held`]: () => {
         held = true;
         return json(200, { ...overdue, status: 'held', sessionNumber: 1, cyclesUpdated: [] });
@@ -713,7 +753,7 @@ describe('sessions that need marking (SCRUM-73)', () => {
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
-    await user.click(await screen.findByRole('button', { name: 'ايوه، سجّلها' }));
+    await confirmHeld(user);
 
     await waitFor(() => expect(screen.queryByText(/سيشنات محتاجة تتسجل/)).not.toBeInTheDocument());
     const todayReads = calls.filter(

@@ -19,5 +19,6 @@ export function toSession(row: SessionRow): Session {
     isMakeup: row.isMakeup,
     compensatesSessionId: row.compensatesSessionId,
     cancelReason: row.cancelReason,
+    topic: row.topic,
   };
 }

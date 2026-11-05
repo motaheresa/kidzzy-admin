@@ -4,6 +4,7 @@ import { EnrollmentsModule } from '../enrollments/enrollments.module';
 import { GroupsModule } from '../groups/groups.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { StudentsModule } from '../students/students.module';
+import { AttendanceHeldRecorder } from './attendance-held.recorder';
 import { AttendanceViewsService } from './attendance-views.service';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceRepository } from './attendance.repository';
@@ -20,6 +21,12 @@ import { StudentAttendanceController } from './student-attendance.controller';
 @Module({
   imports: [AcademiesModule, EnrollmentsModule, GroupsModule, SessionsModule, StudentsModule],
   controllers: [AttendanceController, GroupAttendanceController, StudentAttendanceController],
-  providers: [AttendanceRepository, AttendanceService, AttendanceViewsService, AttendanceUndoHook],
+  providers: [
+    AttendanceRepository,
+    AttendanceService,
+    AttendanceViewsService,
+    AttendanceUndoHook,
+    AttendanceHeldRecorder,
+  ],
 })
 export class AttendanceModule {}

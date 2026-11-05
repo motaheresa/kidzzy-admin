@@ -1,4 +1,4 @@
-import type { Session } from '@kidzzy/shared';
+import type { HeldRequest, Session } from '@kidzzy/shared';
 import { useApiMutation, useQueryClient } from '@/lib/query';
 import { markSessionHeld } from '../api/sessions.api';
 import { applySessionChange } from './applySessionChange';
@@ -7,7 +7,7 @@ import { applySessionChange } from './applySessionChange';
 export function useMarkHeld(id: string) {
   const queryClient = useQueryClient();
   return useApiMutation({
-    mutationFn: () => markSessionHeld(id),
+    mutationFn: (body: HeldRequest) => markSessionHeld(id, body),
     meta: { errorHandling: 'local' },
     onSuccess: (result) => {
       const session: Session = {
@@ -22,6 +22,7 @@ export function useMarkHeld(id: string) {
         isMakeup: result.isMakeup,
         compensatesSessionId: result.compensatesSessionId,
         cancelReason: result.cancelReason,
+        topic: result.topic,
       };
       applySessionChange(queryClient, session);
     },
