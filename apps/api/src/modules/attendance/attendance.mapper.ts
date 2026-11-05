@@ -33,6 +33,7 @@ export function toSessionAttendance(
         status: row?.status ?? null,
         performanceRating: row?.performanceRating ?? null,
         homeworkRating: row?.homeworkRating ?? null,
+        note: row?.note ?? null,
       };
     }),
   };
@@ -81,8 +82,10 @@ export function toStudentAttendanceItem(row: HistoryAttendanceRow): StudentAtten
     scheduledAt: row.session.scheduledAt.toISOString(),
     sessionNumber: row.session.sessionNumber,
     group: { id: row.session.group.id, name: row.session.group.name },
+    topic: row.session.topic,
     status: row.status,
     performanceRating: row.performanceRating,
     homeworkRating: row.homeworkRating,
+    note: row.note,
   };
 }

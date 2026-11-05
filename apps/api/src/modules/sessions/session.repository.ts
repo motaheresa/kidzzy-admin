@@ -32,6 +32,7 @@ const SESSION_SELECT = {
   isMakeup: true,
   compensatesSessionId: true,
   cancelReason: true,
+  topic: true,
   group: { select: { id: true, name: true, instructorId: true } },
 } as const satisfies Prisma.SessionSelect;
 
@@ -327,6 +328,7 @@ export class SessionRepository {
   async markHeld(
     id: string,
     sessionNumber: number,
+    topic: string,
     changedById: string,
     changedAt: Date,
   ): Promise<void> {
@@ -335,6 +337,7 @@ export class SessionRepository {
       data: {
         status: 'held',
         sessionNumber,
+        topic,
         statusChangedById: changedById,
         statusChangedByAcademyId: this.tenant.requireAcademyId(),
         statusChangedAt: changedAt,
@@ -344,7 +347,8 @@ export class SessionRepository {
 
   /**
    * Takes a Held session back to Scheduled (US-17): no number, and who changed the status. The
-   * number is freed in this same UPDATE, because a check ties a number to the Held status.
+   * number is freed in this same UPDATE, because a check ties a number to the Held status. The
+   * topic goes too: it described a session the system now treats as not held.
    */
   async markScheduled(id: string, changedById: string, changedAt: Date): Promise<void> {
     await this.txHost.tx.session.update({
@@ -352,6 +356,7 @@ export class SessionRepository {
       data: {
         status: 'scheduled',
         sessionNumber: null,
+        topic: null,
         statusChangedById: changedById,
         statusChangedByAcademyId: this.tenant.requireAcademyId(),
         statusChangedAt: changedAt,
@@ -405,6 +410,11 @@ export class SessionRepository {
   /** Moves a session to another instant. Only scheduled_at changes; the status columns do not. */
   async setScheduledAt(id: string, scheduledAt: Date): Promise<void> {
     await this.txHost.tx.session.update({ where: { id }, data: { scheduledAt } });
+  }
+
+  /** Corrects what was taught in a Held session (SCRUM-79). The caller has checked the status. */
+  async setTopic(id: string, topic: string): Promise<void> {
+    await this.txHost.tx.session.update({ where: { id }, data: { topic } });
   }
 
   private where(filter: SessionListFilter): Prisma.SessionWhereInput {

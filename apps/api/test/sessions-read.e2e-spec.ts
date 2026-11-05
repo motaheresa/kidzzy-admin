@@ -160,6 +160,7 @@ describe('Reading sessions (e2e)', () => {
       isMakeup: false,
       compensatesSessionId: null,
       cancelReason: null,
+      topic: null,
     });
   }
 
@@ -182,6 +183,7 @@ describe('Reading sessions (e2e)', () => {
         'scheduledAt',
         'sessionNumber',
         'status',
+        'topic',
       ].sort(),
     );
     expect(Object.keys((res.body as Session).group).sort()).toEqual(['id', 'name']);

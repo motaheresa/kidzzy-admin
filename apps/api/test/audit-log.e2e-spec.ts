@@ -4,7 +4,14 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AuditRepository } from '../src/modules/audit/audit.repository';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 const NOW = new Date('2026-10-22T10:00:00.000Z');
 
@@ -141,10 +148,7 @@ describe('The audit log (e2e)', () => {
     });
   }
 
-  const hold = (id: string, token = adminToken) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(token));
+  const hold = (id: string, token = adminToken) => postHeld(server(), prisma, id, token);
   const cancel = (id: string, token = adminToken) =>
     request(server())
       .post(api(`/sessions/${id}/cancel`))

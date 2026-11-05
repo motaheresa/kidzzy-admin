@@ -12,7 +12,8 @@ const NONE = 'none';
  *
  * Without `noneLabel` the rating is optional: pressing the chosen star again clears it (null).
  * With `noneLabel` there is a first option for "none" (null), always one of the choices, which
- * is how homework works: null means there was no homework.
+ * is how homework works: null means there was no homework. A value of undefined means nothing is
+ * chosen yet (the Held dialog makes the instructor choose between a rating and "no homework").
  */
 export function StarRating({
   label,
@@ -21,11 +22,12 @@ export function StarRating({
   noneLabel,
 }: {
   label: string;
-  value: number | null;
+  value: number | null | undefined;
   onChange: (value: number | null) => void;
   noneLabel?: string;
 }) {
-  const selected = value === null ? (noneLabel ? NONE : '') : String(value);
+  const selected =
+    value === undefined ? '' : value === null ? (noneLabel ? NONE : '') : String(value);
 
   return (
     <ToggleGroup
@@ -57,7 +59,7 @@ export function StarRating({
             aria-hidden="true"
             className={cn(
               'size-6',
-              value !== null && star <= value
+              value != null && star <= value
                 ? 'fill-current text-primary'
                 : 'text-muted-foreground',
             )}

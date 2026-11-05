@@ -358,9 +358,11 @@ describe('Attendance views (e2e)', () => {
         scheduledAt: '2026-10-20T14:00:00.000Z',
         sessionNumber: 3,
         group: { id: group.id, name: group.name },
+        topic: null,
         status: 'present',
         performanceRating: 5,
         homeworkRating: 3,
+        note: null,
       });
       const second = (await history(student, '?pageSize=2&page=2').expect(200))
         .body as Page<StudentAttendanceItem>;

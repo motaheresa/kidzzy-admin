@@ -3,7 +3,14 @@ import { SystemRole, type Group, type Session } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 const NOW = new Date('2026-10-22T10:00:00.000Z');
 type ErrorResponse = { code: string };
@@ -65,9 +72,7 @@ describe('Rescheduling sessions (e2e)', () => {
   }
 
   function mark(id: string, token = anaToken) {
-    return request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(token));
+    return postHeld(server(), prisma, id, token);
   }
 
   function move(id: string, scheduledAt: unknown, token = anaToken) {

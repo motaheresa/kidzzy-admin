@@ -59,6 +59,12 @@ export function StudentAttendanceList({ studentId }: { studentId: string }) {
                 >
                   <span className="flex flex-col">
                     <span className="font-medium">{item.group.name}</span>
+                    {item.topic && <span className="text-sm">{'اتشرح: ' + item.topic}</span>}
+                    {item.note && (
+                      <span className="text-sm whitespace-pre-line text-muted-foreground">
+                        {'ملاحظة: ' + item.note}
+                      </span>
+                    )}
                     <span className="numeric text-sm text-muted-foreground">
                       {formatDateTime(item.scheduledAt, timeZone)}
                       {item.sessionNumber !== null && ' · #' + formatNumber(item.sessionNumber)}

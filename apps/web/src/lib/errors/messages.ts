@@ -37,6 +37,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   STUDENT_CODE_TAKEN: 'كود الطالب ده مستخدم قبل كده',
   STUDENT_ABSENT: 'مينفعش تقيّم طالب غايب',
   STUDENT_NOT_IN_SESSION: 'الطالب ده مش من طلاب الحصة دي',
+  ATTENDANCE_INCOMPLETE: 'قايمة الطلاب اتغيرت. راجع الحضور وسجّل كل الطلاب',
   INSTRUCTOR_NOT_IN_GROUP: 'المدرس ده مش مدرس الجروب ده دلوقتي، فمينفعش نحدد له اول خطة للجروب',
   STUDENT_NOT_ENROLLABLE: 'الطالب ده مش نشط، اختار طالب تاني',
   GROUP_INACTIVE: 'الجروب ده متوقف، اختار جروب شغال',

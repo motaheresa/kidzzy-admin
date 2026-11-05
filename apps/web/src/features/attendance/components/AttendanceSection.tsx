@@ -10,6 +10,7 @@ import {
   CardTitle,
   EmptyState,
   Skeleton,
+  TextareaField,
   ToggleGroup,
   ToggleGroupItem,
 } from '@/components/ui';
@@ -29,6 +30,7 @@ function toDraft(data: SessionAttendance): Draft {
         status: record.status,
         performanceRating: record.performanceRating,
         homeworkRating: record.homeworkRating,
+        note: record.note ?? '',
       },
     ]),
   );
@@ -88,7 +90,8 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
       line !== undefined &&
       (line.status !== record.status ||
         line.performanceRating !== record.performanceRating ||
-        line.homeworkRating !== record.homeworkRating)
+        line.homeworkRating !== record.homeworkRating ||
+        line.note !== (record.note ?? ''))
     );
   });
 
@@ -101,7 +104,7 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
         ...current,
         [studentId]:
           status === AttendanceStatus.Absent
-            ? { status, performanceRating: null, homeworkRating: null }
+            ? { ...line, status, performanceRating: null, homeworkRating: null }
             : { ...line, status },
       };
     });
@@ -118,6 +121,13 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
     });
   }
 
+  function setNote(studentId: string, note: string) {
+    setDraft((current) => {
+      const line = current[studentId];
+      return line ? { ...current, [studentId]: { ...line, note } } : current;
+    });
+  }
+
   function onSave() {
     save.mutate(
       changed.flatMap((record) => {
@@ -129,6 +139,8 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
             status: line.status,
             performanceRating: line.performanceRating,
             homeworkRating: line.homeworkRating,
+            // The full record every time: a record sent without a note clears the saved one.
+            note: line.note.trim() === '' ? null : line.note.trim(),
           },
         ];
       }),
@@ -182,6 +194,17 @@ function AttendanceForm({ data, editable }: { data: SessionAttendance; editable:
                     />
                   </RatingField>
                 </div>
+              )}
+              {editable && (
+                <TextareaField
+                  label={'ملاحظة عن ' + record.studentName}
+                  value={line?.note ?? ''}
+                  onChange={(event) => setNote(record.studentId, event.target.value)}
+                  maxLength={500}
+                />
+              )}
+              {!editable && record.note && (
+                <p className="text-sm whitespace-pre-line">{'ملاحظة: ' + record.note}</p>
               )}
               {!editable && record.status === AttendanceStatus.Present && (
                 <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">

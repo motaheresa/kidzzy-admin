@@ -3,7 +3,14 @@ import { SystemRole, type Group, type HeldResult } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 const NOW = new Date('2026-10-22T10:00:00.000Z');
 type HeldResponse = Pick<HeldResult, 'sessionNumber' | 'cyclesUpdated'>;
@@ -67,9 +74,7 @@ describe('Marking sessions Held (e2e)', () => {
   }
 
   function mark(id: string, token = anaToken) {
-    return request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(token));
+    return postHeld(server(), prisma, id, token);
   }
 
   beforeAll(async () => {

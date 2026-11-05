@@ -3,7 +3,14 @@ import { SystemRole, type Group, type HeldResult, type Session } from '@kidzzy/s
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeld,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 const NOW = new Date('2026-10-22T10:00:00.000Z');
 type HeldResponse = Pick<HeldResult, 'sessionNumber'>;
@@ -67,9 +74,7 @@ describe('Cancelling sessions (e2e)', () => {
   }
 
   function mark(id: string, token = anaToken) {
-    return request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(token));
+    return postHeld(server(), prisma, id, token);
   }
 
   function cancelWith(id: string, body: object, token = anaToken) {

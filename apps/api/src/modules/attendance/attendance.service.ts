@@ -8,6 +8,7 @@ import { AccessContext } from '../auth/access-context';
 import { EnrollmentRepository } from '../enrollments/enrollment.repository';
 import { Clock } from '../sessions/clock';
 import { SessionRepository, type SessionRow } from '../sessions/session.repository';
+import type { HeldAttendanceRecord } from '../sessions/session-held-hooks';
 import { isVisibleToInstructor } from '../sessions/session-visibility';
 import { toSessionAttendance } from './attendance.mapper';
 import { AttendanceRepository } from './attendance.repository';
@@ -62,7 +63,7 @@ export class AttendanceService {
    */
   @Transactional()
   async save(sessionId: string, dto: SaveAttendanceDto): Promise<SessionAttendance> {
-    this.assertNoDuplicateStudent(dto.records);
+    this.assertNoDuplicateStudent(dto.records, 'records');
 
     const first = await this.sessions.findById(sessionId);
     if (!first) throw notFound();
@@ -84,7 +85,7 @@ export class AttendanceService {
     }
 
     const students = await this.studentsOf(row);
-    this.assertRecordsAreValid(dto.records, new Set(students.map((s) => s.studentId)));
+    this.assertRecordsAreValid(dto.records, new Set(students.map((s) => s.studentId)), 'records');
 
     const now = this.clock.now();
     for (const record of dto.records) {
@@ -94,14 +95,58 @@ export class AttendanceService {
         status: record.status,
         performanceRating: record.performanceRating ?? null,
         homeworkRating: record.homeworkRating ?? null,
+        // A record sent without a note clears it, the same as a rating left out.
+        note: record.note ?? null,
         recordedById: this.access.userId,
         recordedAt: now,
       });
     }
 
     // Not audited on purpose: attendance and ratings change often and move no money. What counts
-    // for a payment cycle is the Held session, and that is in the log (session.held).
+    // for a payment cycle is the Held session, and that is in the log (session.held). A note is
+    // about a child: it stays in this table and is never copied into an audit row, a
+    // notification or a push payload.
     return toSessionAttendance(sessionId, students, await this.attendance.findBySession(sessionId));
+  }
+
+  /**
+   * The attendance sent with a Held session (SCRUM-79), written inside the Held transaction while
+   * the group is locked by the caller. The first problem found is the one reported, in this order:
+   * the same student twice (400), a student who is not in the session (422 STUDENT_NOT_IN_SESSION),
+   * a rating on an absent student (422 STUDENT_ABSENT), then a student of the session with no line
+   * (422 ATTENDANCE_INCOMPLETE, one field error per missing student). A session with no students
+   * takes an empty list. Any refusal rolls the whole Held mark back.
+   */
+  async recordForHeld(row: SessionRow, records: HeldAttendanceRecord[], at: Date): Promise<void> {
+    this.assertNoDuplicateStudent(records, 'attendance');
+    const students = await this.studentsOf(row);
+    this.assertRecordsAreValid(records, new Set(students.map((s) => s.studentId)), 'attendance');
+
+    const sent = new Set(records.map((record) => record.studentId));
+    const missing = students.filter((s) => !sent.has(s.studentId));
+    if (missing.length > 0) {
+      throw new AppException(
+        ErrorCode.AttendanceIncomplete,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'Every student of the session needs a status',
+        missing.map((s) => ({ field: 'attendance', message: s.studentId })),
+      );
+    }
+
+    for (const record of records) {
+      await this.attendance.upsert({
+        sessionId: row.id,
+        studentId: record.studentId,
+        status: record.status,
+        performanceRating: record.performanceRating,
+        homeworkRating: record.homeworkRating,
+        // About a child: never copied into the session report notification (FR-26), a push
+        // payload or an audit row.
+        note: record.note,
+        recordedById: this.access.userId,
+        recordedAt: at,
+      });
+    }
   }
 
   private async view(row: SessionRow): Promise<SessionAttendance> {
@@ -131,13 +176,13 @@ export class AttendanceService {
   }
 
   /** The same student twice is a shape error: which line would win? */
-  private assertNoDuplicateStudent(records: AttendanceRecordDto[]): void {
+  private assertNoDuplicateStudent(records: { studentId: string }[], list: string): void {
     const seen = new Set<string>();
     const errors: FieldError[] = [];
     records.forEach((record, index) => {
       if (seen.has(record.studentId)) {
         errors.push({
-          field: `records.${index}.studentId`,
+          field: `${list}.${index}.studentId`,
           message: 'studentId appears more than once',
         });
       }
@@ -154,26 +199,33 @@ export class AttendanceService {
   }
 
   /** 422 for a student who is not in the session, then for a rating on an absent student. */
-  private assertRecordsAreValid(records: AttendanceRecordDto[], studentIds: Set<string>): void {
+  private assertRecordsAreValid(
+    records: Pick<
+      AttendanceRecordDto,
+      'studentId' | 'status' | 'performanceRating' | 'homeworkRating'
+    >[],
+    studentIds: Set<string>,
+    list: string,
+  ): void {
     const notInSession: FieldError[] = [];
     const absentRated: FieldError[] = [];
     records.forEach((record, index) => {
       if (!studentIds.has(record.studentId)) {
         notInSession.push({
-          field: `records.${index}.studentId`,
+          field: `${list}.${index}.studentId`,
           message: 'The student is not in this session',
         });
       }
       if (record.status === 'absent') {
         if (record.performanceRating != null) {
           absentRated.push({
-            field: `records.${index}.performanceRating`,
+            field: `${list}.${index}.performanceRating`,
             message: 'An absent student cannot be rated',
           });
         }
         if (record.homeworkRating != null) {
           absentRated.push({
-            field: `records.${index}.homeworkRating`,
+            field: `${list}.${index}.homeworkRating`,
             message: 'An absent student cannot be rated',
           });
         }

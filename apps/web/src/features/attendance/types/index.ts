@@ -26,6 +26,8 @@ export interface AttendanceDraft {
   status: AttendanceStatus | null;
   performanceRating: number | null;
   homeworkRating: number | null;
+  /** The note as typed; empty means no note. */
+  note: string;
 }
 
 /** The dates of the group grid, academy-local YYYY-MM-DD, both included. Either may be left out. */

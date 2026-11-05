@@ -35,6 +35,20 @@ export function useSaveAttendance(sessionId: string) {
   });
 }
 
+/**
+ * Returns a function that refreshes everything that shows a session's attendance: the session's
+ * own list, the group grids and the student histories. A Held mark writes the attendance on the
+ * server, so the sessions feature calls it after the mark.
+ */
+export function useRefreshAttendance() {
+  const queryClient = useQueryClient();
+  return (sessionId: string) => {
+    void queryClient.invalidateQueries({ queryKey: attendanceKeys.session(sessionId) });
+    void queryClient.invalidateQueries({ queryKey: attendanceKeys.groups() });
+    void queryClient.invalidateQueries({ queryKey: attendanceKeys.students() });
+  };
+}
+
 /** A group's attendance grid for a date range. `enabled` skips the request (no permission, bad range). */
 export function useGroupAttendance(groupId: string, range: AttendanceRange, enabled = true) {
   return useApiQuery({

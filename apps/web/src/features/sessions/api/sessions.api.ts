@@ -1,4 +1,4 @@
-import type { HeldResult } from '@kidzzy/shared';
+import type { HeldRequest, HeldResult } from '@kidzzy/shared';
 import { http } from '@/lib/http';
 import type { Page, Session, SessionListParams } from '../types';
 
@@ -30,9 +30,14 @@ export function getSession(id: string, signal?: AbortSignal): Promise<Session> {
   return http.get<Session>(path(id), { signal });
 }
 
-/** POST /sessions/{id}/held. cyclesUpdated is empty until cycles are counted. */
-export function markSessionHeld(id: string): Promise<HeldResult> {
-  return http.post<HeldResult>(`${path(id)}/held`);
+/** POST /sessions/{id}/held: the topic and every student's attendance, in one request. */
+export function markSessionHeld(id: string, body: HeldRequest): Promise<HeldResult> {
+  return http.post<HeldResult>(`${path(id)}/held`, body);
+}
+
+/** PATCH /sessions/{id}: corrects what was taught in a Held session. */
+export function updateSessionTopic(id: string, topic: string): Promise<Session> {
+  return http.patch<Session>(path(id), { topic });
 }
 
 /** POST /sessions/{id}/cancel. The reason is required. */
