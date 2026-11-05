@@ -279,6 +279,45 @@ describe('Payment reminders (e2e)', () => {
     expect(await claims(cycle.id)).toHaveLength(1);
   });
 
+  it('undoes the session that opened a cycle which already has a reminder', async () => {
+    const group = await newGroup('فاضية');
+    const studentId = await newStudent('نور');
+    // One counted session completes a cycle of 2 that started at 1, and opens the next at 0.
+    await enroll(group.id, studentId, 2, 1);
+    const [completing, next] = await sessionsOf(group.id, 2);
+    await hold(completing.id).expect(200);
+    await hold(next.id).expect(200);
+
+    const cycles = await prisma.unscoped.paymentCycle.findMany({
+      where: { studentId },
+      orderBy: { cycleNumber: 'asc' },
+    });
+    const [completed, opened] = cycles;
+    if (!completed || !opened) throw new Error('The next cycle did not open');
+    expect(completed).toMatchObject({ status: 'due', sessionsCounted: 2 });
+    // The cycle that opened empty is itself on a threshold: one session leaves one.
+    expect(opened).toMatchObject({ status: 'in_progress', sessionsCounted: 1 });
+    expect(await claims(opened.id)).toMatchObject([{ sessionsLeft: 1 }]);
+
+    // Back to empty, but the reminder row stays: this cycle is not deleted yet.
+    await request(server())
+      .post(api(`/sessions/${next.id}/undo-held`))
+      .set(as(adminToken))
+      .expect(200);
+    expect(await claims(opened.id)).toHaveLength(1);
+
+    // Deleting that empty cycle is what used to fail the foreign key and return 500.
+    await request(server())
+      .post(api(`/sessions/${completing.id}/undo-held`))
+      .set(as(adminToken))
+      .expect(200);
+    expect(await prisma.unscoped.paymentCycle.findMany({ where: { id: opened.id } })).toHaveLength(
+      0,
+    );
+    expect(await claims(opened.id)).toHaveLength(0);
+    expect(await claims(completed.id)).toMatchObject([{ sessionsLeft: 0 }]);
+  });
+
   it('sends nothing when a starting point lands on 2 left, or a session is cancelled', async () => {
     const group = await newGroup('بداية');
     const studentId = await newStudent('يارا');
