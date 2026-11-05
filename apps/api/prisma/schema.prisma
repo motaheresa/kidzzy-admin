@@ -50,6 +50,7 @@ model Academy {
   pushSubscriptions PushSubscription[]
   reminderJobs      ReminderJob[]
   sessionReminders  SessionReminder[]
+  paymentReminders  PaymentReminder[]
 
   @@map("academies")
 }
@@ -477,6 +478,7 @@ model PaymentCycle {
   plan       PaymentPlan    @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
   sessions   CycleSession[]
   payments   Payment[]
+  reminders  PaymentReminder[]
 
   @@unique([id, academyId])
   @@unique([studentId, cycleNumber])
@@ -688,4 +690,23 @@ model SessionReminder {
   @@unique([id, academyId])
   @@unique([sessionId, leadMinutes])
   @@map("session_reminders")
+}
+
+/// One threshold already sent for a payment cycle (SCRUM-45). sessions_left 0 means the cycle
+/// became Due. The unique key is the cycle and the threshold, so an undo and another Held at
+/// the same point do not remind again. The check allows any non-negative lead: SCRUM-47 may add
+/// one, and a list of 0, 1 and 2 would need a migration on a table that already has rows.
+model PaymentReminder {
+  id           String   @id @default(uuid()) @db.Uuid
+  academyId    String   @map("academy_id") @db.Uuid
+  cycleId      String   @map("cycle_id") @db.Uuid
+  sessionsLeft Int      @map("sessions_left") @db.SmallInt
+  sentAt       DateTime @map("sent_at") @db.Timestamptz(3)
+
+  academy Academy      @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  cycle   PaymentCycle @relation(fields: [cycleId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([cycleId, sessionsLeft])
+  @@map("payment_reminders")
 }

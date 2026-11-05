@@ -15,6 +15,7 @@ describe('TENANT_MODELS', () => {
       'Payment',
       'PaymentCycle',
       'PaymentPlan',
+      'PaymentReminder',
       'PushSubscription',
       'RefreshToken',
       'ReminderJob',

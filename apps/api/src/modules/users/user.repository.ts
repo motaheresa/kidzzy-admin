@@ -110,4 +110,19 @@ export class UserRepository {
       },
     });
   }
+
+  /**
+   * Active users in this academy whose role grants `key` now. Payment reminders (and later
+   * stories) need the people who hold the permission, not the keys frozen in a token: a role
+   * change applies here on the next Held session, without waiting for the token to refresh.
+   */
+  listActiveWithPermission(key: string): Promise<{ id: string }[]> {
+    return this.txHost.tx.user.findMany({
+      where: {
+        isActive: true,
+        roles: { some: { role: { permissions: { some: { permission: { key } } } } } },
+      },
+      select: { id: true },
+    });
+  }
 }

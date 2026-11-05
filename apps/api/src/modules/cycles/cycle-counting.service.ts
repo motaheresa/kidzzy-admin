@@ -6,6 +6,7 @@ import { AcademyRepository } from '../academies/academy.repository';
 import { EnrollmentRepository } from '../enrollments/enrollment.repository';
 import { PaymentCycleRepository, type CountableCycle } from '../payments/payment-cycle.repository';
 import { PaymentPlanRepository } from '../payments/payment-plan.repository';
+import { PaymentReminderService } from '../payments/payment-reminder.service';
 import { SessionHeldHooks, type SessionHeldHook } from '../sessions/session-held-hooks';
 import type { SessionRow } from '../sessions/session.repository';
 
@@ -45,6 +46,7 @@ export class CycleCountingService implements SessionHeldHook, OnModuleInit {
     private readonly cycles: PaymentCycleRepository,
     private readonly plans: PaymentPlanRepository,
     private readonly academies: AcademyRepository,
+    private readonly paymentReminders: PaymentReminderService,
   ) {}
 
   onModuleInit(): void {
@@ -64,6 +66,9 @@ export class CycleCountingService implements SessionHeldHook, OnModuleInit {
 
     const changes: CycleChange[] = [];
     for (const cycle of counted) changes.push(await this.count(cycle, session, at));
+    // After the counters are written. A bug in the reminder text does not undo them; the call
+    // joins this transaction, so a database error in the claim or the notification does.
+    await this.paymentReminders.remind(session, changes);
     return changes;
   }
 

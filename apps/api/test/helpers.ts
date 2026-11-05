@@ -115,6 +115,7 @@ export async function createUser(
 export async function removeAcademy(prisma: PrismaService, academyId: string): Promise<void> {
   const where = { academyId };
   await prisma.unscoped.sessionReminder.deleteMany({ where });
+  await prisma.unscoped.paymentReminder.deleteMany({ where });
   await prisma.unscoped.reminderJob.deleteMany({ where });
   await prisma.unscoped.pushSubscription.deleteMany({ where });
   await prisma.unscoped.notification.deleteMany({ where });
