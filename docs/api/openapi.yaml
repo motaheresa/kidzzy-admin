@@ -1207,6 +1207,10 @@ paths:
         admin sets the starting point when creating the plan. When a group changes instructor, the
         former instructor's cycle for the group stays in progress and takes no new session (no
         partial payment), and the new instructor is counted once they have a plan for the group.
+        After the counters are written, each active admin who holds payments.manage gets one summary
+        when a counted cycle reached 2 sessions left, 1 left, or became Due (US-27). One notification
+        lists everyone who crossed a threshold with this session. A bug in that text does not refuse
+        the Held mark.
 
 
         scheduledAt must be at or before the server clock, otherwise 409 SESSION_NOT_STARTED.
@@ -1230,7 +1234,7 @@ paths:
         unlock above.
       operationId: markSessionHeld
       x-permission: sessions.update
-      x-story: US-13, US-22
+      x-story: US-13, US-22, US-27
       parameters:
         - $ref: '#/components/parameters/id'
       responses:

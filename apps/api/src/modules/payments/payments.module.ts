@@ -6,7 +6,10 @@ import { InstructorsModule } from '../instructors/instructors.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { StudentsModule } from '../students/students.module';
+import { UsersModule } from '../users/users.module';
 import { PaymentCycleRepository } from './payment-cycle.repository';
+import { PaymentReminderRepository } from './payment-reminder.repository';
+import { PaymentReminderService } from './payment-reminder.service';
 import { PaymentCyclesController } from './payment-cycles.controller';
 import { PaymentCyclesService } from './payment-cycles.service';
 import { PaymentPlanRepository } from './payment-plan.repository';
@@ -31,6 +34,7 @@ import { PaymentPlansService } from './payment-plans.service';
     GroupsModule,
     NotificationsModule,
     SessionsModule,
+    UsersModule,
   ],
   controllers: [PaymentPlansController, PaymentCyclesController, PaymentsController],
   providers: [
@@ -40,7 +44,9 @@ import { PaymentPlansService } from './payment-plans.service';
     PaymentCyclesService,
     PaymentRepository,
     PaymentsService,
+    PaymentReminderRepository,
+    PaymentReminderService,
   ],
-  exports: [PaymentPlanRepository, PaymentCycleRepository],
+  exports: [PaymentPlanRepository, PaymentCycleRepository, PaymentReminderService],
 })
 export class PaymentsModule {}

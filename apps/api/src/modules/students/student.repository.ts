@@ -217,6 +217,15 @@ export class StudentRepository {
       select: STUDENT_SELECT,
     });
   }
+
+  /** The names of these students, one query. A missing id is left out; the caller decides. */
+  findNames(ids: string[]): Promise<{ id: string; name: string }[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.txHost.tx.student.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+  }
 }
 
 /** The unique index on (academy_id, code) becomes 409 STUDENT_CODE_TAKEN; other errors pass. */

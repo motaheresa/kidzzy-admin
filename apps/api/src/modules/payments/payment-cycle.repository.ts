@@ -318,8 +318,13 @@ export class PaymentCycleRepository {
       FOR UPDATE`;
   }
 
-  /** Deletes a cycle that counted nothing (the one opened after a completed cycle). */
+  /**
+   * Deletes a cycle that counted nothing (the one opened after a completed cycle). Its reminder
+   * rows go with it: that cycle is gone. The completed cycle's rows stay, so the same threshold
+   * is not sent again when the session is marked Held once more.
+   */
   async deleteEmpty(id: string): Promise<void> {
+    await this.txHost.tx.paymentReminder.deleteMany({ where: { cycleId: id } });
     await this.txHost.tx.paymentCycle.delete({ where: { id } });
   }
 
