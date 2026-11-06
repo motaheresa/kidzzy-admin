@@ -10,6 +10,14 @@ export interface SessionHeldHook {
   /** Marked Held. Returns the payment cycles it changed (openapi.yaml: HeldResult.cyclesUpdated). */
   onHeld?(session: SessionRow, at: Date): Promise<CycleChange[]>;
   /**
+   * After every onHeld has run (cycles counted, payment reminders sent) and the attendance is
+   * recorded: the session report to the admins (SCRUM-43). A separate phase, so it does not
+   * depend on which module registered first.
+   */
+  afterHeld?(session: SessionRow, at: Date): Promise<void>;
+  /** Cancelled with a reason (SCRUM-43): `session` is the row after the change. */
+  onCancelled?(session: SessionRow, reason: string, at: Date): Promise<void>;
+  /**
    * Undone (US-17): the session is about to go back to Scheduled. A hook may refuse by throwing,
    * which rolls the whole undo back. `session` is the row as it was while Held.
    */
@@ -84,6 +92,20 @@ export class SessionHeldHooks {
       if (hook.onHeld) changes.push(...(await hook.onHeld(session, at)));
     }
     return changes;
+  }
+
+  /** Runs every afterHeld in registration order, after `run`. */
+  async afterRun(session: SessionRow, at: Date): Promise<void> {
+    for (const hook of this.hooks) {
+      if (hook.afterHeld) await hook.afterHeld(session, at);
+    }
+  }
+
+  /** Runs every onCancelled in registration order. */
+  async cancelled(session: SessionRow, reason: string, at: Date): Promise<void> {
+    for (const hook of this.hooks) {
+      if (hook.onCancelled) await hook.onCancelled(session, reason, at);
+    }
   }
 
   /** Runs every onUndone in registration order. The first that throws stops the undo. */

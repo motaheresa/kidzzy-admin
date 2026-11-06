@@ -28,5 +28,7 @@ import { StudentAttendanceController } from './student-attendance.controller';
     AttendanceUndoHook,
     AttendanceHeldRecorder,
   ],
+  // The session reports (SCRUM-43) read the attendance of a Held session.
+  exports: [AttendanceRepository],
 })
 export class AttendanceModule {}

@@ -23,6 +23,7 @@ describe('TENANT_MODELS', () => {
       'ScheduleSlot',
       'Session',
       'SessionReminder',
+      'SessionReport',
       'Student',
       'User',
     ]);
