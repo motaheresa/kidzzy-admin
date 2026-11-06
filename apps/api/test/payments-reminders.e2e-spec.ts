@@ -150,17 +150,24 @@ describe('Payment reminders (e2e)', () => {
 
   const notes = (userId: string) =>
     prisma.unscoped.notification.findMany({
-      where: { userId },
+      where: { userId, type: { not: 'session_report' } },
       orderBy: { createdAt: 'asc' },
     });
   const about = async (userId: string, groupName: string) =>
-    (await notes(userId)).filter((note) => note.title.includes(groupName));
+    (await notes(userId)).filter(
+      (note) => note.type !== 'session_report' && note.title.includes(groupName),
+    );
   const claims = (cycleId: string) =>
     prisma.unscoped.paymentReminder.findMany({
       where: { cycleId },
       orderBy: { sessionsLeft: 'desc' },
     });
-  const jobs = () => prisma.unscoped.reminderJob.count({ where: { academyId } });
+  // Marking Held also sends the session report (SCRUM-43): leave its push jobs out of the count.
+  const jobs = async () =>
+    (await prisma.unscoped.reminderJob.count({ where: { academyId } })) -
+    (await prisma.unscoped.notification.count({
+      where: { academyId, type: 'session_report' },
+    }));
 
   it('sends 2 left, then 1 left, then due, once each, and queues one push job per notification', async () => {
     const group = await newGroup('عتبات');

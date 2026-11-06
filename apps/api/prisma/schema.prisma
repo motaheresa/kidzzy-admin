@@ -50,6 +50,7 @@ model Academy {
   pushSubscriptions PushSubscription[]
   reminderJobs      ReminderJob[]
   sessionReminders  SessionReminder[]
+  sessionReports    SessionReport[]
   paymentReminders  PaymentReminder[]
 
   @@map("academies")
@@ -364,6 +365,7 @@ model Session {
   attendance      Attendance[]
   cycleSessions   CycleSession[]
   reminders       SessionReminder[]
+  reports         SessionReport[]
 
   /// Generation inserts with ON CONFLICT DO NOTHING against this: running twice, or the job and a
   /// request at once, never duplicates a day (AC). Rows with a null slot never conflict.
@@ -696,6 +698,32 @@ model SessionReminder {
   @@unique([id, academyId])
   @@unique([sessionId, leadMinutes])
   @@map("session_reminders")
+}
+
+enum SessionReportKind {
+  held
+  cancelled
+  unmarked
+
+  @@map("session_report_kind")
+}
+
+/// One report already sent to the admins about a session (SCRUM-43). The unique key is the
+/// session and the kind, so an undo and another Held, or a second tick, never send it twice. A
+/// session that was reported as unmarked and is later held still gets its held report.
+model SessionReport {
+  id        String            @id @default(uuid()) @db.Uuid
+  academyId String            @map("academy_id") @db.Uuid
+  sessionId String            @map("session_id") @db.Uuid
+  kind      SessionReportKind
+  sentAt    DateTime          @map("sent_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  session Session @relation(fields: [sessionId, academyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([sessionId, kind])
+  @@map("session_reports")
 }
 
 /// One threshold already sent for a payment cycle (SCRUM-45). sessions_left 0 means the cycle

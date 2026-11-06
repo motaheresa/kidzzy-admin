@@ -1288,6 +1288,15 @@ paths:
         group's current instructor is not enough. After an instructor change, an unrecorded
         session stays on the previous instructor, and only an admin can record it or use the
         unlock above.
+
+
+        Session report (US-29, FR-26): in the same transaction, after the attendance is recorded and the
+        cycles are counted, every active user who holds sessions.read:any gets one notification of type
+        session_report with the counts (present out of total), the topic cut to 60 characters, up to three
+        absent names and the average performance rating when there is one. It opens the session details.
+        It is sent once per session: editing the attendance or the topic, or an undo and another Held, does
+        not send it again. A student's note is never part of it. A bug in the text does not refuse the
+        Held mark.
       operationId: markSessionHeld
       x-permission: sessions.update
       x-story: US-13, US-22, US-27, SCRUM-79
@@ -1334,6 +1343,12 @@ paths:
         Scope own may cancel only a session whose instructor is the caller, the same write rule
         as marking Held. The response does not include who changed the status; that is stored on
         the row.
+
+
+        Session report (US-29, FR-26): in the same transaction, every active user who holds
+        sessions.read:any gets one notification of type session_report with the day, the time and the
+        reason (cut to 80 characters), whatever the session's date. Once per session. A bug in the text does
+        not refuse the cancel.
       operationId: cancelSession
       x-permission: sessions.update
       x-story: US-14

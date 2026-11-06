@@ -46,6 +46,18 @@ export type HistoryAttendanceRow = Prisma.AttendanceGetPayload<{
   select: typeof HISTORY_SELECT;
 }>;
 
+/**
+ * What the session report to the admins reads (SCRUM-43). No `note` here on purpose: a note is
+ * about a child and never goes into a report or a push, so the report cannot reach it.
+ */
+const REPORT_SELECT = {
+  status: true,
+  performanceRating: true,
+  student: { select: { name: true } },
+} as const satisfies Prisma.AttendanceSelect;
+
+export type ReportAttendanceRow = Prisma.AttendanceGetPayload<{ select: typeof REPORT_SELECT }>;
+
 /** What one save writes for one student. */
 export interface AttendanceWrite {
   sessionId: string;
@@ -74,6 +86,15 @@ export class AttendanceRepository {
     return this.txHost.tx.attendance.findMany({
       where: { sessionId },
       select: ATTENDANCE_SELECT,
+    });
+  }
+
+  /** The attendance of the session for its report, by student name. Never selects the note. */
+  findForReport(sessionId: string): Promise<ReportAttendanceRow[]> {
+    return this.txHost.tx.attendance.findMany({
+      where: { sessionId },
+      select: REPORT_SELECT,
+      orderBy: [{ student: { name: 'asc' } }, { id: 'asc' }],
     });
   }
 

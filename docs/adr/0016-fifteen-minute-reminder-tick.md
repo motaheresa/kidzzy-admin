@@ -28,3 +28,7 @@ Session reminders are not stored as future jobs. Each run reads Scheduled sessio
 - A session that already received its 1-day reminder, then was rescheduled, does not receive that reminder again. That is intended.
 - A session that already received its 1-hour reminder, then was moved further away, does not receive that reminder again before the new time. That is rare and intended: the key is the session and the lead, not the time.
 - The 1-hour lead still fires at a new time when it has not been sent yet.
+
+## Note, 2026-11-06: the "not marked yet" report (SCRUM-43)
+
+The same tick sends one more thing. A session still Scheduled two hours after it ended (`scheduled_at` plus `duration_min`) is reported to every active user who holds `sessions.read:any`, once per session (`session_reports`, unique on the session and the kind). A session that ended more than 24 hours before the run is ignored, so a deploy never reports old sessions. It is the only session report that needs a clock: a session nobody marks writes nothing, so nothing can trigger it. The held and cancelled reports are not time-based: the Held and the Cancel send them in their own transaction.
