@@ -120,9 +120,9 @@ export class SessionsService {
    * absent one) puts all of it back. The checks run in this order: the session (404, 403, 409 for
    * its state, the clock and the order rule), then the attendance against the session's students.
    *
-   * The admin session report (FR-26) is a later notification, not part of this write. When it is
-   * built it must use the topic and the counts only: a student's note is about a child and is never
-   * copied into a notification, a push payload or an audit row.
+   * The admin session report (FR-26, SCRUM-43) is written in this same transaction by a hook,
+   * after the attendance and the cycles. It uses the topic and the counts only: a student's note is
+   * about a child and is never copied into a notification, a push payload or an audit row.
    */
   @Transactional()
   async markHeld(id: string, dto: HeldSessionDto): Promise<HeldResult> {
@@ -167,6 +167,8 @@ export class SessionsService {
 
     // Counts the session into the payment cycles (US-22), in this same transaction.
     const cyclesUpdated = await this.heldHooks.run(held, now);
+    // The report to the admins (SCRUM-43), once the attendance and the cycles are written.
+    await this.heldHooks.afterRun(held, now);
 
     // Each counted cycle took exactly this one session, so its counter was one lower before, and
     // only a cycle in progress is counted: the "before" is exact.
@@ -311,6 +313,8 @@ export class SessionsService {
       before: { status: 'scheduled' },
       after: { status: 'cancelled', cancelReason: reason },
     });
+    // The report to the admins (SCRUM-43), in this same transaction.
+    await this.heldHooks.cancelled(cancelled, reason, this.clock.now());
     return toSession(cancelled);
   }
 

@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
 import { NotificationType } from '@kidzzy/shared';
-import { DateTime } from 'luxon';
 import { AcademyRepository } from '../academies/academy.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Clock } from './clock';
 import { matchingLead, type SessionReminderLead } from './session-reminder.constants';
 import { SessionReminderRepository, type DueSession } from './session-reminder.repository';
+import { formatClock, formatWeekday } from './session-time-format';
 
 /** One session and the lead the job is about to send. */
 export interface DueReminder extends DueSession {
@@ -68,17 +68,4 @@ export class SessionReminderService {
     });
     return true;
   }
-}
-
-/** Arabic weekday only. The clock is formatted separately so the digits stay Western. */
-function formatWeekday(instant: Date, zone: string): string {
-  return DateTime.fromJSDate(instant, { zone }).setLocale('ar').toFormat('cccc');
-}
-
-/** 12-hour clock with ص/م and Western digits, for example "3:30 م". */
-function formatClock(instant: Date, zone: string): string {
-  const local = DateTime.fromJSDate(instant, { zone });
-  const hour12 = local.hour % 12 === 0 ? 12 : local.hour % 12;
-  const minute = String(local.minute).padStart(2, '0');
-  return `${hour12}:${minute} ${local.hour < 12 ? 'ص' : 'م'}`;
 }
