@@ -37,6 +37,7 @@ export {
   TableHeader,
   TableRow,
 } from './atoms/table';
+export { Switch } from './atoms/switch';
 export { Textarea } from './atoms/textarea';
 export { ToggleGroup, ToggleGroupItem } from './atoms/toggle-group';
 export { ConfirmDialog } from './molecules/ConfirmDialog';

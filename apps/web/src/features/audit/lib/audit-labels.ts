@@ -13,6 +13,9 @@ const ACTION_LABELS: Record<string, string> = {
   'payment_plan.changed': 'تغيير خطة دفع',
   'enrollment.transferred': 'نقل طالب لجروب تاني',
   'enrollment.ended': 'انهاء تسجيل طالب في جروب',
+  'reminder_rule.created': 'اضافة قاعدة تذكير',
+  'reminder_rule.changed': 'تعديل قاعدة تذكير',
+  'reminder_rule.deleted': 'مسح قاعدة تذكير',
 };
 
 export function actionLabel(action: string): string {
@@ -25,6 +28,7 @@ export const ENTITY_TYPES: { value: string; label: string }[] = [
   { value: 'students', label: 'طالب' },
   { value: 'payment_cycles', label: 'دورة دفع' },
   { value: 'payment_plans', label: 'خطة دفع' },
+  { value: 'reminder_rules', label: 'قاعدة تذكير' },
 ];
 
 export function entityTypeLabel(entityType: string): string {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { CycleChange } from '@kidzzy/shared';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ReminderRuleRepository } from '../reminder-rules/reminder-rule.repository';
 import { Clock } from '../sessions/clock';
 import type { SessionRow } from '../sessions/session.repository';
 import { StudentRepository } from '../students/student.repository';
@@ -27,12 +28,20 @@ export class PaymentReminderService {
     private readonly reminders: PaymentReminderRepository,
     private readonly students: StudentRepository,
     private readonly users: UserRepository,
+    private readonly rules: ReminderRuleRepository,
     private readonly notifications: NotificationsService,
     private readonly clock: Clock,
   ) {}
 
   async remind(session: SessionRow, changes: CycleChange[]): Promise<void> {
-    const candidates = reminderCandidates(changes);
+    if (changes.length === 0) return;
+    // The academy's active rules, read now: a rule turned off or deleted stops future reminders,
+    // and the due line (0 left) is always on because it is not a rule.
+    const thresholds = {
+      student: await this.rules.activeSessionsBeforeEnd('student_payment'),
+      instructor: await this.rules.activeSessionsBeforeEnd('instructor_payment'),
+    };
+    const candidates = reminderCandidates(changes, thresholds);
     if (candidates.length === 0) return;
     const admins = await this.users.listActiveWithPermission(PAYMENT_REMINDER_PERMISSION);
     if (admins.length === 0) return;

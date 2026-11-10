@@ -19,6 +19,7 @@ describe('TENANT_MODELS', () => {
       'PushSubscription',
       'RefreshToken',
       'ReminderJob',
+      'ReminderRule',
       'Role',
       'ScheduleSlot',
       'Session',

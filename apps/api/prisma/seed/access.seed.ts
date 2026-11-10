@@ -1,4 +1,9 @@
-import { PERMISSIONS, SYSTEM_ROLE_PERMISSIONS, SystemRole } from '@kidzzy/shared';
+import {
+  DEFAULT_REMINDER_RULES,
+  PERMISSIONS,
+  SYSTEM_ROLE_PERMISSIONS,
+  SystemRole,
+} from '@kidzzy/shared';
 import type { PrismaClient } from '../../src/generated/prisma/client';
 
 // Seeding crosses academies by nature, so it uses the unscoped client (ADR-0006).
@@ -59,6 +64,25 @@ export async function seedSystemRoles(prisma: PrismaClient, academyId: string): 
   }
 }
 
+/**
+ * Gives an academy with no reminder rules the defaults (SCRUM-47): the timing that was hardcoded
+ * before. An academy that already has rules, even after an admin deleted some, is left alone, so
+ * running the seed again never brings back a rule that was removed.
+ */
+export async function seedReminderRules(prisma: PrismaClient, academyId: string): Promise<void> {
+  const existing = await prisma.reminderRule.count({ where: { academyId } });
+  if (existing > 0) return;
+  await prisma.reminderRule.createMany({
+    data: DEFAULT_REMINDER_RULES.map((rule) => ({
+      academyId,
+      type: rule.type,
+      leadMinutes: rule.leadMinutes ?? null,
+      sessionsBeforeEnd: rule.sessionsBeforeEnd ?? null,
+    })),
+    skipDuplicates: true,
+  });
+}
+
 /** The full access seed for one academy. */
 export async function seedAccess(
   prisma: PrismaClient,
@@ -67,5 +91,6 @@ export async function seedAccess(
   await seedPermissions(prisma);
   const { id } = await seedAcademy(prisma, academy.name, academy.timezone);
   await seedSystemRoles(prisma, id);
+  await seedReminderRules(prisma, id);
   return { academyId: id };
 }

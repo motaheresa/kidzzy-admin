@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  BellRingIcon,
   GraduationCapIcon,
   HistoryIcon,
   HouseIcon,
@@ -40,6 +41,13 @@ const NAV_ITEMS: NavItem[] = [
     label: 'سجل التغييرات',
     icon: HistoryIcon,
     permission: 'audit.read',
+    scope: 'any',
+  },
+  {
+    to: '/reminder-rules',
+    label: 'قواعد التذكير',
+    icon: BellRingIcon,
+    permission: 'reminders.manage',
     scope: 'any',
   },
 ];

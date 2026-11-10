@@ -52,6 +52,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   STARTING_POINT_OUT_OF_RANGE: 'نقطة البداية لازم تكون اقل من عدد سيشنات الدورة',
   AMOUNT_MISMATCH: 'المبلغ مش مطابق لمبلغ الخطة',
   PAID_ON_IN_FUTURE: 'تاريخ الدفع مينفعش يكون بعد النهارده',
+  REMINDER_RULE_EXISTS: 'القاعدة دي موجودة بالفعل، اكتب قيمة تانية',
+  REMINDER_RULES_LIMIT: 'وصلت للحد الأقصى: 10 قواعد في القسم الواحد. امسح قاعدة الاول',
   RATE_LIMITED: 'محاولات كثيرة، جرب تاني بعد دقيقة',
   INTERNAL_ERROR: 'حصلت مشكلة في السيرفر، جرب تاني',
 };
@@ -105,6 +107,8 @@ export const FIELD_MESSAGES: Record<string, string> = {
   sessionsPerCycle: 'عدد سيشنات الدورة من 1 لـ 100',
   amount: 'اكتب المبلغ بالجنيه، اكبر من صفر، زي 1500',
   openingCount: 'نقطة البداية رقم من 0 لحد اقل من عدد سيشنات الدورة',
+  leadMinutes: 'اكتب مدة من 30 دقيقة لحد 7 ايام',
+  sessionsBeforeEnd: 'اكتب عدد حصص من 1 لـ 20',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';
@@ -129,6 +133,7 @@ export const CODE_FIELDS: Partial<Record<ErrorCode, string>> = {
   GROUP_INACTIVE: 'toGroupId',
   STARTING_POINT_OUT_OF_RANGE: 'openingCount',
   STARTING_POINT_LOCKED: 'openingCount',
+  REMINDER_RULE_EXISTS: 'value',
   SESSION_NOT_CANCELLED: 'compensatesSessionId',
   SESSION_ALREADY_COMPENSATED: 'compensatesSessionId',
   COMPENSATES_SESSION_INVALID: 'compensatesSessionId',

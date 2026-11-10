@@ -1,7 +1,7 @@
 import { NotificationType, PayeeType, type CycleChange } from '@kidzzy/shared';
-import {
-  PAYMENT_REMINDER_SESSIONS_LEFT,
-  type PaymentReminderSessionsLeft,
+import type {
+  PaymentReminderSessionsLeft,
+  PaymentReminderThresholds,
 } from './payment-reminder.constants';
 
 /** One cycle this Held session moved onto a reminder threshold. */
@@ -20,22 +20,32 @@ export interface PaymentReminderSummary {
   url: string;
 }
 
-const LINE: Record<PaymentReminderSessionsLeft, string> = {
-  2: 'فاضلهم حصتين',
-  1: 'فاضلهم حصة',
-  0: 'استحقت',
-};
+/** The heading of one line: "فاضلهم حصتين", "فاضلهم 3 حصص", "استحقت". */
+function lineLabel(sessionsLeft: PaymentReminderSessionsLeft): string {
+  if (sessionsLeft === 0) return 'استحقت';
+  if (sessionsLeft === 1) return 'فاضلهم حصة';
+  if (sessionsLeft === 2) return 'فاضلهم حصتين';
+  // Arabic counts 3 to 10 with the plural and 11 and up with the singular.
+  return sessionsLeft <= 10 ? `فاضلهم ${sessionsLeft} حصص` : `فاضلهم ${sessionsLeft} حصة`;
+}
 
 const NAME_CAP = 5;
 
 /**
- * The cycles whose counter just became 2 left, 1 left, or Due. Counting adds one session, so a
- * cycle crosses one of these at a time.
+ * The cycles whose counter just reached one of the academy's thresholds, or became Due. A
+ * student's cycle uses the student rules and an instructor's cycle the instructor rules. Counting
+ * adds one session, so a cycle crosses one of these at a time.
  */
-export function reminderCandidates(changes: CycleChange[]): ReminderCandidate[] {
+export function reminderCandidates(
+  changes: CycleChange[],
+  thresholds: PaymentReminderThresholds,
+): ReminderCandidate[] {
   const candidates: ReminderCandidate[] = [];
   for (const change of changes) {
-    const sessionsLeft = threshold(change);
+    const sessionsLeft = threshold(
+      change,
+      change.payeeType === PayeeType.Instructor ? thresholds.instructor : thresholds.student,
+    );
     if (sessionsLeft === undefined) continue;
     candidates.push({
       cycleId: change.cycleId,
@@ -59,9 +69,12 @@ export function formatSummary(
 ): PaymentReminderSummary {
   if (!input.instructorName) throw new Error('The instructor has no name');
   const lines: string[] = [];
-  for (const sessionsLeft of [2, 1, 0] as const) {
+  const levels = [...new Set(candidates.map((candidate) => candidate.sessionsLeft))].sort(
+    (a, b) => b - a,
+  );
+  for (const sessionsLeft of levels) {
     const names = namesFor(sessionsLeft, candidates, studentNames, input.instructorName);
-    if (names.length > 0) lines.push(`${LINE[sessionsLeft]}: ${joinNames(names)}`);
+    if (names.length > 0) lines.push(`${lineLabel(sessionsLeft)}: ${joinNames(names)}`);
   }
   if (lines.length === 0) throw new Error('The summary has no one to name');
   const onlyDue = candidates.every((candidate) => candidate.sessionsLeft === 0);
@@ -77,13 +90,13 @@ export function formatSummary(
   };
 }
 
-function threshold(change: CycleChange): PaymentReminderSessionsLeft | undefined {
+function threshold(
+  change: CycleChange,
+  active: readonly number[],
+): PaymentReminderSessionsLeft | undefined {
   const left = change.sessionsPerCycle - change.sessionsCounted;
   if (change.status === 'due' || left === 0) return 0;
-  if ((PAYMENT_REMINDER_SESSIONS_LEFT as readonly number[]).includes(left)) {
-    return left as PaymentReminderSessionsLeft;
-  }
-  return undefined;
+  return active.includes(left) ? left : undefined;
 }
 
 function namesFor(
