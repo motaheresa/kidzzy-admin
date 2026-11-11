@@ -609,3 +609,51 @@ export interface SessionUpdate {
   startedAt?: string;
   endedAt?: string;
 }
+
+/** The four numbers at the top of the admin dashboard (openapi.yaml: Dashboard). */
+export interface DashboardCounts {
+  /** Today's sessions that are not cancelled. */
+  sessionsToday: number;
+  /** Due cycles of students and instructors, not capped. */
+  dueCycles: number;
+  /** Cancelled sessions dated in the last 7 academy-local days, today included. */
+  cancelledThisWeek: number;
+  /** Past sessions still Scheduled (nobody marked them). */
+  unmarked: number;
+}
+
+/** One of the last Held sessions (openapi.yaml: DashboardHeldSession). */
+export interface DashboardHeldSession {
+  sessionId: string;
+  /** ISO 8601, UTC */
+  scheduledAt: string;
+  group: GroupRef;
+  /** The instructor on the session. */
+  instructor: GroupRef;
+  topic: string | null;
+  attendance: { present: number; enrolled: number };
+  /** Minutes between the actual start and end; null when they were not recorded. */
+  actualDurationMin: number | null;
+}
+
+/** A due cycle on the dashboard (openapi.yaml: DashboardDueCycle). */
+export interface DashboardDueCycle {
+  id: string;
+  payeeId: string;
+  payeeName: string;
+  cycleNumber: number;
+  /** Decimal string in EGP, e.g. "1500.00" */
+  amount: string;
+  /** ISO 8601, UTC */
+  dueAt: string | null;
+  /** The group of an instructor's cycle (an instructor is paid per group); null for a student. */
+  group: GroupRef | null;
+}
+
+/** GET /dashboard (openapi.yaml: Dashboard). Admin only. */
+export interface Dashboard {
+  counts: DashboardCounts;
+  todaySessions: Session[];
+  recentHeld: DashboardHeldSession[];
+  dueCycles: { students: DashboardDueCycle[]; instructors: DashboardDueCycle[] };
+}

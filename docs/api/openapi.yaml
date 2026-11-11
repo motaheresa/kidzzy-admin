@@ -2510,6 +2510,12 @@ paths:
       tags:
         - Admin
       summary: Admin dashboard data
+      description: >
+        What the admin sees first (US-34). Admin only (dashboard.read, scope any): an instructor is 403 from the
+        guard. Another academy's rows are never visible. "Today" is the academy-local calendar day and "this week"
+        is the last 7 academy-local days including today, both from the academy's IANA time zone (daylight saving
+        time included) and the server clock. Nothing here is paginated: every list has its own cap, said on its
+        field.
       operationId: getDashboard
       x-permission: dashboard.read
       x-story: US-34
@@ -4397,6 +4403,85 @@ components:
       additionalProperties: false
       required:
         - ids
+    DashboardHeldSession:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+        group:
+          $ref: '#/components/schemas/GroupRef'
+        instructor:
+          $ref: '#/components/schemas/GroupRef'
+          description: The instructor on the session (who taught it).
+        topic:
+          anyOf:
+            - type: string
+            - type: 'null'
+        attendance:
+          type: object
+          properties:
+            present:
+              type: integer
+            enrolled:
+              type: integer
+              description: Students with an attendance row in the session (present or absent).
+          additionalProperties: false
+          required:
+            - present
+            - enrolled
+        actualDurationMin:
+          description: Minutes between the actual start and end; null when they were not recorded.
+          anyOf:
+            - type: integer
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - sessionId
+        - scheduledAt
+        - group
+        - instructor
+        - topic
+        - attendance
+        - actualDurationMin
+    DashboardDueCycle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payeeId:
+          type: string
+          format: uuid
+        payeeName:
+          type: string
+        cycleNumber:
+          type: integer
+        amount:
+          type: string
+          description: Decimal string in EGP, e.g. "1500.00".
+        dueAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        group:
+          anyOf:
+            - $ref: '#/components/schemas/GroupRef'
+            - type: 'null'
+          description: The group of an instructor's cycle (an instructor is paid per group); null for a student.
+      additionalProperties: false
+      required:
+        - id
+        - payeeId
+        - payeeName
+        - cycleNumber
+        - amount
+        - dueAt
+        - group
     Dashboard:
       type: object
       properties:
@@ -4405,32 +4490,58 @@ components:
           properties:
             sessionsToday:
               type: integer
+              description: Today's sessions that are not cancelled.
             dueCycles:
               type: integer
+              description: Due cycles of students plus due cycles of instructors, not capped by the lists below.
             cancelledThisWeek:
               type: integer
+              description: >
+                Cancelled sessions whose date falls in the last 7 academy-local days, today included
+                (by the session's date, not by when it was cancelled).
+            unmarked:
+              type: integer
+              description: Sessions whose start has passed and that are still Scheduled.
           additionalProperties: false
           required:
             - sessionsToday
             - dueCycles
             - cancelledThisWeek
+            - unmarked
         todaySessions:
           type: array
+          description: Today's sessions of every status, in time order.
           items:
             $ref: '#/components/schemas/Session'
-        recentReports:
+        recentHeld:
           type: array
+          description: The last 10 sessions marked Held, newest first.
+          maxItems: 10
           items:
-            $ref: '#/components/schemas/Notification'
+            $ref: '#/components/schemas/DashboardHeldSession'
         dueCycles:
-          type: array
-          items:
-            $ref: '#/components/schemas/PaymentCycle'
+          type: object
+          description: Due cycles, the oldest dueAt first; each list holds at most 20.
+          properties:
+            students:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/DashboardDueCycle'
+            instructors:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/DashboardDueCycle'
+          additionalProperties: false
+          required:
+            - students
+            - instructors
       additionalProperties: false
       required:
         - counts
         - todaySessions
-        - recentReports
+        - recentHeld
         - dueCycles
     AuditLog:
       type: object

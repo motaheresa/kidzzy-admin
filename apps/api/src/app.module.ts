@@ -5,6 +5,7 @@ import { validateEnv } from './common/config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { CyclesModule } from './modules/cycles/cycles.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { SessionReportsModule } from './modules/session-reports/session-reports.module';
 import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { GroupsModule } from './modules/groups/groups.module';
@@ -39,6 +40,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     CyclesModule,
     SessionReportsModule,
     ReminderRulesModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
