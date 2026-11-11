@@ -66,6 +66,7 @@ describe('Transactions (e2e)', () => {
   afterAll(async () => {
     const ids = [academyA, academyB].filter(Boolean);
     await prisma.unscoped.refreshToken.deleteMany({ where: { academyId: { in: ids } } });
+    await prisma.unscoped.reminderRule.deleteMany({ where: { academyId: { in: ids } } });
     await prisma.unscoped.user.deleteMany({ where: { academyId: { in: ids } } });
     await prisma.unscoped.role.deleteMany({ where: { academyId: { in: ids } } });
     await prisma.unscoped.academy.deleteMany({ where: { id: { in: ids } } });

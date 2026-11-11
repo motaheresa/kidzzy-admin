@@ -3,11 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { TenantContext } from '../tenancy/tenant-context';
-import {
-  REMINDERS_PER_RUN,
-  leadWindow,
-  type SessionReminderLead,
-} from './session-reminder.constants';
+import { REMINDERS_PER_RUN, leadWindow } from './session-reminder.constants';
 
 /** A scheduled session that still needs one lead. */
 export interface DueSession {
@@ -15,6 +11,8 @@ export interface DueSession {
   instructorId: string;
   scheduledAt: Date;
   groupName: string;
+  /** The leads this session already has, so the caller does not send them again. */
+  sentLeads: number[];
 }
 
 /**
@@ -29,31 +27,28 @@ export class SessionReminderRepository {
   ) {}
 
   /**
-   * The soonest scheduled sessions that fall in a lead's window and do not already have that
-   * lead. At most REMINDERS_PER_RUN, so an older session is not left behind a later one.
+   * The soonest scheduled sessions that fall in the window of one of these leads and do not
+   * already have that lead. At most REMINDERS_PER_RUN, so an older session is not left behind a
+   * later one. Each session comes with the leads it already has.
    */
-  async findDue(now: Date): Promise<DueSession[]> {
-    const day = leadWindow(now, 1440);
-    const hour = leadWindow(now, 60);
+  async findDue(now: Date, leads: readonly number[]): Promise<DueSession[]> {
     const rows = await this.txHost.tx.session.findMany({
       where: {
         status: 'scheduled',
-        OR: [
-          {
-            scheduledAt: { gt: day.after, lte: day.until },
-            reminders: { none: { leadMinutes: 1440 } },
-          },
-          {
-            scheduledAt: { gt: hour.after, lte: hour.until },
-            reminders: { none: { leadMinutes: 60 } },
-          },
-        ],
+        OR: leads.map((lead) => {
+          const window = leadWindow(now, lead);
+          return {
+            scheduledAt: { gt: window.after, lte: window.until },
+            reminders: { none: { leadMinutes: lead } },
+          };
+        }),
       },
       select: {
         id: true,
         instructorId: true,
         scheduledAt: true,
         group: { select: { name: true } },
+        reminders: { select: { leadMinutes: true } },
       },
       orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
       take: REMINDERS_PER_RUN,
@@ -63,6 +58,7 @@ export class SessionReminderRepository {
       instructorId: row.instructorId,
       scheduledAt: row.scheduledAt,
       groupName: row.group.name,
+      sentLeads: row.reminders.map((reminder) => reminder.leadMinutes),
     }));
   }
 
@@ -72,7 +68,7 @@ export class SessionReminderRepository {
    */
   async claim(input: {
     sessionId: string;
-    leadMinutes: SessionReminderLead;
+    leadMinutes: number;
     instructorId: string;
     sentAt: Date;
   }): Promise<boolean> {

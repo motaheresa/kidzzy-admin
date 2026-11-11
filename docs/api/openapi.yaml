@@ -2138,6 +2138,10 @@ paths:
       tags:
         - Reminder rules
       summary: List reminder rules
+      description: |
+        Every rule of the academy, active or not, ordered by type and then by value. A new academy starts
+        with the rules that were hardcoded before US-30: session_reminder 1440 and 60 minutes, and
+        student_payment and instructor_payment 2 and 1 sessions before the end of the cycle.
       operationId: listReminderRules
       x-permission: reminders.manage
       x-story: US-30
@@ -2164,6 +2168,20 @@ paths:
       tags:
         - Reminder rules
       summary: Add a reminder rule
+      description: |
+        A session_reminder rule needs leadMinutes (30 to 10080, at most 7 days, because the reminders run
+        every 15 minutes, ADR-0016). A student_payment or instructor_payment rule needs sessionsBeforeEnd
+        (1 to 20). A value out of range, a missing value, or a value that belongs to another type is
+        refused. At most 10 rules per type (422 REMINDER_RULES_LIMIT). The same value twice in a type is
+        409 REMINDER_RULE_EXISTS, whether the first one is active or not.
+
+
+        A rule changes only reminders not sent yet. The reminders are computed when they are due, and every
+        reminder sent is claimed, so the rule never resends one. A session reminder is sent inside a window
+        after its moment, grace = lead / 2 minutes, at least 15 and at most 180 (60 gives 30, 1440 gives 180).
+        Every active lead is checked on its own, so two leads with overlapping windows both send. The
+        payment reminder when a cycle becomes due is not a rule and is always sent. Audit entry
+        reminder_rule.created.
       operationId: createReminderRule
       x-permission: reminders.manage
       x-story: US-30
@@ -2186,6 +2204,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
   /reminder-rules/{id}:
@@ -2193,6 +2213,16 @@ paths:
       tags:
         - Reminder rules
       summary: Change a reminder rule
+      description: |
+        Changes the value (leadMinutes for a session rule, sessionsBeforeEnd for a payment rule, in the
+        same ranges as when adding) and or isActive. The type cannot change. A value that does not fit the
+        rule's type is 422, the same value as another rule of the type is 409 REMINDER_RULE_EXISTS.
+
+
+        A change affects only reminders not sent yet. A disabled rule stops future sends only. A rule
+        edited to a new value can send at the new value, even if the old value was already sent for the
+        same session or cycle, because the claim is by value. Turning the last rule of a type off leaves
+        that type sending nothing. Audit entry reminder_rule.changed with before and after.
       operationId: updateReminderRule
       x-permission: reminders.manage
       x-story: US-30
@@ -2219,12 +2249,18 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
     delete:
       tags:
         - Reminder rules
       summary: Remove a reminder rule
+      description: |
+        Deletes the rule. Reminders already sent keep their own record, which stores the value and not the
+        rule. Deleting the last rule of a type is allowed: that type then sends nothing. Audit entry
+        reminder_rule.deleted.
       operationId: deleteReminderRule
       x-permission: reminders.manage
       x-story: US-30
@@ -4119,13 +4155,17 @@ components:
         leadMinutes:
           anyOf:
             - type: integer
-              minimum: 1
+              minimum: 30
+              maximum: 10080
             - type: 'null'
+          description: Session rules only, minutes before the session
         sessionsBeforeEnd:
           anyOf:
             - type: integer
               minimum: 1
+              maximum: 20
             - type: 'null'
+          description: Payment rules only, sessions left in the cycle
         isActive:
           type: boolean
       additionalProperties: false
@@ -4144,11 +4184,13 @@ components:
             - instructor_payment
         leadMinutes:
           type: integer
-          minimum: 1
+          minimum: 30
+          maximum: 10080
           description: Session rules only
         sessionsBeforeEnd:
           type: integer
           minimum: 1
+          maximum: 20
           description: Payment rules only
       additionalProperties: false
       required:
@@ -4158,10 +4200,12 @@ components:
       properties:
         leadMinutes:
           type: integer
-          minimum: 1
+          minimum: 30
+          maximum: 10080
         sessionsBeforeEnd:
           type: integer
           minimum: 1
+          maximum: 20
         isActive:
           type: boolean
       additionalProperties: false

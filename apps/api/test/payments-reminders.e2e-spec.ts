@@ -372,4 +372,100 @@ describe('Payment reminders (e2e)', () => {
       await prisma.unscoped.user.update({ where: { id: secondId }, data: { isActive: false } });
     }
   });
+
+  describe('with the academy rules (SCRUM-47)', () => {
+    const rule = (type: 'student_payment' | 'instructor_payment', sessionsBeforeEnd: number) =>
+      prisma.unscoped.reminderRule.findFirstOrThrow({
+        where: { academyId, type, sessionsBeforeEnd },
+      });
+
+    it('reminds at a threshold the admin added, and names the count', async () => {
+      const added = await prisma.unscoped.reminderRule.create({
+        data: { academyId, type: 'student_payment', sessionsBeforeEnd: 3 },
+      });
+      try {
+        const group = await newGroup('عتبة ثلاثة');
+        await enroll(group.id, await newStudent('رنا'), 5, 1);
+        const [first, second] = await sessionsOf(group.id, 2);
+        await hold(first.id).expect(200);
+        await hold(second.id).expect(200);
+        const sent = await about(adminId, 'عتبة ثلاثة');
+        expect(sent.map((note) => note.body)).toEqual(['فاضلهم 3 حصص: رنا', 'فاضلهم حصتين: رنا']);
+      } finally {
+        await prisma.unscoped.reminderRule.delete({ where: { id: added.id } });
+      }
+    });
+
+    it('uses the student rules for students and the instructor rules for the instructor', async () => {
+      const added = await prisma.unscoped.reminderRule.create({
+        data: { academyId, type: 'student_payment', sessionsBeforeEnd: 3 },
+      });
+      try {
+        const group = await newGroup('قواعد منفصلة');
+        await instructorPlan(5, group.id, 1);
+        await enroll(group.id, await newStudent('ليلى'), 5, 1);
+        const [first, second] = await sessionsOf(group.id, 2);
+        await hold(first.id).expect(200);
+        // 3 left: only the student rule has it, so the instructor is not on the line.
+        expect((await about(adminId, 'قواعد منفصلة')).map((note) => note.body)).toEqual([
+          'فاضلهم 3 حصص: ليلى',
+        ]);
+        await hold(second.id).expect(200);
+        // 2 left: both have it.
+        expect((await about(adminId, 'قواعد منفصلة')).map((note) => note.body)).toEqual([
+          'فاضلهم 3 حصص: ليلى',
+          'فاضلهم حصتين: ليلى، المدرس كريم',
+        ]);
+      } finally {
+        await prisma.unscoped.reminderRule.delete({ where: { id: added.id } });
+      }
+    });
+
+    it('does not remind at a threshold that was turned off', async () => {
+      const off = await rule('student_payment', 2);
+      await prisma.unscoped.reminderRule.update({
+        where: { id: off.id },
+        data: { isActive: false },
+      });
+      try {
+        const group = await newGroup('عتبة مقفولة');
+        await enroll(group.id, await newStudent('نور'), 4, 1);
+        const [first, second] = await sessionsOf(group.id, 2);
+        await hold(first.id).expect(200); // 2 left: off
+        expect(await about(adminId, 'عتبة مقفولة')).toHaveLength(0);
+        await hold(second.id).expect(200); // 1 left: still on
+        expect((await about(adminId, 'عتبة مقفولة')).map((note) => note.body)).toEqual([
+          'فاضلهم حصة: نور',
+        ]);
+      } finally {
+        await prisma.unscoped.reminderRule.update({
+          where: { id: off.id },
+          data: { isActive: true },
+        });
+      }
+    });
+
+    it('still tells the admins when a cycle is due, with no active rule at all', async () => {
+      await prisma.unscoped.reminderRule.updateMany({
+        where: { academyId, type: { in: ['student_payment', 'instructor_payment'] } },
+        data: { isActive: false },
+      });
+      try {
+        const group = await newGroup('بدون قواعد');
+        await enroll(group.id, await newStudent('هبة'), 3, 1);
+        const [first, second] = await sessionsOf(group.id, 2);
+        await hold(first.id).expect(200); // 1 left: no rule
+        expect(await about(adminId, 'بدون قواعد')).toHaveLength(0);
+        await hold(second.id).expect(200); // due
+        expect((await about(adminId, 'بدون قواعد')).map((note) => note.body)).toEqual([
+          'استحقت: هبة',
+        ]);
+      } finally {
+        await prisma.unscoped.reminderRule.updateMany({
+          where: { academyId, type: { in: ['student_payment', 'instructor_payment'] } },
+          data: { isActive: true },
+        });
+      }
+    });
+  });
 });

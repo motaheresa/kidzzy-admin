@@ -52,6 +52,7 @@ model Academy {
   sessionReminders  SessionReminder[]
   sessionReports    SessionReport[]
   paymentReminders  PaymentReminder[]
+  reminderRules     ReminderRule[]
 
   @@map("academies")
 }
@@ -743,4 +744,34 @@ model PaymentReminder {
   @@unique([id, academyId])
   @@unique([cycleId, sessionsLeft])
   @@map("payment_reminders")
+}
+
+enum ReminderRuleType {
+  session_reminder
+  student_payment
+  instructor_payment
+
+  @@map("reminder_rule_type")
+}
+
+/// When the academy wants to be reminded (SCRUM-47). A session rule has lead_minutes, a payment
+/// rule has sessions_before_end; a check in the migration ties each type to its own field. Two
+/// plain unique keys refuse the same value twice in a type: a null never conflicts, and the
+/// check keeps one of the two null. Sent reminders store their own value, not the rule id.
+model ReminderRule {
+  id                String           @id @default(uuid()) @db.Uuid
+  academyId         String           @map("academy_id") @db.Uuid
+  type              ReminderRuleType
+  leadMinutes       Int?             @map("lead_minutes") @db.SmallInt
+  sessionsBeforeEnd Int?             @map("sessions_before_end") @db.SmallInt
+  isActive          Boolean          @default(true) @map("is_active")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([academyId, type, leadMinutes])
+  @@unique([academyId, type, sessionsBeforeEnd])
+  @@map("reminder_rules")
 }

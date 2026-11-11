@@ -3,14 +3,15 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { NotificationType } from '@kidzzy/shared';
 import { AcademyRepository } from '../academies/academy.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ReminderRuleRepository } from '../reminder-rules/reminder-rule.repository';
 import { Clock } from './clock';
-import { matchingLead, type SessionReminderLead } from './session-reminder.constants';
+import { DAY_MINUTES, matchingLeads } from './session-reminder.constants';
 import { SessionReminderRepository, type DueSession } from './session-reminder.repository';
 import { formatClock, formatWeekday } from './session-time-format';
 
 /** One session and the lead the job is about to send. */
 export interface DueReminder extends DueSession {
-  lead: SessionReminderLead;
+  lead: number;
   zone: string;
   now: Date;
 }
@@ -25,19 +26,28 @@ export class SessionReminderService {
   constructor(
     private readonly reminders: SessionReminderRepository,
     private readonly academies: AcademyRepository,
+    private readonly rules: ReminderRuleRepository,
     private readonly notifications: NotificationsService,
     private readonly clock: Clock,
   ) {}
 
-  /** The due leads for this academy, soonest first. The job calls sendOne for each. */
+  /**
+   * The due leads for this academy, soonest first. The job calls sendOne for each. The leads are
+   * the academy's active session rules (SCRUM-47), read now: a rule turned off or deleted stops
+   * future sends, and a lead already sent is never listed again. With no active rule nothing is
+   * due and no session is read.
+   */
   async listDue(): Promise<DueReminder[]> {
+    const leads = await this.rules.activeLeadMinutes();
+    if (leads.length === 0) return [];
     const now = this.clock.now();
     const zone = await this.academies.findTimezone();
-    const due = await this.reminders.findDue(now);
+    const due = await this.reminders.findDue(now, leads);
     const reminders: DueReminder[] = [];
     for (const session of due) {
-      const lead = matchingLead(session.scheduledAt, now);
-      if (lead) reminders.push({ ...session, lead, zone, now });
+      for (const lead of matchingLeads(session.scheduledAt, now, leads)) {
+        if (!session.sentLeads.includes(lead)) reminders.push({ ...session, lead, zone, now });
+      }
     }
     return reminders;
   }
@@ -57,13 +67,14 @@ export class SessionReminderService {
     });
     if (!claimed) return false;
     const time = formatClock(reminder.scheduledAt, reminder.zone);
+    // A day or more ahead names the weekday; a closer lead only needs the time.
+    const farAhead = reminder.lead >= DAY_MINUTES;
     await this.notifications.notify(reminder.instructorId, {
       type: NotificationType.SessionReminder,
-      title: reminder.lead === 1440 ? 'تذكير: عندك حصة' : 'تذكير: حصتك قربت',
-      body:
-        reminder.lead === 1440
-          ? `جروب ${reminder.groupName} ${formatWeekday(reminder.scheduledAt, reminder.zone)} الساعة ${time}`
-          : `جروب ${reminder.groupName} الساعة ${time}`,
+      title: farAhead ? 'تذكير: عندك حصة' : 'تذكير: حصتك قربت',
+      body: farAhead
+        ? `جروب ${reminder.groupName} ${formatWeekday(reminder.scheduledAt, reminder.zone)} الساعة ${time}`
+        : `جروب ${reminder.groupName} الساعة ${time}`,
       data: { url: `/sessions/${reminder.id}`, sessionId: reminder.id },
     });
     return true;

@@ -122,6 +122,8 @@ export const ErrorCode = {
   StartingPointOutOfRange: 'STARTING_POINT_OUT_OF_RANGE',
   AmountMismatch: 'AMOUNT_MISMATCH',
   PaidOnInFuture: 'PAID_ON_IN_FUTURE',
+  ReminderRuleExists: 'REMINDER_RULE_EXISTS',
+  ReminderRulesLimit: 'REMINDER_RULES_LIMIT',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -534,4 +536,56 @@ export interface InstructorUpdate {
   name?: string;
   email?: string | null;
   phone?: string | null;
+}
+
+/** What a reminder rule is for (openapi.yaml: ReminderRule.type). */
+export const ReminderRuleType = {
+  SessionReminder: 'session_reminder',
+  StudentPayment: 'student_payment',
+  InstructorPayment: 'instructor_payment',
+} as const;
+export type ReminderRuleType = (typeof ReminderRuleType)[keyof typeof ReminderRuleType];
+
+/** Limits of a reminder rule (US-30). The tick runs every 15 minutes (ADR-0016), so a lead under 30 is pointless. */
+export const REMINDER_LEAD_MINUTES_MIN = 30;
+export const REMINDER_LEAD_MINUTES_MAX = 10080;
+export const REMINDER_SESSIONS_BEFORE_END_MIN = 1;
+export const REMINDER_SESSIONS_BEFORE_END_MAX = 20;
+export const REMINDER_RULES_PER_TYPE = 10;
+
+/** The rules every academy starts with: what was hardcoded before SCRUM-47. */
+export const DEFAULT_REMINDER_RULES: ReadonlyArray<{
+  type: ReminderRuleType;
+  leadMinutes?: number;
+  sessionsBeforeEnd?: number;
+}> = [
+  { type: ReminderRuleType.SessionReminder, leadMinutes: 1440 },
+  { type: ReminderRuleType.SessionReminder, leadMinutes: 60 },
+  { type: ReminderRuleType.StudentPayment, sessionsBeforeEnd: 2 },
+  { type: ReminderRuleType.StudentPayment, sessionsBeforeEnd: 1 },
+  { type: ReminderRuleType.InstructorPayment, sessionsBeforeEnd: 2 },
+  { type: ReminderRuleType.InstructorPayment, sessionsBeforeEnd: 1 },
+];
+
+/** A reminder rule (openapi.yaml: ReminderRule). */
+export interface ReminderRule {
+  id: string;
+  type: ReminderRuleType;
+  leadMinutes: number | null;
+  sessionsBeforeEnd: number | null;
+  isActive: boolean;
+}
+
+/** POST /reminder-rules body: leadMinutes for a session rule, sessionsBeforeEnd for a payment rule. */
+export interface ReminderRuleCreate {
+  type: ReminderRuleType;
+  leadMinutes?: number;
+  sessionsBeforeEnd?: number;
+}
+
+/** PATCH /reminder-rules/{id} body; the type cannot change. */
+export interface ReminderRuleUpdate {
+  leadMinutes?: number;
+  sessionsBeforeEnd?: number;
+  isActive?: boolean;
 }

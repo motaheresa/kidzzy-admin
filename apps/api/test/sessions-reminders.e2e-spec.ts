@@ -6,7 +6,10 @@ import { NotificationsService } from '../src/modules/notifications/notifications
 import { QUARTER_HOUR_CRON } from '../src/modules/notifications/quarter-hour';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { SessionReminderJob } from '../src/modules/sessions/session-reminder.job';
-import { REMINDERS_PER_RUN } from '../src/modules/sessions/session-reminder.constants';
+import {
+  REMINDERS_PER_RUN,
+  graceMinutes,
+} from '../src/modules/sessions/session-reminder.constants';
 import { SessionReminderService } from '../src/modules/sessions/session-reminder.service';
 import { TenantContext } from '../src/modules/tenancy/tenant-context';
 import { createAcademy, createTestApp, createUser, removeAcademy } from './helpers';
@@ -343,5 +346,158 @@ describe('Session reminders (e2e)', () => {
     await expect(tenant.run(academyId, () => reminders.sendOne(due))).resolves.toBe(true);
     await expect(tenant.run(academyId, () => reminders.sendOne(due))).resolves.toBe(false);
     expect((await notes(instructorId)).filter((note) => note.body.includes('مرة'))).toHaveLength(1);
+  });
+
+  describe('with the academy rules (SCRUM-47)', () => {
+    let ruleAcademyId: string;
+    let ruleInstructorId: string;
+
+    beforeAll(async () => {
+      ruleAcademyId = await createAcademy(prisma, 'session-reminders-rules');
+      ruleInstructorId = await createUser(prisma, ruleAcademyId, {
+        name: 'مدرس القواعد',
+        email: mail('rules'),
+        password,
+        role: SystemRole.Instructor,
+      });
+    });
+
+    afterAll(async () => {
+      await removeAcademy(prisma, ruleAcademyId);
+    });
+
+    const ruleNotes = async (name: string) =>
+      (await notes(ruleInstructorId)).filter((note) => note.body.includes(name));
+    const ruleClaims = (sessionId: string) =>
+      prisma.unscoped.sessionReminder.findMany({
+        where: { sessionId },
+        orderBy: { leadMinutes: 'asc' },
+      });
+    const session = (at: Date, name: string) =>
+      addSession({ at, name, academy: ruleAcademyId, instructor: ruleInstructorId });
+    const setRule = (leadMinutes: number, data: { isActive?: boolean; leadMinutes?: number }) =>
+      prisma.unscoped.reminderRule.updateMany({
+        where: { academyId: ruleAcademyId, type: 'session_reminder', leadMinutes },
+        data,
+      });
+    const addRule = (leadMinutes: number) =>
+      prisma.unscoped.reminderRule.create({
+        data: { academyId: ruleAcademyId, type: 'session_reminder', leadMinutes },
+      });
+
+    it('has the grace window of half the lead, between 15 and 180 minutes', () => {
+      expect(graceMinutes(30)).toBe(15);
+      expect(graceMinutes(60)).toBe(30);
+      expect(graceMinutes(180)).toBe(90);
+      expect(graceMinutes(1440)).toBe(180);
+      expect(graceMinutes(10080)).toBe(180);
+    });
+
+    it('sends a lead the admin added at the right tick, inside its own window', async () => {
+      const rule = await addRule(180);
+      try {
+        now = cairo('2026-11-10T12:00:00');
+        // The window of 180 is (90, 180] minutes ahead.
+        const early = await session(new Date(now.getTime() + 200 * 60_000), 'بدري');
+        const inside = await session(new Date(now.getTime() + 150 * 60_000), 'جوه');
+        const late = await session(new Date(now.getTime() + 80 * 60_000), 'متأخر');
+        await job.remindAll();
+        expect(await ruleNotes('جوه')).toHaveLength(1);
+        expect((await ruleClaims(inside.id)).map((row) => row.leadMinutes)).toEqual([180]);
+        expect(await ruleNotes('بدري')).toHaveLength(0);
+        expect(await ruleNotes('متأخر')).toHaveLength(0);
+        expect(await ruleClaims(early.id)).toHaveLength(0);
+        expect(await ruleClaims(late.id)).toHaveLength(0);
+        // The text of a lead under a day is the short one.
+        expect((await ruleNotes('جوه'))[0]?.title).toBe('تذكير: حصتك قربت');
+        // Thirty minutes later the early one (now 170 ahead) has entered its window.
+        now = new Date(now.getTime() + 30 * 60_000);
+        await job.remindAll();
+        expect(await ruleNotes('بدري')).toHaveLength(1);
+      } finally {
+        await prisma.unscoped.reminderRule.delete({ where: { id: rule.id } });
+      }
+    });
+
+    it('names the weekday for a lead of a day or more', async () => {
+      const rule = await addRule(2880);
+      try {
+        now = cairo('2026-11-11T12:00:00');
+        const two = await session(new Date(now.getTime() + 47 * 60 * 60_000), 'يومين');
+        await job.remindAll();
+        const [note] = await ruleNotes('يومين');
+        expect(note?.title).toBe('تذكير: عندك حصة');
+        expect(note?.body).toContain('الساعة');
+        expect((await ruleClaims(two.id)).map((row) => row.leadMinutes)).toEqual([2880]);
+      } finally {
+        await prisma.unscoped.reminderRule.delete({ where: { id: rule.id } });
+      }
+    });
+
+    it('sends two leads whose windows overlap, one notification each', async () => {
+      const rule = await addRule(90); // window (45, 90] overlaps the hour lead (30, 60]
+      try {
+        now = cairo('2026-11-12T12:00:00');
+        const both = await session(new Date(now.getTime() + 50 * 60_000), 'اتنين');
+        await job.remindAll();
+        await job.remindAll();
+        expect(await ruleNotes('اتنين')).toHaveLength(2);
+        expect((await ruleClaims(both.id)).map((row) => row.leadMinutes)).toEqual([60, 90]);
+      } finally {
+        await prisma.unscoped.reminderRule.delete({ where: { id: rule.id } });
+      }
+    });
+
+    it('does not send a lead that was turned off, and sends it once it is on again', async () => {
+      await setRule(60, { isActive: false });
+      try {
+        now = cairo('2026-11-13T12:00:00');
+        const off = await session(new Date(now.getTime() + 50 * 60_000), 'مقفول');
+        await job.remindAll();
+        expect(await ruleNotes('مقفول')).toHaveLength(0);
+        await setRule(60, { isActive: true });
+        await job.remindAll();
+        expect((await ruleClaims(off.id)).map((row) => row.leadMinutes)).toEqual([60]);
+      } finally {
+        await setRule(60, { isActive: true });
+      }
+    });
+
+    it('sends nothing when the academy has no active session rule', async () => {
+      await prisma.unscoped.reminderRule.updateMany({
+        where: { academyId: ruleAcademyId, type: 'session_reminder' },
+        data: { isActive: false },
+      });
+      try {
+        now = cairo('2026-11-14T12:00:00');
+        await session(new Date(now.getTime() + 50 * 60_000), 'مفيش قواعد');
+        await session(new Date(now.getTime() + 23 * 60 * 60_000), 'مفيش قواعد يوم');
+        await job.remindAll();
+        expect(await ruleNotes('مفيش قواعد')).toHaveLength(0);
+      } finally {
+        await prisma.unscoped.reminderRule.updateMany({
+          where: { academyId: ruleAcademyId, type: 'session_reminder' },
+          data: { isActive: true },
+        });
+      }
+    });
+
+    it('does not resend the old value after a rule was edited, and sends the new one', async () => {
+      now = cairo('2026-11-15T12:00:00');
+      const edited = await session(new Date(now.getTime() + 50 * 60_000), 'متعدل');
+      await job.remindAll();
+      expect((await ruleClaims(edited.id)).map((row) => row.leadMinutes)).toEqual([60]);
+      try {
+        await setRule(60, { leadMinutes: 75 }); // the session is still inside the window of 75
+        await job.remindAll();
+        expect((await ruleClaims(edited.id)).map((row) => row.leadMinutes)).toEqual([60, 75]);
+        await setRule(75, { leadMinutes: 60 }); // back to the value already sent
+        await job.remindAll();
+        expect((await ruleClaims(edited.id)).map((row) => row.leadMinutes)).toEqual([60, 75]);
+        expect(await ruleNotes('متعدل')).toHaveLength(2);
+      } finally {
+        await setRule(75, { leadMinutes: 60 });
+      }
+    });
   });
 });

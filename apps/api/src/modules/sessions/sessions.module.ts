@@ -11,6 +11,7 @@ import { SessionHeldHooks } from './session-held-hooks';
 import { SessionRegeneration } from './session-regeneration';
 import { SessionGenerationJob } from './session-generation.job';
 import { SessionGenerator } from './session-generator';
+import { ReminderRulesModule } from '../reminder-rules/reminder-rules.module';
 import { SessionRepository } from './session.repository';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -22,7 +23,7 @@ import { SessionsService } from './sessions.service';
  * import GroupRepository back.
  */
 @Module({
-  imports: [AcademiesModule, AuditModule, NotificationsModule],
+  imports: [AcademiesModule, AuditModule, NotificationsModule, ReminderRulesModule],
   controllers: [SessionsController, GroupSessionsController],
   providers: [
     Clock,

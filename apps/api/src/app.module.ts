@@ -15,6 +15,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { StudentsModule } from './modules/students/students.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
+import { ReminderRulesModule } from './modules/reminder-rules/reminder-rules.module';
 import { TenancyModule } from './modules/tenancy/tenancy.module';
 
 @Module({
@@ -37,6 +38,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     AttendanceModule,
     CyclesModule,
     SessionReportsModule,
+    ReminderRulesModule,
   ],
 })
 export class AppModule {}

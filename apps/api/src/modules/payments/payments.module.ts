@@ -15,6 +15,7 @@ import { PaymentCyclesService } from './payment-cycles.service';
 import { PaymentPlanRepository } from './payment-plan.repository';
 import { PaymentRepository } from './payment.repository';
 import { PaymentsController } from './payments.controller';
+import { ReminderRulesModule } from '../reminder-rules/reminder-rules.module';
 import { PaymentsService } from './payments.service';
 import { PaymentPlansController } from './payment-plans.controller';
 import { PaymentPlansService } from './payment-plans.service';
@@ -33,6 +34,7 @@ import { PaymentPlansService } from './payment-plans.service';
     InstructorsModule,
     GroupsModule,
     NotificationsModule,
+    ReminderRulesModule,
     SessionsModule,
     UsersModule,
   ],
