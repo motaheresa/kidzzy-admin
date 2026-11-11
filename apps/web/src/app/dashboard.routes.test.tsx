@@ -14,7 +14,7 @@ const admin: Me = {
   email: 'admin@test.local',
   phone: null,
   roles: ['Admin'],
-  permissions: ['dashboard.read:any', 'sessions.read:any'],
+  permissions: ['dashboard.read:any', 'sessions.read:any', 'sessions.update:any'],
   mustChangePassword: false,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
@@ -148,6 +148,15 @@ describe('Home for the admin', () => {
     const instructor = screen.getByRole('link', { name: /دورة 1/ });
     expect(instructor).toHaveAttribute('href', '/instructors/i1');
     expect(within(instructor).getByText(/Scratch A - دورة 1/)).toBeInTheDocument();
+  });
+
+  it('keeps the actions beside a session today: mark Held, reschedule and cancel', async () => {
+    api(admin);
+    renderHome();
+    await screen.findByText('حصص النهارده');
+    expect(screen.getByRole('button', { name: 'سجّل حصة Scratch A اتعملت' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'غيّر ميعاد حصة Scratch A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'الغي حصة Scratch A' })).toBeInTheDocument();
   });
 
   it("shows today's sessions once: the plain list is not rendered beside the dashboard", async () => {

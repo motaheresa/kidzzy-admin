@@ -1,7 +1,7 @@
 import { CalendarOffIcon, CheckCheckIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle, EmptyState } from '@/components/ui';
-import { SessionStatusBadge } from '@/features/sessions';
+import { SessionActions, SessionStatusBadge } from '@/features/sessions';
 import { formatDuration, formatTime } from '@/lib/format';
 import type { Dashboard } from '../types';
 
@@ -31,8 +31,14 @@ export function TodaySessionsCard({
         ) : (
           <ul className="grid gap-2">
             {sessions.map((session) => (
-              <li key={session.id}>
-                <Link to={`/sessions/${session.id}`} className={ROW}>
+              <li
+                key={session.id}
+                className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
+              >
+                <Link
+                  to={`/sessions/${session.id}`}
+                  className="flex min-h-11 flex-1 flex-wrap items-center justify-between gap-3 rounded-md transition-colors duration-fast ease-out hover:bg-muted"
+                >
                   <span className="flex flex-col">
                     <span className="font-medium">{session.group.name}</span>
                     <span className="text-sm text-muted-foreground">{session.instructorName}</span>
@@ -46,6 +52,7 @@ export function TodaySessionsCard({
                     compensates={session.compensatesSessionId !== null}
                   />
                 </Link>
+                <SessionActions session={session} />
               </li>
             ))}
           </ul>

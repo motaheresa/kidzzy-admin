@@ -14,9 +14,7 @@ import {
 import { usePermissions, useSession } from '@/features/auth';
 import { formatTime, zonedDayRange } from '@/lib/format';
 import { useSessions } from '../hooks/useSessions';
-import { CancelSessionButton } from './CancelSessionButton';
-import { RescheduleSessionButton } from './RescheduleSessionButton';
-import { MarkHeldButton } from './MarkHeldButton';
+import { SessionActions } from './SessionActions';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
 /**
@@ -80,11 +78,7 @@ function TodaySessionsList({ timeZone }: { timeZone: string }) {
                     compensates={session.compensatesSessionId !== null}
                   />
                 </Link>
-                <span className="flex flex-wrap items-center gap-2">
-                  <MarkHeldButton session={session} />
-                  <RescheduleSessionButton session={session} />
-                  <CancelSessionButton session={session} />
-                </span>
+                <SessionActions session={session} />
               </li>
             ))}
           </ul>
