@@ -136,3 +136,33 @@ function wallClock(instant: Date, timeZone: string) {
     second: part('second'),
   };
 }
+
+/** A number with its noun: the singular and the dual are words, 3 to 10 the plural, 11+ singular. */
+function counted(amount: number, one: string, two: string, few: string, many: string): string {
+  if (amount === 1) return one;
+  if (amount === 2) return two;
+  return `${amount} ${amount <= 10 ? few : many}`;
+}
+
+/**
+ * A length of time in plain Arabic: 65 gives "ساعة و5 دقايق", 45 gives "45 دقيقة", 120 gives
+ * "ساعتين". The API has the same function for the admins' report (sessions/session-time-format.ts);
+ * packages/shared holds no runtime logic, so the two are kept in step by their tests.
+ */
+export function formatDuration(totalMinutes: number): string {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const parts: string[] = [];
+  if (hours > 0) parts.push(counted(hours, 'ساعة', 'ساعتين', 'ساعات', 'ساعة'));
+  if (rest > 0 || hours === 0) parts.push(counted(rest, 'دقيقة', 'دقيقتين', 'دقايق', 'دقيقة'));
+  return parts.join(' و');
+}
+
+/**
+ * Puts "ب" before a duration for "longer than planned by …": "بـ5 دقايق" before a digit (the tatweel
+ * keeps the letter and the number apart), "بساعة" before a word.
+ */
+export function withBa(duration: string): string {
+  return /^\d/.test(duration) ? `بـ${duration}` : `ب${duration}`;
+}

@@ -287,6 +287,9 @@ describe('the history links', () => {
     compensatesSessionId: null,
     cancelReason: null,
     topic: null,
+    actualStartedAt: null,
+    actualEndedAt: null,
+    actualDurationMin: null,
   };
   const student = {
     id: 'student-9',

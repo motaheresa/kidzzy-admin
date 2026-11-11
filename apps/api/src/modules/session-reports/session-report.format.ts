@@ -1,5 +1,5 @@
 import { AttendanceStatus } from '@kidzzy/shared';
-import { formatClock, formatWeekday } from '../sessions/session-time-format';
+import { formatClock, formatDuration, formatWeekday } from '../sessions/session-time-format';
 import { ABSENT_NAMES_CAP, REASON_CUT, TOPIC_CUT } from './session-report.constants';
 
 /** The text of one report. Pure: the same facts always give the same text. */
@@ -30,18 +30,24 @@ export function cut(text: string, max: number): string {
 export function heldReport(input: {
   groupName: string;
   topic: string | null;
+  /** The real length of the session (SCRUM-80); null for a session held before it was recorded. */
+  durationMin: number | null;
   attendance: readonly ReportAttendanceLine[];
 }): SessionReportText {
   const present = input.attendance.filter((line) => line.status === AttendanceStatus.Present);
   const absent = input.attendance.filter((line) => line.status === AttendanceStatus.Absent);
   const topic = input.topic ? `الشرح: ${cut(input.topic, TOPIC_CUT)}` : undefined;
+  const duration =
+    input.durationMin === null ? undefined : `المدة ${formatDuration(input.durationMin)}`;
 
   const parts: string[] = [];
   if (input.attendance.length === 0) {
     parts.push('مفيش طلاب مسجلين في الحصة');
+    if (duration) parts.push(duration);
     if (topic) parts.push(topic);
   } else {
     parts.push(`حضر ${present.length} من ${input.attendance.length}`);
+    if (duration) parts.push(duration);
     if (topic) parts.push(topic);
     if (absent.length > 0)
       parts.push(`غاب: ${absentNames(absent.map((line) => line.studentName))}`);

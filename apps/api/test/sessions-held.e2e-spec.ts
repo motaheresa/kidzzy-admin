@@ -8,6 +8,7 @@ import {
   createTestApp,
   createUser,
   postHeld,
+  postHeldNow,
   readCookies,
   removeAcademy,
 } from './helpers';
@@ -75,6 +76,9 @@ describe('Marking sessions Held (e2e)', () => {
 
   function mark(id: string, token = anaToken) {
     return postHeld(server(), prisma, id, token);
+  }
+  function markNow(id: string, token = anaToken) {
+    return postHeldNow(server(), prisma, id, token);
   }
 
   beforeAll(async () => {
@@ -260,7 +264,10 @@ describe('Marking sessions Held (e2e)', () => {
     if (!session) throw new Error('expected generated session');
     await setTime(session.id, '2026-10-21T08:00:00.000Z');
 
-    const results = await Promise.all([mark(session.id, adminToken), mark(session.id, adminToken)]);
+    const results = await Promise.all([
+      markNow(session.id, adminToken),
+      markNow(session.id, adminToken),
+    ]);
     expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
     expect((results.find((result) => result.status === 409)?.body as ErrorResponse).code).toBe(
       'SESSION_NOT_SCHEDULED',
@@ -353,7 +360,7 @@ describe('Marking sessions Held (e2e)', () => {
     await setTime(first.id, sameTime);
     await setTime(second.id, sameTime);
 
-    const results = await Promise.all([mark(first.id), mark(second.id)]);
+    const results = await Promise.all([markNow(first.id), markNow(second.id)]);
     expect(results.map((result) => result.status)).toEqual([200, 200]);
     expect(results.map((result) => (result.body as HeldResponse).sessionNumber).sort()).toEqual([
       1, 2,

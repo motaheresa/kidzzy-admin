@@ -23,6 +23,9 @@ export function useMarkHeld(id: string) {
         compensatesSessionId: result.compensatesSessionId,
         cancelReason: result.cancelReason,
         topic: result.topic,
+        actualStartedAt: result.actualStartedAt,
+        actualEndedAt: result.actualEndedAt,
+        actualDurationMin: result.actualDurationMin,
       };
       applySessionChange(queryClient, session);
     },

@@ -51,11 +51,8 @@ export class SessionsController {
 
   @RequirePermission('sessions.update')
   @Patch(':id')
-  updateTopic(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: UpdateSessionDto,
-  ): Promise<Session> {
-    return this.sessions.updateTopic(id, body);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateSessionDto): Promise<Session> {
+    return this.sessions.update(id, body);
   }
 
   @RequirePermission('sessions.update')

@@ -7,6 +7,7 @@ const ACTION_LABELS: Record<string, string> = {
   'session.rescheduled': 'تغيير ميعاد حصة',
   'session.created': 'اضافة حصة تعويضية او اضافية',
   'session.held_undone': 'ارجاع حصة لمجدولة',
+  'session.actual_times_changed': 'تعديل وقت بداية وخلاص الحصة',
   'payment.recorded': 'تسجيل دفعة',
   'payment_cycle.starting_point_set': 'تعديل نقطة بداية الدورة',
   'payment_plan.set': 'تحديد خطة دفع',

@@ -161,6 +161,9 @@ describe('Reading sessions (e2e)', () => {
       compensatesSessionId: null,
       cancelReason: null,
       topic: null,
+      actualStartedAt: null,
+      actualEndedAt: null,
+      actualDurationMin: null,
     });
   }
 
@@ -172,6 +175,9 @@ describe('Reading sessions (e2e)', () => {
     expectSession(res.body as Session);
     expect(Object.keys(res.body as object).sort()).toEqual(
       [
+        'actualDurationMin',
+        'actualEndedAt',
+        'actualStartedAt',
         'cancelReason',
         'compensatesSessionId',
         'durationMin',

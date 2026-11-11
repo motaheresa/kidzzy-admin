@@ -20,7 +20,7 @@ import {
   ToggleGroupItem,
 } from '@/components/ui';
 import { usePermissions } from '@/features/auth';
-import { formatDateTime, formatNumber } from '@/lib/format';
+import { formatDateTime, formatDuration, formatNumber } from '@/lib/format';
 import { SESSIONS_PAGE_SIZE } from '../api/sessions.api';
 import { useSessionListParams } from '../hooks/useSessionListParams';
 import { useSessions } from '../hooks/useSessions';
@@ -92,6 +92,7 @@ export function GroupSessions({ groupId }: { groupId: string }) {
                 <TableHead>الرقم</TableHead>
                 <TableHead>الموعد</TableHead>
                 <TableHead>الحالة</TableHead>
+                <TableHead>المدة الفعلية</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -119,6 +120,11 @@ export function GroupSessions({ groupId }: { groupId: string }) {
                       <RescheduleSessionButton session={session} />
                       <CancelSessionButton session={session} />
                     </span>
+                  </TableCell>
+                  <TableCell className="numeric">
+                    {session.actualDurationMin === null
+                      ? '—'
+                      : formatDuration(session.actualDurationMin)}
                   </TableCell>
                 </TableRow>
               ))}

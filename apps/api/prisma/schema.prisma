@@ -348,6 +348,12 @@ model Session {
   /// What the instructor taught, written when the session is marked Held (SCRUM-79). Null for a
   /// session that is not Held, and for sessions held before this column existed. Cleared by an undo.
   topic                    String?
+  /// When the session really started and ended, written with the topic when it is marked Held
+  /// (SCRUM-80). Both null, or both set with the end after the start (check in the migration).
+  /// Null for a session that is not Held, and for sessions held before these columns existed.
+  /// Cleared by an undo. The duration is computed from the two on read, never stored.
+  actualStartedAt          DateTime?     @map("actual_started_at") @db.Timestamptz(3)
+  actualEndedAt            DateTime?     @map("actual_ended_at") @db.Timestamptz(3)
   /// Who last changed the status, and when. The academy mirror is null exactly when the user is
   /// null, and otherwise equals academyId (optional composite foreign key; see the migration).
   statusChangedAt          DateTime?     @map("status_changed_at") @db.Timestamptz(3)

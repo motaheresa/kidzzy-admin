@@ -3,8 +3,10 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { ErrorCode, type HeldResult, type Page, type Session } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
 import { pageWindow, toPage } from '../../common/pagination/page';
+import { AcademyRepository } from '../academies/academy.repository';
 import { AccessContext } from '../auth/access-context';
 import { AuditService } from '../audit/audit.service';
+import { ActualTimeError, actualInstants } from './actual-times';
 import { Clock } from './clock';
 import type { CreateSessionDto } from './dto/create-session.dto';
 import type { HeldSessionDto } from './dto/held-session.dto';
@@ -44,6 +46,7 @@ export class SessionsService {
     private readonly clock: Clock,
     private readonly heldHooks: SessionHeldHooks,
     private readonly audit: AuditService,
+    private readonly academies: AcademyRepository,
   ) {}
 
   async list(query: ListSessionsQueryDto): Promise<Page<Session>> {
@@ -144,9 +147,11 @@ export class SessionsService {
       );
     }
     await this.ensureOrder(row);
+    // Before anything is written: a refused time leaves the session Scheduled.
+    const actual = await this.actualTimes(row.scheduledAt, dto.startedAt, dto.endedAt, now);
 
     const sessionNumber = await this.sessions.nextSessionNumber(row.group.id);
-    await this.sessions.markHeld(id, sessionNumber, dto.topic, this.access.userId, now);
+    await this.sessions.markHeld(id, sessionNumber, dto.topic, actual, this.access.userId, now);
     const held = await this.sessions.findById(id);
     if (!held) {
       throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
@@ -188,6 +193,8 @@ export class SessionsService {
       after: {
         status: 'held',
         sessionNumber,
+        actualStartedAt: actual.startedAt.toISOString(),
+        actualEndedAt: actual.endedAt.toISOString(),
         cycles: cyclesUpdated.map((cycle) => ({
           cycleId: cycle.cycleId,
           sessionsCounted: cycle.sessionsCounted,
@@ -237,11 +244,19 @@ export class SessionsService {
       entityId: id,
       // The topic is cleared with the status, so the log keeps what it was. The notes are about
       // children and are not recorded here.
-      before: { status: 'held', sessionNumber: row.sessionNumber, topic: row.topic },
+      before: {
+        status: 'held',
+        sessionNumber: row.sessionNumber,
+        topic: row.topic,
+        actualStartedAt: row.actualStartedAt?.toISOString() ?? null,
+        actualEndedAt: row.actualEndedAt?.toISOString() ?? null,
+      },
       after: {
         status: 'scheduled',
         sessionNumber: null,
         topic: null,
+        actualStartedAt: null,
+        actualEndedAt: null,
         laterSessionsRenumbered: renumbered,
       },
     });
@@ -254,35 +269,98 @@ export class SessionsService {
   }
 
   /**
-   * Corrects what was taught in a Held session (SCRUM-79). Only the topic changes. The same write
-   * rule and group lock as marking Held (scope `own`: the instructor on the session; scope `any`:
-   * the admin). A session that is not Held is 409 SESSION_NOT_HELD. Audited with the topic before
-   * and after.
+   * Corrects a Held session (SCRUM-79, SCRUM-80): what was taught, and when it really started and
+   * ended. The body has the topic, or both times, or all three. The same write rule and group lock
+   * as marking Held (scope `own`: the instructor on the session; scope `any`: the admin). A
+   * session that is not Held is 409 SESSION_NOT_HELD. The times follow the Held rules (422
+   * ACTUAL_TIME_INVALID). Each change is audited with its values before and after, and a part
+   * that does not change writes nothing.
    */
   @Transactional()
-  async updateTopic(id: string, dto: UpdateSessionDto): Promise<Session> {
+  async update(id: string, dto: UpdateSessionDto): Promise<Session> {
+    if (dto.topic === undefined && dto.startedAt === undefined && dto.endedAt === undefined) {
+      throw new AppException(
+        ErrorCode.ValidationFailed,
+        HttpStatus.BAD_REQUEST,
+        'Send the topic or the times',
+        [{ field: 'topic', message: 'Send the topic or the times' }],
+      );
+    }
     const row = await this.loadForWrite(id);
     if (row.status !== 'held') {
       throw new AppException(
         ErrorCode.SessionNotHeld,
         HttpStatus.CONFLICT,
-        'The topic is written for a Held session',
+        'The topic and the times are written for a Held session',
       );
     }
-    await this.sessions.setTopic(id, dto.topic);
-    await this.audit.record({
-      action: 'session.topic_changed',
-      entityType: 'sessions',
-      entityId: id,
-      before: { topic: row.topic },
-      after: { topic: dto.topic },
-    });
+    // Checked before anything is written, so a refused time leaves the topic unchanged too.
+    const actual =
+      dto.startedAt !== undefined && dto.endedAt !== undefined
+        ? await this.actualTimes(row.scheduledAt, dto.startedAt, dto.endedAt, this.clock.now())
+        : undefined;
+
+    if (dto.topic !== undefined && dto.topic !== row.topic) {
+      await this.sessions.setTopic(id, dto.topic);
+      await this.audit.record({
+        action: 'session.topic_changed',
+        entityType: 'sessions',
+        entityId: id,
+        before: { topic: row.topic },
+        after: { topic: dto.topic },
+      });
+    }
+    if (
+      actual &&
+      (actual.startedAt.getTime() !== row.actualStartedAt?.getTime() ||
+        actual.endedAt.getTime() !== row.actualEndedAt?.getTime())
+    ) {
+      await this.sessions.setActualTimes(id, actual);
+      await this.audit.record({
+        action: 'session.actual_times_changed',
+        entityType: 'sessions',
+        entityId: id,
+        before: {
+          actualStartedAt: row.actualStartedAt?.toISOString() ?? null,
+          actualEndedAt: row.actualEndedAt?.toISOString() ?? null,
+        },
+        after: {
+          actualStartedAt: actual.startedAt.toISOString(),
+          actualEndedAt: actual.endedAt.toISOString(),
+        },
+      });
+    }
 
     const updated = await this.sessions.findById(id);
     if (!updated) {
       throw new AppException(ErrorCode.NotFound, HttpStatus.NOT_FOUND, 'No such session');
     }
     return toSession(updated);
+  }
+
+  /**
+   * The instants of the start and end an instructor typed as clock times in the academy's zone,
+   * on the session's date (see actualInstants). A refused time is 422 ACTUAL_TIME_INVALID, with
+   * the field at fault.
+   */
+  private async actualTimes(
+    scheduledAt: Date,
+    startedAt: string,
+    endedAt: string,
+    now: Date,
+  ): Promise<{ startedAt: Date; endedAt: Date }> {
+    const zone = await this.academies.findTimezone();
+    try {
+      return actualInstants({ scheduledAt, startedAt, endedAt, zone, now });
+    } catch (error) {
+      if (!(error instanceof ActualTimeError)) throw error;
+      throw new AppException(
+        ErrorCode.ActualTimeInvalid,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        error.message,
+        [{ field: error.field, message: error.message }],
+      );
+    }
   }
 
   /**

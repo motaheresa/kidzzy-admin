@@ -33,6 +33,8 @@ const SESSION_SELECT = {
   compensatesSessionId: true,
   cancelReason: true,
   topic: true,
+  actualStartedAt: true,
+  actualEndedAt: true,
   group: { select: { id: true, name: true, instructorId: true } },
 } as const satisfies Prisma.SessionSelect;
 
@@ -329,6 +331,7 @@ export class SessionRepository {
     id: string,
     sessionNumber: number,
     topic: string,
+    actual: { startedAt: Date; endedAt: Date },
     changedById: string,
     changedAt: Date,
   ): Promise<void> {
@@ -338,6 +341,8 @@ export class SessionRepository {
         status: 'held',
         sessionNumber,
         topic,
+        actualStartedAt: actual.startedAt,
+        actualEndedAt: actual.endedAt,
         statusChangedById: changedById,
         statusChangedByAcademyId: this.tenant.requireAcademyId(),
         statusChangedAt: changedAt,
@@ -348,7 +353,8 @@ export class SessionRepository {
   /**
    * Takes a Held session back to Scheduled (US-17): no number, and who changed the status. The
    * number is freed in this same UPDATE, because a check ties a number to the Held status. The
-   * topic goes too: it described a session the system now treats as not held.
+   * topic and the actual start and end go too: they described a session the system now treats as
+   * not held.
    */
   async markScheduled(id: string, changedById: string, changedAt: Date): Promise<void> {
     await this.txHost.tx.session.update({
@@ -357,6 +363,8 @@ export class SessionRepository {
         status: 'scheduled',
         sessionNumber: null,
         topic: null,
+        actualStartedAt: null,
+        actualEndedAt: null,
         statusChangedById: changedById,
         statusChangedByAcademyId: this.tenant.requireAcademyId(),
         statusChangedAt: changedAt,
@@ -415,6 +423,14 @@ export class SessionRepository {
   /** Corrects what was taught in a Held session (SCRUM-79). The caller has checked the status. */
   async setTopic(id: string, topic: string): Promise<void> {
     await this.txHost.tx.session.update({ where: { id }, data: { topic } });
+  }
+
+  /** Corrects when a Held session really started and ended (SCRUM-80). The caller checked the status. */
+  async setActualTimes(id: string, actual: { startedAt: Date; endedAt: Date }): Promise<void> {
+    await this.txHost.tx.session.update({
+      where: { id },
+      data: { actualStartedAt: actual.startedAt, actualEndedAt: actual.endedAt },
+    });
   }
 
   private where(filter: SessionListFilter): Prisma.SessionWhereInput {
