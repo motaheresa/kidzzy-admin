@@ -14,6 +14,14 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
   return failureCount < MAX_QUERY_RETRIES && RETRYABLE_KINDS.has(normalizeError(error).kind);
 }
 
+/**
+ * The root of the dashboard's query keys (US-34). It lives here, not in the dashboard feature,
+ * because the client below refreshes it after every successful mutation: the dashboard counts
+ * sessions, attendance, cycles and payments, so almost any change makes it stale, and a list of
+ * mutations kept by hand would miss the next one that is added.
+ */
+export const DASHBOARD_QUERY_ROOT = ['dashboard'] as const;
+
 /** The global error handler for one query or mutation, unless its meta opts out. */
 function report(error: unknown, meta: ApiMeta | undefined): void {
   if (meta?.errorHandling === 'local' || isCancelledError(error)) return;
@@ -26,16 +34,22 @@ function report(error: unknown, meta: ApiMeta | undefined): void {
  * - Mutations never retry: a POST that timed out or got a 5xx may have been applied already,
  *   and sending it again could, for example, record a payment twice.
  * - Every failure goes to the global reporter unless meta.errorHandling is 'local'.
+ * - Every success refreshes the dashboard (DASHBOARD_QUERY_ROOT).
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
     queryCache: new QueryCache({ onError: (error, query) => report(error, query.meta) }),
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) => report(error, mutation.meta),
+      // A mounted dashboard refetches at once; an unmounted one is only marked stale.
+      onSuccess: () => {
+        void client.invalidateQueries({ queryKey: DASHBOARD_QUERY_ROOT });
+      },
     }),
     defaultOptions: {
       queries: { retry: shouldRetryQuery },
       mutations: { retry: false },
     },
   });
+  return client;
 }

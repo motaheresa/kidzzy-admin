@@ -21,7 +21,7 @@ export interface SessionListFilter {
   isMakeup?: boolean;
 }
 
-const SESSION_SELECT = {
+export const SESSION_SELECT = {
   id: true,
   instructorId: true,
   instructor: { select: { name: true } },

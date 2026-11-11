@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import { fromResponse, timeoutError } from '@/lib/errors';
-import { createQueryClient, shouldRetryQuery } from './client';
+import { createQueryClient, DASHBOARD_QUERY_ROOT, shouldRetryQuery } from './client';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
@@ -81,5 +81,29 @@ describe('createQueryClient', () => {
       .execute(undefined)
       .catch(() => undefined);
     expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the dashboard stale after a successful mutation, and only the dashboard', async () => {
+    const client = createQueryClient();
+    const dashboardKey = [...DASHBOARD_QUERY_ROOT, 'summary'];
+    await client.fetchQuery({ queryKey: dashboardKey, queryFn: () => Promise.resolve('d') });
+    await client.fetchQuery({ queryKey: ['other'], queryFn: () => Promise.resolve('o') });
+
+    await client
+      .getMutationCache()
+      .build(client, {
+        mutationFn: () => Promise.reject(conflict),
+        meta: { errorHandling: 'local' },
+      })
+      .execute(undefined)
+      .catch(() => undefined);
+    expect(client.getQueryState(dashboardKey)?.isInvalidated).toBe(false);
+
+    await client
+      .getMutationCache()
+      .build(client, { mutationFn: () => Promise.resolve('done') })
+      .execute(undefined);
+    expect(client.getQueryState(dashboardKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['other'])?.isInvalidated).toBe(false);
   });
 });
