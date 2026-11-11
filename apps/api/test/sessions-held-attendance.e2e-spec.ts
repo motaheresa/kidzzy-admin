@@ -10,7 +10,14 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import { SessionHeldHooks } from '../src/modules/sessions/session-held-hooks';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeldWith,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 // Marking a session Held with its topic and attendance in one request (SCRUM-79).
 const NOW = new Date('2026-10-22T10:00:00.000Z');
@@ -112,10 +119,7 @@ describe('Held with topic and attendance (e2e)', () => {
     prisma.unscoped.paymentCycle.findFirstOrThrow({ where: { studentId } });
 
   const hold = (id: string, body: unknown, token = adminToken) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(token))
-      .send(body as object);
+    postHeldWith(server(), prisma, id, token, () => body as object);
   const present = (studentId: string, extra: object = {}) => ({
     studentId,
     status: 'present',

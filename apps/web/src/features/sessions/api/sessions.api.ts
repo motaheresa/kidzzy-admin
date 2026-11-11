@@ -40,6 +40,14 @@ export function updateSessionTopic(id: string, topic: string): Promise<Session> 
   return http.patch<Session>(path(id), { topic });
 }
 
+/** PATCH /sessions/{id}: corrects when a Held session really started and ended ("HH:mm"). */
+export function updateSessionTimes(
+  id: string,
+  times: { startedAt: string; endedAt: string },
+): Promise<Session> {
+  return http.patch<Session>(path(id), times);
+}
+
 /** POST /sessions/{id}/cancel. The reason is required. */
 export function cancelSession(id: string, reason: string): Promise<Session> {
   return http.post<Session>(path(id) + '/cancel', { reason });

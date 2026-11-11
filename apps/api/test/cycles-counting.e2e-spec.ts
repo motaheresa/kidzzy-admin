@@ -8,6 +8,7 @@ import {
   createTestApp,
   createUser,
   postHeld,
+  postHeldNow,
   readCookies,
   removeAcademy,
 } from './helpers';
@@ -136,6 +137,7 @@ describe('Counting Held sessions into payment cycles (e2e)', () => {
   }
 
   const hold = (id: string) => postHeld(server(), prisma, id, adminToken);
+  const holdNow = (id: string) => postHeldNow(server(), prisma, id, adminToken);
 
   const studentCycles = (studentId: string) =>
     prisma.unscoped.paymentCycle.findMany({
@@ -588,7 +590,7 @@ describe('Counting Held sessions into payment cycles (e2e)', () => {
       await setTime(b.id, '2026-10-21T08:00:00.000Z');
       await enroll(group.id, await newStudent(), 20);
 
-      const results = await Promise.all([hold(a.id), hold(b.id)]);
+      const results = await Promise.all([holdNow(a.id), holdNow(b.id)]);
       expect(results.map((r) => r.status)).toEqual([200, 200]);
       const cycles = await instructorCycles(instructor, group.id);
       expect(cycles).toHaveLength(1);
@@ -663,7 +665,7 @@ describe('Counting Held sessions into payment cycles (e2e)', () => {
       await setTime(oldSession.id, '2026-10-08T08:00:00.000Z');
       await setTime(newSession.id, '2026-10-20T08:00:00.000Z');
 
-      const results = await Promise.all([hold(oldSession.id), hold(newSession.id)]);
+      const results = await Promise.all([holdNow(oldSession.id), holdNow(newSession.id)]);
       expect(results.map((r) => r.status)).toEqual([200, 200]);
       const cycles = await studentCycles(student);
       expect(cycles.map((c) => [c.sessionsCounted, c.status])).toEqual([

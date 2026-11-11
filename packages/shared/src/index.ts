@@ -124,6 +124,7 @@ export const ErrorCode = {
   PaidOnInFuture: 'PAID_ON_IN_FUTURE',
   ReminderRuleExists: 'REMINDER_RULE_EXISTS',
   ReminderRulesLimit: 'REMINDER_RULES_LIMIT',
+  ActualTimeInvalid: 'ACTUAL_TIME_INVALID',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -203,6 +204,14 @@ export interface Session {
    * topic existed (SCRUM-79).
    */
   topic: string | null;
+  /**
+   * When the session really started and ended (ISO 8601, UTC), entered when it was marked Held
+   * (SCRUM-80). Null until then and for sessions held before they existed.
+   */
+  actualStartedAt: string | null;
+  actualEndedAt: string | null;
+  /** The minutes between the two, computed on read. Null when the times are. */
+  actualDurationMin: number | null;
 }
 
 /**
@@ -242,6 +251,10 @@ export interface AttendanceRecord {
 /** The body of POST /sessions/{id}/held (openapi.yaml: HeldRequest): the topic and every student. */
 export interface HeldRequest {
   topic: string;
+  /** Local wall-clock "HH:mm" in the academy's zone, on the session's date. */
+  startedAt: string;
+  /** Same; on the next date when it is earlier than startedAt. Not after now. */
+  endedAt: string;
   attendance: AttendanceRecord[];
 }
 
@@ -588,4 +601,11 @@ export interface ReminderRuleUpdate {
   leadMinutes?: number;
   sessionsBeforeEnd?: number;
   isActive?: boolean;
+}
+
+/** PATCH /sessions/{id} body (openapi.yaml: SessionUpdate): the topic, or both times, or all. */
+export interface SessionUpdate {
+  topic?: string;
+  startedAt?: string;
+  endedAt?: string;
 }

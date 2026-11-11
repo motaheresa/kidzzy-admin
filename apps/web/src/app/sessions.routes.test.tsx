@@ -57,6 +57,9 @@ const session: Session = {
   compensatesSessionId: null,
   cancelReason: null,
   topic: null,
+  actualStartedAt: null,
+  actualEndedAt: null,
+  actualDurationMin: null,
 };
 
 const startedSession: Session = { ...session, scheduledAt: '2026-10-22T09:00:00.000Z' };
@@ -180,6 +183,32 @@ describe('a group’s sessions', () => {
     expect(router.state.location.search).toBe('?status=held');
     await waitFor(() => expect(sessionCalls().at(-1)?.url.searchParams.get('status')).toBe('held'));
     expect(sessionCalls().at(-1)?.url.searchParams.get('groupId')).toBe(session.group.id);
+  });
+
+  it('shows the actual length of a Held session in the list, and a dash for the others', async () => {
+    api(admin, {
+      'GET /sessions': () =>
+        json(
+          200,
+          page([
+            {
+              ...heldSession,
+              actualStartedAt: heldSession.scheduledAt,
+              actualEndedAt: heldSession.scheduledAt,
+              actualDurationMin: 65,
+            },
+            { ...session, id: 'other-session' },
+          ]),
+        ),
+      [`GET ${groupPath}`]: () => json(200, groupData()),
+      [`GET ${groupPath}/enrollments`]: () => json(200, { data: [] }),
+    });
+    renderAt(groupPath);
+    expect(await screen.findByRole('columnheader', { name: 'المدة الفعلية' })).toBeInTheDocument();
+    expect(await screen.findByText('ساعة و5 دقايق')).toBeInTheDocument();
+    const rows = screen.getAllByRole('row');
+    // The number and the length of the Scheduled row are both a dash.
+    expect(within(rows[2] as HTMLElement).getAllByText('—')).toHaveLength(2);
   });
 
   it('shows Mark Held on an eligible row and refreshes its status and number after confirmation', async () => {

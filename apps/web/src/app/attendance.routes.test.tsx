@@ -45,6 +45,9 @@ const session = (id: string, scheduledAt: string, sessionNumber: number) => ({
   compensatesSessionId: null,
   cancelReason: null,
   topic: null,
+  actualStartedAt: null,
+  actualEndedAt: null,
+  actualDurationMin: null,
 });
 
 const grid: GroupAttendance = {

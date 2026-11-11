@@ -1,5 +1,5 @@
 import type { Me, Session } from '@kidzzy/shared';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -41,6 +41,9 @@ const session: Session = {
   compensatesSessionId: null,
   cancelReason: null,
   topic: null,
+  actualStartedAt: null,
+  actualEndedAt: null,
+  actualDurationMin: null,
 };
 const heldSession: Session = { ...session, status: 'held', sessionNumber: 1, topic: 'Loops' };
 
@@ -143,6 +146,8 @@ describe('the Held dialog', () => {
     await waitFor(() => expect(heldCalls()).toHaveLength(1));
     expect(heldCalls()[0]?.body).toEqual({
       topic: 'Loops',
+      startedAt: '12:00',
+      endedAt: '13:00',
       attendance: [
         {
           studentId: 's1',
@@ -292,7 +297,12 @@ describe('the Held dialog', () => {
     await user.click(confirmButton());
 
     await waitFor(() => expect(heldCalls()).toHaveLength(1));
-    expect(heldCalls()[0]?.body).toEqual({ topic: 'Loops', attendance: [] });
+    expect(heldCalls()[0]?.body).toEqual({
+      topic: 'Loops',
+      startedAt: '12:00',
+      endedAt: '13:00',
+      attendance: [],
+    });
   });
 });
 
@@ -336,6 +346,161 @@ describe('the topic and the notes on the session details', () => {
     });
     renderAt(detailPath);
 
-    expect(await screen.findByText('ما اتسجلش')).toBeInTheDocument();
+    // The topic and the actual time are both missing.
+    expect(await screen.findAllByText('ما اتسجلش')).toHaveLength(2);
+  });
+});
+
+describe('the actual times of a session (SCRUM-80)', () => {
+  const noStudents = () => json(200, { sessionId: session.id, records: [] });
+  // Planned 12:00 to 13:00 in Cairo (09:00Z, UTC+3 on 2026-10-22).
+  const startedLate = {
+    ...heldSession,
+    actualStartedAt: '2026-10-22T09:05:00.000Z',
+    actualEndedAt: '2026-10-22T10:15:00.000Z',
+    actualDurationMin: 70,
+  };
+
+  async function openEmptyDialog(user: ReturnType<typeof userEvent.setup>) {
+    api({
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`GET ${attendancePath}`]: noStudents,
+      [`POST ${detailPath}/held`]: () => json(200, { ...startedLate, cyclesUpdated: [] }),
+    });
+    renderAt(detailPath);
+    await user.click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
+    await screen.findByLabelText('بدأت');
+  }
+
+  it('prefills the planned times and shows the length', async () => {
+    const user = userEvent.setup();
+    await openEmptyDialog(user);
+    expect(screen.getByLabelText('بدأت')).toHaveValue('12:00');
+    expect(screen.getByLabelText('خلصت')).toHaveValue('13:00');
+    expect(screen.getByText('المدة: ساعة')).toBeInTheDocument();
+  });
+
+  it('updates the length as the times change, and shows an end before the start as a long session', async () => {
+    const user = userEvent.setup();
+    await openEmptyDialog(user);
+    fireEvent.change(screen.getByLabelText('بدأت'), { target: { value: '12:05' } });
+    fireEvent.change(screen.getByLabelText('خلصت'), { target: { value: '13:10' } });
+    expect(screen.getByText('المدة: ساعة و5 دقايق')).toBeInTheDocument();
+    // 11:00 is before 12:05, so the server reads it as the next day.
+    fireEvent.change(screen.getByLabelText('خلصت'), { target: { value: '11:00' } });
+    expect(screen.getByText('المدة: 22 ساعة و55 دقيقة')).toBeInTheDocument();
+  });
+
+  it('sends the typed times, and stays off while one is empty', async () => {
+    const user = userEvent.setup();
+    await openEmptyDialog(user);
+    await user.type(screen.getByLabelText('شرحت ايه النهارده؟'), 'Loops');
+    fireEvent.change(screen.getByLabelText('خلصت'), { target: { value: '' } });
+    expect(confirmButton()).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('بدأت'), { target: { value: '12:05' } });
+    fireEvent.change(screen.getByLabelText('خلصت'), { target: { value: '13:15' } });
+    await user.click(confirmButton());
+    await waitFor(() => expect(heldCalls()).toHaveLength(1));
+    expect(heldCalls()[0]?.body).toMatchObject({ startedAt: '12:05', endedAt: '13:15' });
+  });
+
+  it('shows the API’s refusal of the end under its field and keeps the dialog open', async () => {
+    const user = userEvent.setup();
+    api({
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`GET ${attendancePath}`]: noStudents,
+      [`POST ${detailPath}/held`]: () =>
+        json(422, {
+          type: 'about:blank',
+          title: 'Error',
+          status: 422,
+          code: 'ACTUAL_TIME_INVALID',
+        }),
+    });
+    renderAt(detailPath);
+    await user.click(await screen.findByRole('button', { name: /سجّل حصة جروب A/ }));
+    await user.type(await screen.findByLabelText('شرحت ايه النهارده؟'), 'Loops');
+    await user.click(confirmButton());
+    // Under the field, and in the dialog's alert.
+    expect(
+      (await screen.findAllByText('وقت الخلاص لازم يكون بعد وقت البداية، ومينفعش يكون في المستقبل'))
+        .length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(screen.getByLabelText('خلصت')).toBeInvalid();
+  });
+
+  it('shows the real times, the length and how they differ from the plan', async () => {
+    api({
+      [`GET ${detailPath}`]: () => json(200, startedLate),
+      [`GET ${attendancePath}`]: noStudents,
+    });
+    renderAt(detailPath);
+    expect(
+      await screen.findByText('بدأت 12:05 م، خلصت 1:15 م، المدة ساعة و10 دقايق'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('بدأت متأخر 5 دقايق')).toBeInTheDocument();
+    expect(screen.getByText('اطول من المخطط بـ10 دقايق')).toBeInTheDocument();
+  });
+
+  it('says nothing about the plan when it ran as planned', async () => {
+    api({
+      [`GET ${detailPath}`]: () =>
+        json(200, {
+          ...heldSession,
+          actualStartedAt: '2026-10-22T09:02:00.000Z',
+          actualEndedAt: '2026-10-22T10:02:00.000Z',
+          actualDurationMin: 60,
+        }),
+      [`GET ${attendancePath}`]: noStudents,
+    });
+    renderAt(detailPath);
+    expect(await screen.findByText('بدأت 12:02 م، خلصت 1:02 م، المدة ساعة')).toBeInTheDocument();
+    expect(screen.queryByText(/بدأت متأخر|بدأت بدري|من المخطط/)).not.toBeInTheDocument();
+  });
+
+  it('corrects the times with a PATCH that carries both', async () => {
+    let times = startedLate;
+    api({
+      [`GET ${detailPath}`]: () => json(200, times),
+      [`GET ${attendancePath}`]: noStudents,
+      [`PATCH ${detailPath}`]: () => {
+        times = {
+          ...startedLate,
+          actualStartedAt: '2026-10-22T09:00:00.000Z',
+          actualEndedAt: '2026-10-22T10:00:00.000Z',
+          actualDurationMin: 60,
+        };
+        return json(200, times);
+      },
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'عدّل الوقت الفعلي' }));
+    // It opens with the recorded times.
+    expect(screen.getByLabelText('بدأت')).toHaveValue('12:05');
+    expect(screen.getByLabelText('خلصت')).toHaveValue('13:15');
+    fireEvent.change(screen.getByLabelText('بدأت'), { target: { value: '12:00' } });
+    fireEvent.change(screen.getByLabelText('خلصت'), { target: { value: '13:00' } });
+    await user.click(screen.getByRole('button', { name: 'احفظ' }));
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        startedAt: '12:00',
+        endedAt: '13:00',
+      }),
+    );
+    expect(await screen.findByText('بدأت 12:00 م، خلصت 1:00 م، المدة ساعة')).toBeInTheDocument();
+  });
+
+  it('offers to record the times of a session held before they existed, from the planned ones', async () => {
+    api({
+      [`GET ${detailPath}`]: () => json(200, heldSession),
+      [`GET ${attendancePath}`]: noStudents,
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'سجّل الوقت الفعلي' }));
+    expect(screen.getByLabelText('بدأت')).toHaveValue('12:00');
+    expect(screen.getByLabelText('خلصت')).toHaveValue('13:00');
   });
 });

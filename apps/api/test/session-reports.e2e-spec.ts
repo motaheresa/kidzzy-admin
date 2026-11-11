@@ -8,7 +8,14 @@ import * as format from '../src/modules/session-reports/session-report.format';
 import { SessionReportJob } from '../src/modules/session-reports/session-report.job';
 import { SessionReportService } from '../src/modules/session-reports/session-report.service';
 import { TenantContext } from '../src/modules/tenancy/tenant-context';
-import { createAcademy, createTestApp, createUser, readCookies, removeAcademy } from './helpers';
+import {
+  createAcademy,
+  createTestApp,
+  createUser,
+  postHeldWith,
+  readCookies,
+  removeAcademy,
+} from './helpers';
 
 // The session reports to the admins (SCRUM-43): held and cancelled inside the write, "not marked
 // yet" on the tick. The clock is a variable so a test can move it.
@@ -139,10 +146,7 @@ describe('Session reports (e2e)', () => {
   }
 
   const hold = (id: string, body: unknown, token = adminToken) =>
-    request(server())
-      .post(api(`/sessions/${id}/held`))
-      .set(as(token))
-      .send(body as object);
+    postHeldWith(server(), prisma, id, token, () => body as object);
   const cancel = (id: string, reason: string) =>
     request(server())
       .post(api(`/sessions/${id}/cancel`))
@@ -198,7 +202,7 @@ describe('Session reports (e2e)', () => {
       const [report] = await reportsFor(adminId, group);
       expect(report?.title).toBe(`تقرير حصة: جروب ${group.name}`);
       expect(report?.body).toBe(
-        `حضر 2 من 6، الشرح: ${'x'.repeat(60)}…، غاب: Absent A، Absent B، Absent C و1 كمان، متوسط الاداء 4.5`,
+        `حضر 2 من 6، المدة دقيقة، الشرح: ${'x'.repeat(60)}…، غاب: Absent A، Absent B، Absent C و1 كمان، متوسط الاداء 4.5`,
       );
       expect(report?.data).toEqual({ url: `/sessions/${session.id}`, sessionId: session.id });
       expect(await reportsFor(adminId, group)).toHaveLength(1);
@@ -209,13 +213,15 @@ describe('Session reports (e2e)', () => {
       const session = await sessionAt(group.id, '2026-10-21T08:00:00.000Z');
       const one = await student(group.id, 'Solo');
       await hold(session.id, { topic: 'Loops', attendance: [present(one)] }).expect(200);
-      expect((await reportsFor(adminId, group))[0]?.body).toBe('حضر 1 من 1، الشرح: Loops');
+      expect((await reportsFor(adminId, group))[0]?.body).toBe(
+        'حضر 1 من 1، المدة دقيقة، الشرح: Loops',
+      );
 
       const empty = await newGroup();
       const emptySession = await sessionAt(empty.id, '2026-10-21T08:00:00.000Z');
       await hold(emptySession.id, { topic: 'Loops', attendance: [] }).expect(200);
       expect((await reportsFor(adminId, empty))[0]?.body).toBe(
-        'مفيش طلاب مسجلين في الحصة، الشرح: Loops',
+        'مفيش طلاب مسجلين في الحصة، المدة دقيقة، الشرح: Loops',
       );
     });
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatDate,
+  formatDuration,
   formatMoney,
   formatNumber,
   localToday,
+  withBa,
   zonedDateAndTime,
   zonedDayRange,
   zonedInstantUtc,
@@ -94,5 +96,39 @@ describe('format', () => {
       date: '2026-10-30',
       time: '00:30',
     });
+  });
+});
+
+// The same cases as formatDuration in the API (sessions/session-time-format.spec.ts).
+describe('formatDuration', () => {
+  it.each([
+    [1, 'دقيقة'],
+    [2, 'دقيقتين'],
+    [5, '5 دقايق'],
+    [10, '10 دقايق'],
+    [11, '11 دقيقة'],
+    [45, '45 دقيقة'],
+    [60, 'ساعة'],
+    [65, 'ساعة و5 دقايق'],
+    [90, 'ساعة و30 دقيقة'],
+    [120, 'ساعتين'],
+    [122, 'ساعتين ودقيقتين'],
+    [181, '3 ساعات ودقيقة'],
+    [660, '11 ساعة'],
+  ])('%i minutes is "%s"', (minutes, text) => {
+    expect(formatDuration(minutes)).toBe(text);
+  });
+
+  it('uses Western digits', () => {
+    expect(formatDuration(125)).not.toMatch(ARABIC_INDIC_DIGITS);
+  });
+});
+
+describe('withBa', () => {
+  it('writes "بـ" before a number and "ب" before a word', () => {
+    expect(withBa('5 دقايق')).toBe('بـ5 دقايق');
+    expect(withBa('ساعة')).toBe('بساعة');
+    expect(withBa('ساعة و5 دقايق')).toBe('بساعة و5 دقايق');
+    expect(withBa('دقيقتين')).toBe('بدقيقتين');
   });
 });

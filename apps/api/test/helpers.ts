@@ -180,7 +180,12 @@ export function readCookies(
 export async function heldBody(
   prisma: PrismaService,
   sessionId: string,
-): Promise<{ topic: string; attendance: { studentId: string; status: 'present' }[] }> {
+): Promise<{
+  topic: string;
+  startedAt: string;
+  endedAt: string;
+  attendance: { studentId: string; status: 'present' }[];
+}> {
   const session = await prisma.unscoped.session.findUniqueOrThrow({
     where: { id: sessionId },
     select: { groupId: true, scheduledAt: true, academy: { select: { timezone: true } } },
@@ -198,9 +203,36 @@ export async function heldBody(
     },
     select: { studentId: true },
   });
+  const times = await actualTimesBefore(prisma, sessionId);
   return {
     topic: 'Test topic',
+    ...times,
     attendance: enrollments.map((e) => ({ studentId: e.studentId, status: 'present' as const })),
+  };
+}
+
+/**
+ * A valid actual start and end for a session (SCRUM-80): the two minutes before its planned start.
+ * Marking Held needs the session to have started, so these are never after the clock, whatever
+ * clock a test fixes. Not realistic, on purpose: a test about the times sends its own.
+ */
+export async function actualTimesBefore(
+  prisma: PrismaService,
+  sessionId: string,
+): Promise<{ startedAt: string; endedAt: string }> {
+  const session = await prisma.unscoped.session.findUniqueOrThrow({
+    where: { id: sessionId },
+    select: { scheduledAt: true, academy: { select: { timezone: true } } },
+  });
+  const zone = session.academy.timezone;
+  const start = DateTime.fromJSDate(session.scheduledAt, { zone });
+  const before = start.minus({ minutes: 2 });
+  if (before.toISODate() !== start.toISODate()) {
+    throw new Error('The session starts too close to local midnight for the default times');
+  }
+  return {
+    startedAt: before.toFormat('HH:mm'),
+    endedAt: start.minus({ minutes: 1 }).toFormat('HH:mm'),
   };
 }
 
@@ -215,14 +247,46 @@ export function postHeld(
   sessionId: string,
   token: string,
 ): request.Test {
+  return postHeldWith(server, prisma, sessionId, token, () => heldBody(prisma, sessionId));
+}
+
+/**
+ * POST /sessions/{id}/held, sent now. For a test that sends several at once: the body is read
+ * first, so the requests go out together and share the test server while they run (postHeld
+ * sends later, and the first response would close the server under the others).
+ */
+export async function postHeldNow(
+  server: App,
+  prisma: PrismaService,
+  sessionId: string,
+  token: string,
+): Promise<request.Response> {
+  const body = await heldBody(prisma, sessionId);
+  return request(server)
+    .post(`/api/v1/sessions/${sessionId}/held`)
+    .set({ Cookie: `access_token=${token}` })
+    .send(body);
+}
+
+/**
+ * Like postHeld, with a body the test builds: the default actual times are added when the body
+ * does not carry its own, so a test about attendance or the topic does not repeat them.
+ */
+export function postHeldWith(
+  server: App,
+  prisma: PrismaService,
+  sessionId: string,
+  token: string,
+  makeBody: () => Promise<object> | object,
+): request.Test {
   const req = request(server)
     .post(`/api/v1/sessions/${sessionId}/held`)
     .set({ Cookie: `access_token=${token}` });
   const end = req.end.bind(req) as (callback: request.CallbackHandler) => request.Test;
   req.end = ((callback: request.CallbackHandler) => {
-    heldBody(prisma, sessionId).then(
-      (body) => {
-        void req.send(body);
+    Promise.all([makeBody(), actualTimesBefore(prisma, sessionId)]).then(
+      ([body, times]) => {
+        void req.send({ ...times, ...body });
         end(callback);
       },
       (error: unknown) => callback(error as Error, undefined as never),

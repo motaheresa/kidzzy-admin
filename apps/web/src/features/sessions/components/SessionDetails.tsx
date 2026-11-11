@@ -4,10 +4,12 @@ import { Link } from 'react-router';
 import { Alert, Button, DetailList, EmptyState, PageHeader, Skeleton } from '@/components/ui';
 import { AttendanceSection } from '@/features/attendance';
 import { usePermissions, useSession } from '@/features/auth';
-import { formatDateTime, formatNumber } from '@/lib/format';
+import { formatDateTime, formatDuration, formatNumber, formatTime } from '@/lib/format';
 import { useSessionDetail } from '../hooks/useSessions';
+import { compareToPlan } from '../lib/actual-times';
 import { CancelSessionButton } from './CancelSessionButton';
 import { RescheduleSessionButton } from './RescheduleSessionButton';
+import { EditActualTimesButton } from './EditActualTimesButton';
 import { EditTopicButton } from './EditTopicButton';
 import { MarkHeldButton } from './MarkHeldButton';
 import { UndoHeldButton } from './UndoHeldButton';
@@ -97,6 +99,28 @@ export function SessionDetails({ id }: { id: string }) {
                     <span className="flex flex-wrap items-center gap-2">
                       <span>{data.topic ?? 'ما اتسجلش'}</span>
                       <EditTopicButton session={data} />
+                    </span>
+                  ),
+                },
+                {
+                  label: 'الوقت الفعلي',
+                  value: (
+                    <span className="flex flex-col gap-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {data.actualStartedAt &&
+                          data.actualEndedAt &&
+                          data.actualDurationMin !== null
+                            ? `بدأت ${formatTime(data.actualStartedAt, timeZone)}، خلصت ${formatTime(data.actualEndedAt, timeZone)}، المدة ${formatDuration(data.actualDurationMin)}`
+                            : 'ما اتسجلش'}
+                        </span>
+                        <EditActualTimesButton session={data} />
+                      </span>
+                      {compareToPlan(data).map((line) => (
+                        <span key={line} className="text-sm text-muted-foreground">
+                          {line}
+                        </span>
+                      ))}
                     </span>
                   ),
                 },

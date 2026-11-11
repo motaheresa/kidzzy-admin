@@ -7,6 +7,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Clock } from '../sessions/clock';
 import { SessionHeldHooks, type SessionHeldHook } from '../sessions/session-held-hooks';
 import type { SessionRow } from '../sessions/session.repository';
+import { actualDurationMin } from '../sessions/session.mapper';
 import { UserRepository } from '../users/user.repository';
 import { SESSION_REPORT_PERMISSION } from './session-report.constants';
 import {
@@ -65,6 +66,7 @@ export class SessionReportService implements SessionHeldHook, OnModuleInit {
       heldReport({
         groupName: session.group.name,
         topic: session.topic,
+        durationMin: actualDurationMin(session),
         attendance: lines.map((line) => ({
           status: line.status,
           performanceRating: line.performanceRating,

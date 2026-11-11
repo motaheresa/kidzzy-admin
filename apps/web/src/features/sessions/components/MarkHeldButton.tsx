@@ -27,6 +27,8 @@ import {
 import { StarRating, useRefreshAttendance, useSessionAttendance } from '@/features/attendance';
 import { usePermissions, useSession } from '@/features/auth';
 import { useMarkHeld } from '../hooks/useMarkHeld';
+import { plannedTimes } from '../lib/actual-times';
+import { ActualTimesFields } from './ActualTimesFields';
 import { canWriteSession } from './session-access';
 
 /**
@@ -90,7 +92,13 @@ export function MarkHeldButton({ session }: { session: Session }) {
 }
 
 function HeldDialogContent({ session, close }: { session: Session; close: () => void }) {
+  const me = useSession();
+  const timeZone = me.data?.academy.timezone ?? 'Africa/Cairo';
+  // Most sessions run as planned, so the times start as the planned ones.
+  const [planned] = useState(() => plannedTimes(session, timeZone));
   const [topic, setTopic] = useState('');
+  const [startedAt, setStartedAt] = useState(planned.startedAt);
+  const [endedAt, setEndedAt] = useState(planned.endedAt);
   const [lines, setLines] = useState<Record<string, Line>>({});
   const roster = useSessionAttendance(session.id);
   const mark = useMarkHeld(session.id);
@@ -130,7 +138,8 @@ function HeldDialogContent({ session, close }: { session: Session; close: () => 
     if (line.status === null) return false;
     return line.status === AttendanceStatus.Absent || line.homeworkRating !== undefined;
   });
-  const ready = topic.trim() !== '' && roster.isSuccess && complete;
+  const ready =
+    topic.trim() !== '' && startedAt !== '' && endedAt !== '' && roster.isSuccess && complete;
 
   function onConfirm() {
     const attendance: AttendanceRecord[] = students.flatMap((student) => {
@@ -148,7 +157,7 @@ function HeldDialogContent({ session, close }: { session: Session; close: () => 
       ];
     });
     mark.mutate(
-      { topic: topic.trim(), attendance },
+      { topic: topic.trim(), startedAt, endedAt, attendance },
       {
         onSuccess: () => {
           refreshAttendance(session.id);
@@ -189,6 +198,17 @@ function HeldDialogContent({ session, close }: { session: Session; close: () => 
         error={mark.error?.fieldErrors.topic}
         maxLength={MAX_TOPIC}
         required
+      />
+
+      <ActualTimesFields
+        scheduledAt={session.scheduledAt}
+        timeZone={timeZone}
+        startedAt={startedAt}
+        endedAt={endedAt}
+        onStartedAt={setStartedAt}
+        onEndedAt={setEndedAt}
+        startedAtError={mark.error?.fieldErrors.startedAt}
+        endedAtError={mark.error?.fieldErrors.endedAt}
       />
 
       {roster.isPending ? (
