@@ -46,6 +46,7 @@ export { EmptyState } from './molecules/EmptyState';
 export { FormField } from './molecules/FormField';
 export { FullScreenMessage } from './molecules/FullScreenMessage';
 export { PageHeader } from './molecules/PageHeader';
+export { PageSizeSelect } from './molecules/PageSizeSelect';
 export { Pagination } from './molecules/Pagination';
 export { SEARCH_DEBOUNCE_MS, SearchInput } from './molecules/SearchInput';
 export { SelectField } from './molecules/SelectField';

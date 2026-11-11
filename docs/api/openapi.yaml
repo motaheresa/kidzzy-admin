@@ -43,6 +43,8 @@ tags:
     description: Course material links (E8)
   - name: Admin
     description: Dashboard and audit log (E8)
+  - name: Reports
+    description: Reports workspace and finance report (E8)
 paths:
   /auth/login:
     post:
@@ -1792,7 +1794,8 @@ paths:
         Payments, newest first (the day they were paid, then when they were recorded). Each payment names whose
         cycle it settled (payeeType, payeeId, payeeName, cycleNumber) and, for an instructor, the group, because
         an instructor is paid per group (ADR-0015). from and to are academy-local dates (YYYY-MM-DD) compared
-        with the day the payment was made, both included; from after to is 400. The filters are combined with AND.
+        with the day the payment was made, both included; from after to is 400. The filters (payeeType, method,
+        studentId, instructorId, from, to) are combined with AND. pageSize goes up to 100, as on every list.
 
 
         Scope own (an instructor) reads only their own payments, whatever the filters: without instructorId they
@@ -1811,6 +1814,15 @@ paths:
             enum:
               - student
               - instructor
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - cash
+              - transfer
+              - wallet
         - name: studentId
           in: query
           required: false
@@ -2505,6 +2517,106 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /reports/finance:
+    get:
+      tags:
+        - Reports
+      summary: Finance report of a period
+      description: >
+        Money in and out of a period, what the period should bring, and what is outstanding (US-38). Admin only
+        (reports.read, scope any): an instructor is 403 from the guard. Another academy's rows are never counted.
+        Money is a decimal string everywhere ("1500.00"), never a number.
+
+
+        The period is from and to, academy-local dates (YYYY-MM-DD), both included. A missing end is the edge of
+        the current local month (neither given: the whole current month). to before from is 400, and a period longer
+        than 366 days is 422 REPORT_PERIOD_TOO_LONG. The instants around the dates come from the academy's IANA
+        zone (daylight saving time included) and the server clock.
+
+
+        actual: in is the sum of the payments on student cycles whose paid_on is in the period, out is the same on
+        instructor cycles, net is in minus out. paid_on is a date, so it compares with from and to as dates.
+
+
+        expected is the sum of two parts. (a) The part of the period that has passed (its start up to now): the
+        cycles whose due_at falls in it, at their plan amount. (b) The part still ahead (now, or the start if it is
+        later, up to the end): for every cycle in progress, the sessions it still needs are its sessions per cycle
+        minus the sessions counted. The payee's future Scheduled sessions are walked in time order (Cancelled ones
+        never count): a student's through their open enrollment's group, an instructor's through the sessions of the
+        cycle's group that the instructor teaches. If the session that completes the cycle falls in the period, the
+        cycle counts at its plan amount. The walk then continues with the next cycle at the latest plan version's
+        sessions per cycle and amount (a plan change applies from the next cycle), for as long as sessions fall in
+        the period. (c) Past the last generated session (SESSION_GENERATION_WEEKS) every active group is extended
+        with its active schedule slots (not retired) as weekly occurrences, so a period further ahead still
+        projects; the extended sessions belong to the group's current instructor. (d) A student with no open
+        enrollment or no plan, and an (instructor, group) pair with no plan, are left out and counted in
+        skippedStudents and skippedInstructorPairs. A payee with a plan but no cycle in progress contributes nothing
+        and is not counted as skipped. expected.in comes from students, expected.out from instructor pairs. The
+        projection assumes no student joins or leaves and no session is cancelled from now on; a past session still
+        Scheduled counts once it is held. A period that ended in the past has no projection and skips nothing.
+
+
+        outstanding is not filtered by the period: the number and the total of the cycles that are Due and unpaid,
+        split by payee type.
+      operationId: getFinanceReport
+      x-permission: reports.read
+      x-story: US-38
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the first day of the current local month.
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the last day of the current local month.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /reports/overview:
+    get:
+      tags:
+        - Reports
+      summary: Overview of one full round
+      description: >
+        The value of one full cycle round, not filtered by a period (US-38). Admin only (reports.read, scope any).
+        roundIncome is the sum of the latest plan amount of every student with an open enrollment and a plan.
+        roundOutflow is the sum of the latest plan amount of every (instructor, group) pair whose group is active and
+        whose instructor is the group's current instructor. roundNet is the difference. averageRoundWeeks is the
+        average, over those students, of their sessions per cycle divided by the active slots a week of their group
+        (one decimal; a group with no active slot is left out); null when there is nothing to average.
+      operationId: getOverviewReport
+      x-permission: reports.read
+      x-story: US-38
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /dashboard:
     get:
       tags:
@@ -4403,6 +4515,107 @@ components:
       additionalProperties: false
       required:
         - ids
+    MoneyFlow:
+      type: object
+      properties:
+        in:
+          type: string
+          description: Decimal string in EGP.
+        out:
+          type: string
+          description: Decimal string in EGP.
+        net:
+          type: string
+          description: in minus out, decimal string in EGP; negative when more went out than came in.
+      additionalProperties: false
+      required:
+        - in
+        - out
+        - net
+    OutstandingTotal:
+      type: object
+      properties:
+        count:
+          type: integer
+        total:
+          type: string
+          description: Decimal string in EGP.
+      additionalProperties: false
+      required:
+        - count
+        - total
+    FinanceReport:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+          additionalProperties: false
+          required:
+            - from
+            - to
+        actual:
+          $ref: '#/components/schemas/MoneyFlow'
+        expected:
+          allOf:
+            - $ref: '#/components/schemas/MoneyFlow'
+            - type: object
+              properties:
+                skippedStudents:
+                  type: integer
+                  description: Students left out of the projection (no open enrollment or no plan).
+                skippedInstructorPairs:
+                  type: integer
+                  description: (Instructor, group) pairs left out of the projection (no plan).
+              required:
+                - skippedStudents
+                - skippedInstructorPairs
+        outstanding:
+          type: object
+          properties:
+            students:
+              $ref: '#/components/schemas/OutstandingTotal'
+            instructors:
+              $ref: '#/components/schemas/OutstandingTotal'
+          additionalProperties: false
+          required:
+            - students
+            - instructors
+      additionalProperties: false
+      required:
+        - period
+        - actual
+        - expected
+        - outstanding
+    OverviewReport:
+      type: object
+      properties:
+        roundIncome:
+          type: string
+          description: Decimal string in EGP.
+        roundOutflow:
+          type: string
+          description: Decimal string in EGP.
+        roundNet:
+          type: string
+          description: Decimal string in EGP.
+        averageRoundWeeks:
+          description: Weeks, one decimal; null when there is nothing to average.
+          anyOf:
+            - type: number
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - roundIncome
+        - roundOutflow
+        - roundNet
+        - averageRoundWeeks
     DashboardHeldSession:
       type: object
       properties:

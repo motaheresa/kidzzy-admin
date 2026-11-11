@@ -13,3 +13,18 @@ export function toDecimal(amount: string): Prisma.Decimal {
 export function toMoney(amount: Prisma.Decimal): string {
   return amount.toFixed(2);
 }
+
+/** A sum that may be empty (an aggregate over no rows is null) -> the API form, "0.00" for none. */
+export function toMoneyOrZero(amount: Prisma.Decimal | null): string {
+  return amount === null ? '0.00' : toMoney(amount);
+}
+
+/** The sum of decimal strings, as a decimal string with two places (never a JS number). */
+export function sumMoney(amounts: readonly string[]): string {
+  return amounts.reduce((total, amount) => total.plus(amount), new Prisma.Decimal(0)).toFixed(2);
+}
+
+/** `a - b` for two decimal strings, as a decimal string with two places. */
+export function subtractMoney(a: string, b: string): string {
+  return new Prisma.Decimal(a).minus(b).toFixed(2);
+}

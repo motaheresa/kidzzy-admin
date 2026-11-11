@@ -3,13 +3,14 @@ import type {
   Payment,
   PaymentCreate,
   PaymentCycle,
+  PaymentMethod,
   PaymentPlan,
   PayeeType,
   PlanInput,
 } from '@kidzzy/shared';
 
 /** The API's plan shapes (openapi.yaml: PaymentPlan, PlanInput, InstructorPlanCreate). */
-export type { Page, Payment, PaymentCreate, PaymentCycle, PaymentPlan, PlanInput };
+export type { Page, Payment, PaymentCreate, PaymentCycle, PaymentMethod, PaymentPlan, PlanInput };
 
 /** The status filters of the cycles list; "approaching" is one or two sessions before the end. */
 export type CycleFilter = 'in_progress' | 'approaching' | 'due' | 'paid';
@@ -31,6 +32,8 @@ export interface CycleListParams {
  * out for the caller's own), between two academy-local dates, both included.
  */
 export interface PaymentListParams {
+  payeeType?: PayeeType;
+  method?: PaymentMethod;
   instructorId?: string;
   from?: string;
   to?: string;

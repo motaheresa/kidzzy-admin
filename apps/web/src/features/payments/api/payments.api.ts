@@ -68,6 +68,8 @@ export function listPayments(
     page: String(params.page ?? 1),
     pageSize: String(params.pageSize ?? CYCLES_PAGE_SIZE),
   });
+  if (params.payeeType) query.set('payeeType', params.payeeType);
+  if (params.method) query.set('method', params.method);
   if (params.instructorId) query.set('instructorId', params.instructorId);
   if (params.from) query.set('from', params.from);
   if (params.to) query.set('to', params.to);

@@ -125,6 +125,7 @@ export const ErrorCode = {
   ReminderRuleExists: 'REMINDER_RULE_EXISTS',
   ReminderRulesLimit: 'REMINDER_RULES_LIMIT',
   ActualTimeInvalid: 'ACTUAL_TIME_INVALID',
+  ReportPeriodTooLong: 'REPORT_PERIOD_TOO_LONG',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -656,4 +657,53 @@ export interface Dashboard {
   todaySessions: Session[];
   recentHeld: DashboardHeldSession[];
   dueCycles: { students: DashboardDueCycle[]; instructors: DashboardDueCycle[] };
+}
+
+/** The period a finance report covers: academy-local dates, both included (openapi.yaml: FinanceReport). */
+export interface ReportPeriod {
+  /** YYYY-MM-DD */
+  from: string;
+  /** YYYY-MM-DD */
+  to: string;
+}
+
+/** Money in, money out and the difference, as decimal strings in EGP. */
+export interface MoneyFlow {
+  in: string;
+  out: string;
+  net: string;
+}
+
+/** Due and unpaid cycles of one kind of payee: how many and what they add up to. */
+export interface OutstandingTotal {
+  count: number;
+  /** Decimal string in EGP */
+  total: string;
+}
+
+/** GET /reports/finance (openapi.yaml: FinanceReport). Admin only. */
+export interface FinanceReport {
+  period: ReportPeriod;
+  /** Payments with paid_on in the period: students pay in, instructors are paid out. */
+  actual: MoneyFlow;
+  /** What the period should bring: cycles due in its passed part plus a projection of its future part. */
+  expected: MoneyFlow & {
+    /** Students left out of the projection (no open enrollment or no plan). */
+    skippedStudents: number;
+    /** (Instructor, group) pairs left out of the projection (no plan). */
+    skippedInstructorPairs: number;
+  };
+  /** Cycles that are Due and unpaid, not filtered by the period. */
+  outstanding: { students: OutstandingTotal; instructors: OutstandingTotal };
+}
+
+/** GET /reports/overview (openapi.yaml: OverviewReport). Admin only, not filtered by a period. */
+export interface OverviewReport {
+  /** One cycle of every student with an open enrollment and a plan, decimal string in EGP. */
+  roundIncome: string;
+  /** One cycle of every (instructor, group) pair of an active group, decimal string in EGP. */
+  roundOutflow: string;
+  roundNet: string;
+  /** Average weeks one cycle lasts (one decimal); null when there is no student to average. */
+  averageRoundWeeks: number | null;
 }

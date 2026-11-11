@@ -13,6 +13,8 @@ import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage';
 import { AuditLogPage } from '@/pages/audit/AuditLogPage';
 import { ReminderRulesPage } from '@/pages/reminder-rules/ReminderRulesPage';
+import { ReportsFinancePage } from '@/pages/reports/ReportsFinancePage';
+import { ReportsOverviewPage } from '@/pages/reports/ReportsOverviewPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotificationsPage } from '@/pages/notifications/NotificationsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -27,7 +29,9 @@ import { StudentsPage } from '@/pages/students/StudentsPage';
 import { TransferStudentPage } from '@/pages/students/TransferStudentPage';
 import { ProtectedLayout } from './layouts/ProtectedLayout';
 import { PublicLayout } from './layouts/PublicLayout';
+import { ReportsLayout } from './layouts/ReportsLayout';
 import { RootLayout } from './layouts/RootLayout';
+import { SessionGateLayout } from './layouts/SessionGate';
 import { RequirePermission } from './RequirePermission';
 
 /**
@@ -48,6 +52,9 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission reminders.manage (any) /reminder-rules
  *       RequirePermission instructors.read     /instructors, /instructors/:id
  *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
+ *     SessionGateLayout  (same sign-in rules, no app shell)
+ *       RequirePermission reports.read (any)
+ *         ReportsLayout  the reports workspace frame: /reports, /reports/finance
  *     NotFoundPage     *
  *     DesignSystemPage /dev/design-system   development only
  * A new signed-in screen is a child of ProtectedLayout, inside a RequirePermission for the
@@ -155,6 +162,26 @@ export const routes: RouteObject[] = [
             children: [
               { path: '/instructors/new', element: <NewInstructorPage /> },
               { path: '/instructors/:id/edit', element: <EditInstructorPage /> },
+            ],
+          },
+        ],
+      },
+      // The reports workspace has its own frame instead of the app shell (US-38): the session is
+      // checked first, then reports.read, then the frame is drawn, so a user without the
+      // permission sees the forbidden page and not an empty workspace.
+      {
+        element: <SessionGateLayout />,
+        children: [
+          {
+            element: <RequirePermission permission="reports.read" scope="any" />,
+            children: [
+              {
+                element: <ReportsLayout />,
+                children: [
+                  { path: '/reports', element: <ReportsOverviewPage /> },
+                  { path: '/reports/finance', element: <ReportsFinancePage /> },
+                ],
+              },
             ],
           },
         ],

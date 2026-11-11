@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   'materials.manage:any': 'Add, edit and order material links',
   'dashboard.read:any': 'View the admin dashboard',
   'audit.read:any': 'View the audit log',
+  'reports.read:any': 'View reports',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;

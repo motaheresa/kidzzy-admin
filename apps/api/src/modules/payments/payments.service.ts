@@ -64,6 +64,7 @@ export class PaymentsService {
     const { rows, total } = await this.payments.list(
       {
         payeeType: own ? 'instructor' : query.payeeType,
+        method: query.method,
         studentId: query.studentId,
         instructorId: own ? this.access.userId : query.instructorId,
         from: query.from,
