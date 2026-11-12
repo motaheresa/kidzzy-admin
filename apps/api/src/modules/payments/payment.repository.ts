@@ -35,6 +35,7 @@ export type PaymentRow = Prisma.PaymentGetPayload<{ select: typeof PAYMENT_SELEC
 /** What GET /payments can filter by. The filters are combined with AND. */
 export interface PaymentListFilter {
   payeeType?: 'student' | 'instructor';
+  method?: PaymentMethod;
   studentId?: string;
   instructorId?: string;
   /** Academy-local dates, YYYY-MM-DD, both included. */
@@ -69,6 +70,7 @@ export class PaymentRepository {
     };
     const where: Prisma.PaymentWhereInput = {
       ...(Object.keys(cycle).length > 0 ? { cycle } : {}),
+      ...(filter.method ? { method: filter.method } : {}),
       ...(filter.from || filter.to
         ? {
             paidOn: {

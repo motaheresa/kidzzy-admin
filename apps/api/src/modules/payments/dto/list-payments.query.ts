@@ -1,4 +1,5 @@
 import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { PaymentMethod } from '@kidzzy/shared';
 import { PageQueryDto } from '../../../common/pagination/page-query.dto';
 import { IsCalendarDate } from '../../../common/validation/is-calendar-date';
 
@@ -11,6 +12,10 @@ export class ListPaymentsQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(['student', 'instructor'])
   payeeType?: 'student' | 'instructor';
+
+  @IsOptional()
+  @IsIn(Object.values(PaymentMethod))
+  method?: PaymentMethod;
 
   @IsOptional()
   @IsUUID()

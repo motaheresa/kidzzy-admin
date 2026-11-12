@@ -55,6 +55,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   REMINDER_RULE_EXISTS: 'القاعدة دي موجودة بالفعل، اكتب قيمة تانية',
   REMINDER_RULES_LIMIT: 'وصلت للحد الأقصى: 10 قواعد في القسم الواحد. امسح قاعدة الاول',
   ACTUAL_TIME_INVALID: 'وقت الخلاص لازم يكون بعد وقت البداية، ومينفعش يكون في المستقبل',
+  REPORT_PERIOD_TOO_LONG: 'الفترة طويلة. اختار فترة أقصاها 366 يوم',
   RATE_LIMITED: 'محاولات كثيرة، جرب تاني بعد دقيقة',
   INTERNAL_ERROR: 'حصلت مشكلة في السيرفر، جرب تاني',
 };
@@ -138,6 +139,7 @@ export const CODE_FIELDS: Partial<Record<ErrorCode, string>> = {
   STARTING_POINT_LOCKED: 'openingCount',
   REMINDER_RULE_EXISTS: 'value',
   ACTUAL_TIME_INVALID: 'endedAt',
+  REPORT_PERIOD_TOO_LONG: 'to',
   SESSION_NOT_CANCELLED: 'compensatesSessionId',
   SESSION_ALREADY_COMPENSATED: 'compensatesSessionId',
   COMPENSATES_SESSION_INVALID: 'compensatesSessionId',

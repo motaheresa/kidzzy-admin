@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  BarChart3Icon,
   BellRingIcon,
   GraduationCapIcon,
   HistoryIcon,
@@ -34,6 +35,13 @@ const NAV_ITEMS: NavItem[] = [
     label: 'المدفوعات',
     icon: WalletIcon,
     permission: 'payments.read',
+    scope: 'any',
+  },
+  {
+    to: '/reports',
+    label: 'التقارير',
+    icon: BarChart3Icon,
+    permission: 'reports.read',
     scope: 'any',
   },
   {
