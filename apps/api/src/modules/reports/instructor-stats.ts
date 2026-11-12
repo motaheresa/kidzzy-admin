@@ -55,7 +55,11 @@ export interface InstructorStats {
  * session without them is counted apart, and the planned length never stands in for it.
  *
  * Rows: every active instructor, plus an inactive one who held or cancelled a session, or was paid,
- * in the period. An inactive instructor with nothing to show is left out. Ordered by name.
+ * in the period, or has a cycle Due now, or has an expected amount in the period (a cycle that fell
+ * due in its passed part, or a projected completion). So the money owed to a former instructor is
+ * always in the totals: kpis.due is every instructor cycle Due now and kpis.expectedOutflow is the
+ * finance report's expected.out. An inactive instructor with none of these is left out. Ordered by
+ * name.
  */
 export function buildInstructorStats(input: InstructorStatsInput): InstructorStats {
   const rows: InstructorsReportRow[] = [];
@@ -65,8 +69,6 @@ export function buildInstructorStats(input: InstructorStatsInput): InstructorSta
     const cancelled = mine.filter((session) => session.status === 'cancelled');
     const payments = input.payments.filter((payment) => payment.instructorId === instructor.id);
 
-    if (!instructor.isActive && held.length + cancelled.length + payments.length === 0) continue;
-
     const due = input.dueCycles.filter((cycle) => cycle.instructorId === instructor.id);
     const expected = [
       ...input.passedDue.filter((cycle) => cycle.instructorId === instructor.id),
@@ -74,6 +76,9 @@ export function buildInstructorStats(input: InstructorStatsInput): InstructorSta
         (completion) => completion.kind === 'instructor' && completion.payeeId === instructor.id,
       ),
     ];
+
+    const hasMoney = payments.length + due.length + expected.length > 0;
+    if (!instructor.isActive && held.length + cancelled.length === 0 && !hasMoney) continue;
     const withTimes = held.filter((session) => session.actualStartedAt && session.actualEndedAt);
     const milliseconds = withTimes.reduce(
       (total, session) =>

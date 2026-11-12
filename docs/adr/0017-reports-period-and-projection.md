@@ -47,7 +47,7 @@ The sessions report (US-39, `GET /reports/sessions`) reuses the same period (fro
 
 The instructors report (US-40, `GET /reports/instructors`) reuses the same period and permission.
 
-- **Rows:** every active instructor, plus an inactive one who held or cancelled a session, or was paid, in the period.
+- **Rows:** every active instructor, plus an inactive one who held or cancelled a session, or was paid, in the period, or has a cycle Due now, or has an expected amount in the period (a passed `due_at` or a projected completion). An inactive instructor with none of these is left out. The totals add up the rows, so the money owed to a former instructor is always in them: `kpis.due` is every instructor cycle Due now and `kpis.expectedOutflow` equals `expected.out` of the finance report for the same period.
 - **A session counts for the instructor on the session**, not the group's current one, so a former instructor keeps what they taught. Real time is only what the actual start and end say; held sessions without them are counted apart, never replaced by the planned length.
 - **Expected per instructor** is the same two parts as the finance report: the cycles that fell due in the passed part of the period (read from `due_at`) plus the completions of the projection, grouped by person. The projection (`finance-projection.ts`) now returns the payee's id on each completion; its logic and the finance totals are unchanged, so the instructors' expected figures add up to `expected.out` of the finance report for the same period.
 - The rows are built by a pure function (`instructor-stats.ts`), like the sessions statistics.

@@ -891,7 +891,7 @@ describe('Reports (e2e)', () => {
       expect(body.kpis.due).toEqual({ count: 2, total: '2700.00' });
     });
 
-    it('expects, per instructor, what the finance report expects for instructors in total', async () => {
+    it('expects, per instructor, what the finance report expects for instructors in total, a former instructor included', async () => {
       const s = await setup('instructors-expected');
       // Ana: two groups, each completing a cycle in November. Omar: one group completing a cycle,
       // and one cycle that already fell due on the 5th (the passed part of the period).
@@ -913,15 +913,40 @@ describe('Reports (e2e)', () => {
         await session(s, g.id, at('2026-11-26'), 'scheduled', instructorId);
       }
 
+      // Zed is a former instructor (inactive now) who is still owed money: a cycle that fell due on
+      // the 6th, and a second group whose cycle completes in the period.
+      const zedId = await createUser(prisma, s.academyId, {
+        name: 'zed',
+        email: mail('zed', 'instructors-expected'),
+        password,
+        role: SystemRole.Instructor,
+      });
+      const fifth = await group(s, 'Fifth', zedId);
+      const sixth = await group(s, 'Sixth', zedId);
+      const owed = await paired(s, fifth.id, zedId, { amount: '1100.00' });
+      await makeDue(owed.cycleId, '2026-11-06T10:00:00.000Z');
+      await paired(s, sixth.id, zedId, { amount: '700.00', counted: 2 });
+      await session(s, sixth.id, at('2026-11-19'), 'scheduled', zedId);
+      await session(s, sixth.id, at('2026-11-26'), 'scheduled', zedId);
+      await prisma.unscoped.user.update({ where: { id: zedId }, data: { isActive: false } });
+
       const body = await rowsOf(s.adminToken, '2026-11-01', '2026-11-30');
       expect(rowOf(body, s.anaId)?.expected).toBe('2700.00');
       expect(rowOf(body, s.omarId)?.expected).toBe('2300.00');
-      expect(body.kpis.expectedOutflow).toBe('5000.00');
+      expect(rowOf(body, zedId)).toMatchObject({
+        isActive: false,
+        held: 0,
+        expected: '1800.00',
+        due: { count: 1, total: '1100.00' },
+      });
+      expect(body.kpis.expectedOutflow).toBe('6800.00');
+      // The totals add up the rows, so they equal the finance report with no exception.
       const finance = await report(s.adminToken, '2026-11-01', '2026-11-30');
       expect(body.kpis.expectedOutflow).toBe(finance.expected.out);
+      expect(body.kpis.due).toEqual(finance.outstanding.instructors);
     });
 
-    it('lists an inactive instructor only when they held, cancelled or were paid in the period', async () => {
+    it('lists an inactive instructor with nothing owed only when they held, cancelled or were paid in the period', async () => {
       const s = await setup('instructors-inactive');
       const zedId = await createUser(prisma, s.academyId, {
         name: 'zed',

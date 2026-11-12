@@ -182,12 +182,66 @@ describe('buildInstructorStats', () => {
       }
     });
 
-    it('leaves out an inactive instructor with nothing in the period', () => {
+    it('lists an inactive instructor who is owed a cycle Due now, and counts it in kpis.due', () => {
       const result = stats({
         instructors: [ana, retired],
-        dueCycles: [{ instructorId: 'zed', amount: '100.00' }], // due now, but no activity in the period
+        dueCycles: [{ instructorId: 'zed', amount: '1500.00' }],
+      });
+      expect(row(result, 'zed')).toMatchObject({
+        isActive: false,
+        held: 0,
+        due: { count: 1, total: '1500.00' },
+      });
+      expect(result.kpis.due).toEqual({ count: 1, total: '1500.00' });
+      expect(result.kpis.activeInstructors).toBe(1);
+    });
+
+    it('lists an inactive instructor whose cycle fell due in the period, and counts it as expected', () => {
+      const result = stats({
+        instructors: [ana, retired],
+        passedDue: [{ instructorId: 'zed', amount: '900.00' }],
+      });
+      expect(row(result, 'zed')?.expected).toBe('900.00');
+      expect(result.kpis.expectedOutflow).toBe('900.00');
+    });
+
+    it('lists an inactive instructor with only a projected completion, and counts it as expected', () => {
+      const result = stats({
+        instructors: [ana, retired],
+        completions: [{ kind: 'instructor', payeeId: 'zed', amount: '1200.00' }],
+      });
+      expect(row(result, 'zed')).toMatchObject({ isActive: false, expected: '1200.00' });
+      expect(result.kpis.expectedOutflow).toBe('1200.00');
+    });
+
+    it('does not list an inactive instructor for a student who has the same id', () => {
+      const result = stats({
+        instructors: [ana, retired],
+        completions: [{ kind: 'student', payeeId: 'zed', amount: '900.00' }],
+      });
+      expect(row(result, 'zed')).toBeUndefined();
+    });
+
+    it('leaves out an inactive instructor with nothing in the period and nothing owed', () => {
+      const result = stats({
+        instructors: [ana, retired],
+        dueCycles: [{ instructorId: 'someone-else', amount: '100.00' }],
       });
       expect(result.rows.map((r) => r.instructorId)).toEqual(['ana']);
+    });
+
+    it('keeps the totals equal to the money of every listed instructor, former ones included', () => {
+      const result = stats({
+        instructors: [ana, retired],
+        dueCycles: [
+          { instructorId: 'ana', amount: '1500.00' },
+          { instructorId: 'zed', amount: '1000.00' },
+        ],
+        passedDue: [{ instructorId: 'zed', amount: '1000.00' }],
+        completions: [{ kind: 'instructor', payeeId: 'ana', amount: '1500.00' }],
+      });
+      expect(result.kpis.due).toEqual({ count: 2, total: '2500.00' });
+      expect(result.kpis.expectedOutflow).toBe('2500.00');
     });
 
     it('ignores a session of someone who is not an instructor', () => {

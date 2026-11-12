@@ -2672,7 +2672,10 @@ paths:
 
 
         Rows: every active instructor, plus an inactive one who held or cancelled a session, or was paid, in the
-        period. An inactive instructor with nothing to show is left out.
+        period, or has a cycle Due now, or has an expected amount in the period (a cycle that fell due in its
+        passed part, or a projected completion). An inactive instructor with none of these is left out. So the
+        money owed to a former instructor is always in the totals: kpis.due is every instructor cycle Due now and
+        kpis.expectedOutflow equals expected.out of GET /reports/finance for the same period.
 
 
         held and cancelled count the sessions of the period whose instructor is that instructor (the instructor
