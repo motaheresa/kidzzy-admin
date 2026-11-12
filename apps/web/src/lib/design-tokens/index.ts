@@ -53,4 +53,9 @@ export const UI_PAIRS: readonly (readonly [string, string])[] = [
   ['input', 'background'],
   ['ring', 'surface'],
   ['ring', 'background'],
+  // Chart marks on the card they are drawn on.
+  ['chart-held', 'surface'],
+  ['chart-cancelled', 'surface'],
+  ['chart-unmarked', 'surface'],
+  ['chart-upcoming', 'surface'],
 ];

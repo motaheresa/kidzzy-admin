@@ -2,6 +2,8 @@
 // arithmetic on date strings: a date has no time zone, only "today" does (it comes from the
 // academy's zone, see localToday in lib/format).
 
+import { zonedInstantUtc } from '@/lib/format';
+
 export interface Period {
   from: string;
   to: string;
@@ -72,4 +74,18 @@ export function presetOf(period: Period, today: string): PeriodPreset {
 /** True when the period ends before it starts: the API would answer 400, so the screen says so. */
 export function isBackwards(period: Period): boolean {
   return period.to < period.from;
+}
+
+/**
+ * The period as the UTC range GET /sessions takes: `from` is local midnight of the first day
+ * (included) and `to` is local midnight of the day after the last (excluded), in the academy's
+ * zone. The two midnights can be 23 or 25 hours apart on the days Egypt changes its clock.
+ */
+export function periodInstants(period: Period, timeZone: string): { from: string; to: string } {
+  const after = parse(period.to);
+  after.setUTCDate(after.getUTCDate() + 1);
+  return {
+    from: zonedInstantUtc(period.from, '00:00', timeZone).toISOString(),
+    to: zonedInstantUtc(format(after), '00:00', timeZone).toISOString(),
+  };
 }

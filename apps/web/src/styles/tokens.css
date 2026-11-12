@@ -55,6 +55,12 @@
   --color-info-soft-foreground: #1d4296;
   --color-destructive: #b42318; /* shadcn's name for danger */
 
+  /* Chart marks (3:1 on surface, checked in tokens.test.ts); the legend and tooltip name each one in words too. */
+  --color-chart-held: #15803d;
+  --color-chart-cancelled: #b42318;
+  --color-chart-unmarked: #b45309;
+  --color-chart-upcoming: #6d3fe6;
+
   /* ── Type ─────────────────────────────────────────────────────────────── */
   --font-sans: 'Cairo Variable', system-ui, sans-serif;
   --font-display: 'Baloo Bhaijaan 2 Variable', 'Cairo Variable', system-ui, sans-serif;

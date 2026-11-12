@@ -2591,6 +2591,68 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /reports/sessions:
+    get:
+      tags:
+        - Reports
+      operationId: getSessionsReport
+      summary: Session statistics of a period
+      description: >
+        How many sessions were held, cancelled, left unmarked or are still ahead in a period, the attendance rate,
+        the average real length of the held ones, and the same counts per day or per month (US-39). Admin only
+        (reports.read, scope any): an instructor is 403 from the guard. Another academy's sessions are never counted.
+
+
+        The period is the same as in GET /reports/finance: from and to, academy-local dates (YYYY-MM-DD), both
+        included, a missing end is the edge of the current local month, to before from is 400 and more than 366
+        days is 422 REPORT_PERIOD_TOO_LONG.
+
+
+        Every session of any state belongs to the academy-local date of its scheduled_at (so a 23:30 session in
+        Cairo is on its own day, whatever its UTC date). Its state: held or cancelled as stored; scheduled and
+        before now is unmarked (nobody recorded it); scheduled at or after now is upcoming.
+
+
+        granularity is day when the period is 62 days or less: one bucket per local day, every day of the period,
+        empty ones included (key YYYY-MM-DD). A longer period is month: one bucket per local month, from the month
+        of from to the month of to, empty months included, the first and last may be partial (key YYYY-MM).
+
+
+        kpis.attendanceRate is the present rows over all attendance rows of the period's held sessions, in percent
+        with one decimal, null when there is none. kpis.averageActualDurationMin is the mean real length of the held
+        sessions that have actual start and end times, in whole minutes, null when none.
+      x-permission: reports.read
+      x-story: US-39
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the first day of the current local month.
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the last day of the current local month.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionsReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /reports/overview:
     get:
       tags:
@@ -4616,6 +4678,91 @@ components:
         - roundOutflow
         - roundNet
         - averageRoundWeeks
+    SessionsBucket:
+      type: object
+      properties:
+        key:
+          type: string
+          description: YYYY-MM-DD for a day bucket, YYYY-MM for a month bucket.
+        held:
+          type: integer
+        cancelled:
+          type: integer
+        unmarked:
+          type: integer
+          description: Scheduled and already past.
+        upcoming:
+          type: integer
+          description: Scheduled and not started yet.
+      additionalProperties: false
+      required:
+        - key
+        - held
+        - cancelled
+        - unmarked
+        - upcoming
+    SessionsReportKpis:
+      type: object
+      properties:
+        held:
+          type: integer
+        cancelled:
+          type: integer
+        unmarked:
+          type: integer
+        upcoming:
+          type: integer
+        attendanceRate:
+          description: Percent with one decimal; null when the held sessions have no attendance rows.
+          anyOf:
+            - type: number
+            - type: 'null'
+        averageActualDurationMin:
+          description: Whole minutes; null when no held session has actual times.
+          anyOf:
+            - type: integer
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - held
+        - cancelled
+        - unmarked
+        - upcoming
+        - attendanceRate
+        - averageActualDurationMin
+    SessionsReport:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+          additionalProperties: false
+          required:
+            - from
+            - to
+        granularity:
+          type: string
+          enum:
+            - day
+            - month
+        kpis:
+          $ref: '#/components/schemas/SessionsReportKpis'
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionsBucket'
+      additionalProperties: false
+      required:
+        - period
+        - granularity
+        - kpis
+        - buckets
     DashboardHeldSession:
       type: object
       properties:

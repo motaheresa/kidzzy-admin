@@ -10,6 +10,7 @@ export interface SessionListParams {
   from?: string;
   to?: string;
   groupId?: string;
+  instructorId?: string;
   status?: SessionStatus;
   /** true: only the make-up and extra sessions added by hand. */
   isMakeup?: boolean;

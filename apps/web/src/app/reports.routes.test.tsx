@@ -1,4 +1,11 @@
-import type { FinanceReport, Me, OverviewReport, Payment } from '@kidzzy/shared';
+import type {
+  FinanceReport,
+  Me,
+  OverviewReport,
+  Payment,
+  Session,
+  SessionsReport,
+} from '@kidzzy/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -20,6 +27,8 @@ const admin: Me = {
     'payments.read:any',
     'students.read:any',
     'instructors.read:any',
+    'sessions.read:any',
+    'groups.read:any',
   ],
   mustChangePassword: false,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
@@ -59,6 +68,43 @@ const finance: FinanceReport = {
   },
 };
 
+const sessionsReport: SessionsReport = {
+  period: { from: '2026-11-01', to: '2026-11-30' },
+  granularity: 'day',
+  kpis: {
+    held: 12,
+    cancelled: 3,
+    unmarked: 2,
+    upcoming: 9,
+    attendanceRate: 87.5,
+    averageActualDurationMin: 58,
+  },
+  buckets: [
+    { key: '2026-11-01', held: 2, cancelled: 0, unmarked: 0, upcoming: 0 },
+    { key: '2026-11-02', held: 0, cancelled: 1, unmarked: 0, upcoming: 0 },
+    { key: '2026-11-03', held: 1, cancelled: 0, unmarked: 1, upcoming: 3 },
+  ],
+};
+
+const reportSession = (id: string, over: Partial<Session> = {}): Session => ({
+  id,
+  group: { id: 'g1', name: 'Scratch A' },
+  instructorId: 'ana-id',
+  instructorName: 'Ana',
+  scheduledAt: '2026-11-03T15:00:00.000Z',
+  durationMin: 60,
+  status: 'held',
+  sessionNumber: 4,
+  isMakeup: false,
+  compensatesSessionId: null,
+  cancelReason: null,
+  topic: 'Loops',
+  actualStartedAt: '2026-11-03T15:00:00.000Z',
+  actualEndedAt: '2026-11-03T16:05:00.000Z',
+  actualDurationMin: 65,
+  ...over,
+});
+
 const payment = (id: string, over: Partial<Payment> = {}): Payment => ({
   id,
   cycleId: `c-${id}`,
@@ -80,6 +126,7 @@ const payment = (id: string, over: Partial<Payment> = {}): Payment => ({
 let fetchMock: MockInstance<typeof fetch>;
 let calls: URL[];
 let financeResponse: (url: URL) => Response;
+let sessionsReportResponse: (url: URL) => Response;
 
 function api(me: Me) {
   fetchMock.mockImplementation((input) => {
@@ -89,6 +136,38 @@ function api(me: Me) {
     if (path === '/auth/me') return Promise.resolve(json(200, me));
     if (path === '/reports/overview') return Promise.resolve(json(200, overview));
     if (path === '/reports/finance') return Promise.resolve(financeResponse(url));
+    if (path === '/reports/sessions') return Promise.resolve(sessionsReportResponse(url));
+    if (path === '/sessions') {
+      return Promise.resolve(
+        json(200, {
+          data: [
+            reportSession('s1'),
+            reportSession('s2', { status: 'cancelled', topic: null, actualDurationMin: null }),
+          ],
+          meta: {
+            page: Number(url.searchParams.get('page')),
+            pageSize: Number(url.searchParams.get('pageSize')),
+            total: 2,
+          },
+        }),
+      );
+    }
+    if (path === '/groups') {
+      return Promise.resolve(
+        json(200, {
+          data: [{ id: 'g1', name: 'Scratch A' }],
+          meta: { page: 1, pageSize: 100, total: 1 },
+        }),
+      );
+    }
+    if (path === '/instructors') {
+      return Promise.resolve(
+        json(200, {
+          data: [{ id: 'ana-id', name: 'Ana' }],
+          meta: { page: 1, pageSize: 100, total: 1 },
+        }),
+      );
+    }
     if (path === '/payments') {
       const pageSize = Number(url.searchParams.get('pageSize'));
       return Promise.resolve(
@@ -129,6 +208,7 @@ const search = (router: ReturnType<typeof renderAt>) => router.state.location.se
 beforeEach(() => {
   calls = [];
   financeResponse = () => json(200, finance);
+  sessionsReportResponse = () => json(200, sessionsReport);
   fetchMock = vi.spyOn(globalThis, 'fetch');
 });
 afterEach(() => {
@@ -394,5 +474,186 @@ describe('the finance report', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('عدد الصفوف في الصفحة'), '50');
     expect(search(router)).toBe('');
+  });
+});
+
+describe('the sessions report', () => {
+  const PERIOD = '?from=2026-11-01&to=2026-11-30';
+  // The KPI cards sit in one region; the status filter and the table repeat some of the words.
+  const kpi = async (label: string) => {
+    const region = await screen.findByRole('region', { name: 'الحصص في الفترة' });
+    return within(region).getByText(label).parentElement?.textContent ?? '';
+  };
+
+  it('is a page of the workspace, and its sidebar link keeps the period', async () => {
+    api(admin);
+    const router = renderAt(`/reports${PERIOD}`);
+    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(sidebar).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
+      'href',
+      `/reports/sessions${PERIOD}`,
+    );
+
+    await userEvent.click(within(sidebar).getByRole('link', { name: 'الحصص' }));
+    await screen.findByText('نسبة الحضور');
+    expect(router.state.location.pathname).toBe('/reports/sessions');
+    expect(search(router)).toBe(PERIOD);
+    const request = callsTo('/reports/sessions').at(-1)!;
+    expect(request.searchParams.get('from')).toBe('2026-11-01');
+    expect(request.searchParams.get('to')).toBe('2026-11-30');
+  });
+
+  it('is forbidden for an instructor, with no report request', async () => {
+    api(instructorUser);
+    renderAt('/reports/sessions');
+    expect(await screen.findByText(/مش مسموح/)).toBeInTheDocument();
+    expect(callsTo('/reports/sessions')).toHaveLength(0);
+  });
+
+  it('shows the six numbers', async () => {
+    api(admin);
+    renderAt(`/reports/sessions${PERIOD}`);
+    expect(await kpi('اتعملت')).toContain('12');
+    expect(await kpi('اتلغت')).toContain('3');
+    expect(await kpi('مش متسجلة')).toContain('2');
+    expect(await kpi('جاية')).toContain('9');
+    expect(await kpi('نسبة الحضور')).toContain('87.5%');
+    expect(await kpi('متوسط المدة الفعلية')).toContain('58 دقيقة');
+  });
+
+  it('shows a dash for a rate and an average that are null', async () => {
+    sessionsReportResponse = () =>
+      json(200, {
+        ...sessionsReport,
+        kpis: { ...sessionsReport.kpis, attendanceRate: null, averageActualDurationMin: null },
+      });
+    api(admin);
+    renderAt(`/reports/sessions${PERIOD}`);
+    expect(await kpi('نسبة الحضور')).toContain('—');
+    expect(await kpi('متوسط المدة الفعلية')).toContain('—');
+  });
+
+  it('draws the buckets in a chart with a legend in words and day numbers', async () => {
+    api(admin);
+    renderAt(`/reports/sessions${PERIOD}`);
+    const chart = await screen.findByRole('img', { name: /رسم بياني/ });
+    const legend = screen.getByRole('list', { name: 'مفتاح الألوان' });
+    for (const label of ['اتعملت', 'اتلغت', 'مش متسجلة', 'جاية']) {
+      expect(within(legend).getByText(label)).toBeInTheDocument();
+    }
+    await waitFor(() => {
+      const ticks = Array.from(
+        chart.querySelectorAll('.recharts-xAxis .recharts-cartesian-axis-tick'),
+      );
+      expect(ticks.map((tick) => tick.textContent)).toEqual(['1', '2', '3']);
+    });
+  });
+
+  it('says there is nothing to draw when no session is in the period', async () => {
+    sessionsReportResponse = () =>
+      json(200, {
+        ...sessionsReport,
+        buckets: sessionsReport.buckets.map((b) => ({
+          ...b,
+          held: 0,
+          cancelled: 0,
+          unmarked: 0,
+          upcoming: 0,
+        })),
+      });
+    api(admin);
+    renderAt(`/reports/sessions${PERIOD}`);
+    await screen.findByText('نسبة الحضور');
+    expect(screen.queryByRole('img', { name: /رسم بياني/ })).not.toBeInTheDocument();
+  });
+
+  it('labels a long period by month name', async () => {
+    sessionsReportResponse = () =>
+      json(200, {
+        ...sessionsReport,
+        period: { from: '2026-09-01', to: '2026-12-31' },
+        granularity: 'month',
+        buckets: [
+          { key: '2026-10', held: 4, cancelled: 0, unmarked: 0, upcoming: 0 },
+          { key: '2026-11', held: 5, cancelled: 1, unmarked: 0, upcoming: 0 },
+        ],
+      });
+    api(admin);
+    renderAt('/reports/sessions?from=2026-09-01&to=2026-12-31');
+    expect(await screen.findByRole('heading', { name: 'الحصص شهر بشهر' })).toBeInTheDocument();
+    const chart = screen.getByRole('img', { name: /رسم بياني/ });
+    await waitFor(() => {
+      const ticks = Array.from(
+        chart.querySelectorAll('.recharts-xAxis .recharts-cartesian-axis-tick'),
+      );
+      expect(ticks.map((tick) => tick.textContent)).toEqual(['أكتوبر', 'نوفمبر']);
+    });
+  });
+
+  it('does not ask for a report when the range ends before it starts', async () => {
+    api(admin);
+    renderAt('/reports/sessions?from=2026-11-10&to=2026-11-01');
+    await screen.findByText('تاريخ البداية بعد تاريخ النهاية');
+    expect(callsTo('/reports/sessions')).toHaveLength(0);
+    expect(callsTo('/sessions')).toHaveLength(0);
+  });
+
+  describe('the sessions table', () => {
+    it('lists the sessions of the period, 50 per page, with the local-midnight instants', async () => {
+      api(admin);
+      renderAt(`/reports/sessions${PERIOD}`);
+      const table = await screen.findByRole('table');
+      const rows = within(table).getAllByRole('row');
+      expect(rows).toHaveLength(3); // header + 2
+
+      const request = callsTo('/sessions').at(-1)!;
+      expect(request.searchParams.get('pageSize')).toBe('50');
+      expect(request.searchParams.get('page')).toBe('1');
+      // Cairo is UTC+2 in November: 1 Nov 00:00 is 31 Oct 22:00Z, and the end is 1 Dec 00:00.
+      expect(request.searchParams.get('from')).toBe('2026-10-31T22:00:00.000Z');
+      expect(request.searchParams.get('to')).toBe('2026-11-30T22:00:00.000Z');
+
+      const first = within(rows[1]!);
+      expect(first.getByText('Scratch A')).toBeInTheDocument();
+      expect(first.getByText('Ana')).toBeInTheDocument();
+      expect(first.getByText('اتعملت')).toBeInTheDocument();
+      expect(first.getByText('Loops')).toBeInTheDocument();
+      expect(first.getByText('ساعة و5 دقايق')).toBeInTheDocument();
+      expect(first.getByRole('link')).toHaveAttribute('href', '/sessions/s1');
+      expect(within(rows[2]!).getByText('اتلغت')).toBeInTheDocument();
+    });
+
+    it('offers 25, 50 and 100 rows per page', async () => {
+      api(admin);
+      const router = renderAt(`/reports/sessions${PERIOD}`);
+      await screen.findByRole('table');
+      await userEvent.selectOptions(screen.getByLabelText('عدد الصفوف في الصفحة'), '25');
+      expect(search(router)).toContain('pageSize=25');
+      await waitFor(() =>
+        expect(callsTo('/sessions').at(-1)!.searchParams.get('pageSize')).toBe('25'),
+      );
+    });
+
+    it('filters by group, instructor and status, kept in the URL', async () => {
+      api(admin);
+      const router = renderAt(`/reports/sessions${PERIOD}`);
+      await screen.findByRole('table');
+      await screen.findByRole('option', { name: 'Scratch A' });
+      await screen.findByRole('option', { name: 'Ana' });
+
+      await userEvent.selectOptions(screen.getByLabelText('المجموعة'), 'g1');
+      await userEvent.selectOptions(screen.getByLabelText('المدرس'), 'ana-id');
+      await userEvent.selectOptions(screen.getByLabelText('الحالة'), 'held');
+
+      expect(search(router)).toContain('groupId=g1');
+      expect(search(router)).toContain('instructorId=ana-id');
+      expect(search(router)).toContain('status=held');
+      await waitFor(() => {
+        const request = callsTo('/sessions').at(-1)!;
+        expect(request.searchParams.get('groupId')).toBe('g1');
+        expect(request.searchParams.get('instructorId')).toBe('ana-id');
+        expect(request.searchParams.get('status')).toBe('held');
+      });
+    });
   });
 });

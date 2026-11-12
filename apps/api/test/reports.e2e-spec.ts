@@ -6,6 +6,7 @@ import {
   type FinanceReport,
   type OverviewReport,
   type Page,
+  type SessionsReport,
   type Payment,
 } from '@kidzzy/shared';
 import request from 'supertest';
@@ -591,6 +592,148 @@ describe('Reports (e2e)', () => {
         .query({ pageSize: '101' })
         .set(as(s.adminToken))
         .expect(400);
+    });
+  });
+
+  describe('GET /reports/sessions', () => {
+    const sessionsReport = (token: string, query: Record<string, string> = {}) =>
+      request(server()).get(api('/reports/sessions')).query(query).set(as(token));
+
+    it('is for the admin: an instructor is 403, no login is 401', async () => {
+      const s = await setup('sessions-access');
+      await sessionsReport(s.adminToken).expect(200);
+      await sessionsReport(s.anaToken).expect(403);
+      await request(server()).get(api('/reports/sessions')).expect(401);
+    });
+
+    it('defaults to the current local month, one bucket per day, and echoes the period', async () => {
+      const s = await setup('sessions-default');
+      const body = (await sessionsReport(s.adminToken).expect(200)).body as SessionsReport;
+      expect(body.period).toEqual({ from: '2026-11-01', to: '2026-11-30' });
+      expect(body.granularity).toBe('day');
+      expect(body.buckets).toHaveLength(30);
+      expect(body.kpis).toEqual({
+        held: 0,
+        cancelled: 0,
+        unmarked: 0,
+        upcoming: 0,
+        attendanceRate: null,
+        averageActualDurationMin: null,
+      });
+    });
+
+    it('refuses a to before from (400) and more than 366 days (422)', async () => {
+      const s = await setup('sessions-period');
+      await sessionsReport(s.adminToken, { from: '2026-11-10', to: '2026-11-01' }).expect(400);
+      const long = await sessionsReport(s.adminToken, {
+        from: '2026-01-01',
+        to: '2027-01-02',
+      }).expect(422);
+      expect((long.body as { code: string }).code).toBe('REPORT_PERIOD_TOO_LONG');
+    });
+
+    it("never counts another academy's sessions", async () => {
+      const mine = await setup('sessions-mine');
+      const theirs = await setup('sessions-theirs');
+      const g = await group(theirs, 'Theirs');
+      await session(theirs, g.id, at('2026-11-05'), 'held');
+      await session(theirs, g.id, at('2026-11-06'), 'cancelled');
+      const body = (await sessionsReport(mine.adminToken).expect(200)).body as SessionsReport;
+      expect(body.kpis).toMatchObject({ held: 0, cancelled: 0, unmarked: 0, upcoming: 0 });
+    });
+
+    it('puts a session at 23:30 local on its local day, and 00:30 on the next', async () => {
+      const s = await setup('sessions-midnight');
+      const g = await group(s, 'Midnight');
+      // Cairo is UTC+2 in November: 21:30Z is 23:30 on the 3rd, 22:30Z is 00:30 on the 4th.
+      await session(s, g.id, '2026-11-03T21:30:00.000Z', 'held');
+      await session(s, g.id, '2026-11-03T22:30:00.000Z', 'held');
+      const body = (
+        await sessionsReport(s.adminToken, { from: '2026-11-01', to: '2026-11-30' }).expect(200)
+      ).body as SessionsReport;
+      expect(body.buckets.find((b) => b.key === '2026-11-03')?.held).toBe(1);
+      expect(body.buckets.find((b) => b.key === '2026-11-04')?.held).toBe(1);
+    });
+
+    it('counts held, cancelled, unmarked and upcoming sessions of the period only', async () => {
+      const s = await setup('sessions-states');
+      const g = await group(s, 'States');
+      await session(s, g.id, at('2026-11-02'), 'held');
+      await session(s, g.id, at('2026-11-03'), 'cancelled');
+      await session(s, g.id, at('2026-11-04'), 'scheduled'); // past: unmarked
+      await session(s, g.id, at('2026-11-20'), 'scheduled'); // ahead: upcoming
+      await session(s, g.id, at('2026-10-31'), 'held'); // before the period
+      await session(s, g.id, at('2026-12-01'), 'scheduled'); // after the period
+      const body = (
+        await sessionsReport(s.adminToken, { from: '2026-11-01', to: '2026-11-30' }).expect(200)
+      ).body as SessionsReport;
+      expect(body.kpis).toMatchObject({ held: 1, cancelled: 1, unmarked: 1, upcoming: 1 });
+    });
+
+    it('computes the attendance rate and the average real duration on known data', async () => {
+      const s = await setup('sessions-kpis');
+      const g = await group(s, 'Kpis');
+      const first = await session(s, g.id, at('2026-11-02'), 'held');
+      const second = await session(s, g.id, at('2026-11-03'), 'held');
+      await prisma.unscoped.session.update({
+        where: { id: first.id },
+        data: {
+          actualStartedAt: new Date('2026-11-02T15:00:00.000Z'),
+          actualEndedAt: new Date('2026-11-02T16:00:00.000Z'), // 60 minutes
+        },
+      });
+      await prisma.unscoped.session.update({
+        where: { id: second.id },
+        data: {
+          actualStartedAt: new Date('2026-11-03T15:00:00.000Z'),
+          actualEndedAt: new Date('2026-11-03T15:45:00.000Z'), // 45 minutes
+        },
+      });
+      const marks = [
+        [first.id, 'present'],
+        [first.id, 'present'],
+        [first.id, 'absent'],
+        [second.id, 'present'],
+      ] as const;
+      for (const [sessionId, status] of marks) {
+        const student = await newStudent(s, 'Kpi');
+        await prisma.unscoped.attendance.create({
+          data: {
+            academyId: s.academyId,
+            sessionId,
+            studentId: student.id,
+            status,
+            recordedById: s.anaId,
+            recordedAt: NOW,
+          },
+        });
+      }
+      const body = (
+        await sessionsReport(s.adminToken, { from: '2026-11-01', to: '2026-11-30' }).expect(200)
+      ).body as SessionsReport;
+      expect(body.kpis.attendanceRate).toBe(75); // 3 present of 4 rows
+      expect(body.kpis.averageActualDurationMin).toBe(53); // (60 + 45) / 2 = 52.5
+    });
+
+    it('is one bucket per month above 62 days, and per day at exactly 62', async () => {
+      const s = await setup('sessions-granularity');
+      const g = await group(s, 'Granularity');
+      await session(s, g.id, at('2026-10-10'), 'held');
+      await session(s, g.id, at('2026-11-10'), 'held');
+      const months = (
+        await sessionsReport(s.adminToken, { from: '2026-10-01', to: '2026-12-02' }).expect(200)
+      ).body as SessionsReport;
+      expect(months.granularity).toBe('month');
+      expect(months.buckets.map((b) => [b.key, b.held])).toEqual([
+        ['2026-10', 1],
+        ['2026-11', 1],
+        ['2026-12', 0],
+      ]);
+      const days = (
+        await sessionsReport(s.adminToken, { from: '2026-10-01', to: '2026-12-01' }).expect(200)
+      ).body as SessionsReport;
+      expect(days.granularity).toBe('day');
+      expect(days.buckets).toHaveLength(62);
     });
   });
 

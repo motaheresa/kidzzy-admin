@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRightIcon, BanknoteIcon, LayoutDashboardIcon } from 'lucide-react';
+import { ArrowRightIcon, BanknoteIcon, CalendarCheckIcon, LayoutDashboardIcon } from 'lucide-react';
 import { NavLink } from 'react-router';
 import { useListParams } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ interface SidebarItem {
 const ITEMS: SidebarItem[] = [
   { to: '/reports', label: 'نظرة عامة', icon: LayoutDashboardIcon, end: true },
   { to: '/reports/finance', label: 'الفلوس', icon: BanknoteIcon },
+  { to: '/reports/sessions', label: 'الحصص', icon: CalendarCheckIcon },
 ];
 
 /**

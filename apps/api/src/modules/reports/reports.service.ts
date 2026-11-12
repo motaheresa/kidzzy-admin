@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { FinanceReport, OverviewReport } from '@kidzzy/shared';
+import type { FinanceReport, OverviewReport, SessionsReport } from '@kidzzy/shared';
 import { AcademyRepository } from '../academies/academy.repository';
 import { subtractMoney, sumMoney, toMoney, toMoneyOrZero } from '../prisma/money';
 import { Clock } from '../sessions/clock';
@@ -17,6 +17,7 @@ import {
   totalOf,
 } from './reports.mapper';
 import { ReportsRepository } from './reports.repository';
+import { buildSessionStats } from './session-stats';
 
 /**
  * The reports of the admin (US-38). Money is a decimal string end to end: Decimal sums in the
@@ -71,6 +72,30 @@ export class ReportsService {
         instructors: toOutstanding(outstanding, 'instructor'),
       },
     };
+  }
+
+  /**
+   * Session statistics of the period (US-39): the repository loads the period's sessions and the
+   * attendance counts of its held ones, and the pure buildSessionStats decides the buckets and
+   * KPIs. The same period rules as the finance report (ADR-0017).
+   */
+  async sessions(query: { from?: string; to?: string }): Promise<SessionsReport> {
+    const zone = await this.academies.findTimezone();
+    const now = this.clock.now();
+    const period = resolvePeriod(query, localDateOf(now, zone), zone);
+
+    const [sessions, attendance] = await Promise.all([
+      this.reports.listSessionsBetween(period.start, period.end),
+      this.reports.countAttendanceOfHeld(period.start, period.end),
+    ]);
+    const stats = buildSessionStats({
+      sessions,
+      attendance,
+      period: { from: period.from, to: period.to },
+      now,
+      zone,
+    });
+    return { period: { from: period.from, to: period.to }, ...stats };
   }
 
   /** The cycles that complete in [max(start, now), end): what the rows say, run through the pure projection. */
