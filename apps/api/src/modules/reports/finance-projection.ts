@@ -27,6 +27,8 @@ export interface PlanTerms {
  */
 export interface ProjectedPayee {
   kind: 'student' | 'instructor';
+  /** Who is paid or pays: the student's id, or the instructor's id of the pair. */
+  payeeId: string;
   groupId: string | null;
   /** Only for an instructor pair: their sessions are the group's sessions they teach. */
   instructorId: string | null;
@@ -67,6 +69,8 @@ export interface ProjectionInput {
 /** A cycle that completes inside the period, and what it is worth. */
 export interface Completion {
   kind: 'student' | 'instructor';
+  /** The payee's id (a student or an instructor), so a report can group the cycles by person. */
+  payeeId: string;
   amount: string;
   at: Date;
 }
@@ -117,7 +121,12 @@ export function projectCompletions(input: ProjectionInput): Projection {
         if (completesAt.getTime() >= input.end.getTime()) break;
         // Completing before the period starts (a period in the future) only advances the walk.
         if (completesAt.getTime() >= lower.getTime()) {
-          result.completions.push({ kind: payee.kind, amount, at: completesAt });
+          result.completions.push({
+            kind: payee.kind,
+            payeeId: payee.payeeId,
+            amount,
+            at: completesAt,
+          });
         }
       }
       // The next cycle starts at the latest plan: a plan change applies from the next cycle.

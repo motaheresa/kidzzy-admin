@@ -29,6 +29,7 @@ const sessionsOn = (groupId: string, instructorId: string, days: string[]): Futu
 
 const student = (overrides: Partial<ProjectedPayee> = {}): ProjectedPayee => ({
   kind: 'student',
+  payeeId: 'st1',
   groupId: 'g1',
   instructorId: null,
   open: { sessionsPerCycle: 4, sessionsCounted: 2, amount: '900.00' },
@@ -38,6 +39,7 @@ const student = (overrides: Partial<ProjectedPayee> = {}): ProjectedPayee => ({
 
 const pair = (overrides: Partial<ProjectedPayee> = {}): ProjectedPayee => ({
   kind: 'instructor',
+  payeeId: overrides.instructorId ?? 'ana',
   groupId: 'g1',
   instructorId: 'ana',
   open: { sessionsPerCycle: 4, sessionsCounted: 2, amount: '1500.00' },
@@ -71,7 +73,7 @@ describe('projectCompletions', () => {
       }),
     );
     expect(result.completions).toEqual([
-      { kind: 'student', amount: '900.00', at: at('2026-11-19') },
+      { kind: 'student', payeeId: 'st1', amount: '900.00', at: at('2026-11-19') },
     ]);
   });
 
@@ -147,7 +149,7 @@ describe('projectCompletions', () => {
       }),
     );
     expect(result.completions).toEqual([
-      { kind: 'student', amount: '900.00', at: at('2026-11-29') },
+      { kind: 'student', payeeId: 'st1', amount: '900.00', at: at('2026-11-29') },
     ]);
   });
 
@@ -183,7 +185,7 @@ describe('projectCompletions', () => {
     ];
     const result = projectCompletions(input({ payees: [pair()], sessions }));
     expect(result.completions).toEqual([
-      { kind: 'instructor', amount: '1500.00', at: at('2026-11-26') },
+      { kind: 'instructor', payeeId: 'ana', amount: '1500.00', at: at('2026-11-26') },
     ]);
   });
 
@@ -318,8 +320,45 @@ describe('projectCompletions', () => {
         }),
       );
       expect(result.completions).toEqual([
-        { kind: 'student', amount: '900.00', at: at('2026-11-16') },
+        { kind: 'student', payeeId: 'st1', amount: '900.00', at: at('2026-11-16') },
       ]);
+    });
+  });
+
+  describe('who a completion belongs to', () => {
+    it('carries the payee id, so a report can group the cycles by person', () => {
+      const result = projectCompletions(
+        input({
+          payees: [student(), pair()],
+          sessions: [...sessionsOn('g1', 'ana', ['2026-11-13', '2026-11-19', '2026-11-26'])],
+        }),
+      );
+      expect(result.completions.map((c) => [c.kind, c.payeeId])).toEqual([
+        ['student', 'st1'],
+        ['instructor', 'ana'],
+      ]);
+    });
+
+    it('keeps two instructors, and two groups of one instructor, apart in one run', () => {
+      const result = projectCompletions(
+        input({
+          payees: [
+            pair({ instructorId: 'ana', groupId: 'g1' }),
+            pair({ instructorId: 'ana', groupId: 'g2' }),
+            pair({ instructorId: 'omar', groupId: 'g3' }),
+          ],
+          sessions: [
+            ...sessionsOn('g1', 'ana', ['2026-11-13', '2026-11-19']),
+            ...sessionsOn('g2', 'ana', ['2026-11-14', '2026-11-20']),
+            ...sessionsOn('g3', 'omar', ['2026-11-15', '2026-11-21']),
+          ],
+        }),
+      );
+      const byPayee = new Map<string, number>();
+      for (const c of result.completions) {
+        byPayee.set(c.payeeId, (byPayee.get(c.payeeId) ?? 0) + 1);
+      }
+      expect(Object.fromEntries(byPayee)).toEqual({ ana: 2, omar: 1 });
     });
   });
 });

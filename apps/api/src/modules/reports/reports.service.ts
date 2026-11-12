@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { FinanceReport, OverviewReport, SessionsReport } from '@kidzzy/shared';
+import type {
+  FinanceReport,
+  InstructorsReport,
+  OverviewReport,
+  SessionsReport,
+} from '@kidzzy/shared';
 import { AcademyRepository } from '../academies/academy.repository';
 import { subtractMoney, sumMoney, toMoney, toMoneyOrZero } from '../prisma/money';
 import { Clock } from '../sessions/clock';
@@ -17,6 +22,7 @@ import {
   totalOf,
 } from './reports.mapper';
 import { ReportsRepository } from './reports.repository';
+import { buildInstructorStats } from './instructor-stats';
 import { buildSessionStats } from './session-stats';
 
 /**
@@ -98,10 +104,64 @@ export class ReportsService {
     return { period: { from: period.from, to: period.to }, ...stats };
   }
 
+  /**
+   * The statistics of every instructor in the period (US-40). The rows are built by the pure
+   * buildInstructorStats from what the repository loads. Expected is what finance shows for
+   * instructors, split by person: the cycles that fell due in the passed part of the period, plus
+   * the completions of the same projection that finance uses (projectAhead), grouped by payee.
+   */
+  async instructors(query: { from?: string; to?: string }): Promise<InstructorsReport> {
+    const zone = await this.academies.findTimezone();
+    const now = this.clock.now();
+    const period = resolvePeriod(query, localDateOf(now, zone), zone);
+    const passedEnd = period.end.getTime() < now.getTime() ? period.end : now;
+
+    const [instructors, sessions, attendance, payments, outstanding, passed, groups] =
+      await Promise.all([
+        this.reports.listInstructors(),
+        this.reports.listInstructorSessions(period.start, period.end),
+        this.reports.countAttendanceBySession(period.start, period.end),
+        this.reports.listInstructorPayments(period.from, period.to),
+        this.reports.listOutstandingCycles(),
+        period.start.getTime() < passedEnd.getTime()
+          ? this.reports.listCyclesDueBetween(period.start, passedEnd)
+          : Promise.resolve([]),
+        this.reports.listActiveGroups(),
+      ]);
+    const ahead = await this.projectAhead(period.start, period.end, now, zone);
+
+    const amounts = (rows: typeof outstanding) =>
+      rows.flatMap((row) =>
+        row.payeeType === 'instructor' && row.instructorId
+          ? [{ instructorId: row.instructorId, amount: toMoney(row.amount) }]
+          : [],
+      );
+    const stats = buildInstructorStats({
+      instructors,
+      sessions,
+      attendance,
+      payments: payments.map((payment) => ({
+        instructorId: payment.instructorId,
+        amount: toMoney(payment.amount),
+      })),
+      dueCycles: amounts(outstanding),
+      passedDue: amounts(passed),
+      completions: ahead.completions,
+      activeGroups: groups,
+    });
+    return { period: { from: period.from, to: period.to }, ...stats };
+  }
+
   /** The cycles that complete in [max(start, now), end): what the rows say, run through the pure projection. */
   private async projectAhead(start: Date, end: Date, now: Date, zone: string) {
     if (end.getTime() <= now.getTime()) {
-      return { in: '0.00', out: '0.00', skippedStudents: 0, skippedInstructorPairs: 0 };
+      return {
+        in: '0.00',
+        out: '0.00',
+        skippedStudents: 0,
+        skippedInstructorPairs: 0,
+        completions: [],
+      };
     }
     const [students, groups, instructorCycles, instructorPlans, sessions] = await Promise.all([
       this.reports.listStudents(),
@@ -131,6 +191,7 @@ export class ReportsService {
       out: sumMoney(amountsOf('instructor')),
       skippedStudents: projection.skippedStudents,
       skippedInstructorPairs: projection.skippedInstructorPairs,
+      completions: projection.completions,
     };
   }
 

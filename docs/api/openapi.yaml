@@ -2653,6 +2653,80 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /reports/instructors:
+    get:
+      tags:
+        - Reports
+      operationId: getInstructorsReport
+      summary: Statistics of every instructor in a period
+      description: >
+        One row per instructor with what they taught, what they were paid, what is due to them and what they are
+        expected to earn in the period, and six totals (US-40). Admin only (reports.read, scope any): an instructor
+        is 403 from the guard. Another academy's rows are never counted. Not paginated: every row is returned,
+        ordered by name. Money is a decimal string everywhere ("1500.00"), never a number.
+
+
+        The period is the same as in GET /reports/finance: from and to, academy-local dates (YYYY-MM-DD), both
+        included, a missing end is the edge of the current local month, to before from is 400 and more than 366
+        days is 422 REPORT_PERIOD_TOO_LONG.
+
+
+        Rows: every active instructor, plus an inactive one who held or cancelled a session, or was paid, in the
+        period, or has a cycle Due now, or has an expected amount in the period (a cycle that fell due in its
+        passed part, or a projected completion). An inactive instructor with none of these is left out. So the
+        money owed to a former instructor is always in the totals: kpis.due is every instructor cycle Due now and
+        kpis.expectedOutflow equals expected.out of GET /reports/finance for the same period.
+
+
+        held and cancelled count the sessions of the period whose instructor is that instructor (the instructor
+        on the session, not the group's current one), so a former instructor keeps what they taught. actualMinutes
+        is the sum of the real length of their held sessions that have actual start and end times;
+        heldWithoutActualTimes counts the held sessions that have none, which are never replaced by the planned
+        length. attendanceRate is present over all attendance rows of their held sessions, in percent with one
+        decimal, null when there is none. activeGroups counts the active groups they teach now.
+
+
+        paid is the sum of the payments on their cycles whose paid_on is in the period (a date, compared as a date).
+        due is the count and the plan amount of their cycles that are Due now, not filtered by the period. expected
+        is the finance projection for their (instructor, group) pairs (ADR-0017): the cycles that fell due in the
+        part of the period that has passed plus the cycles that will complete in the part still ahead, so the
+        expected figures of all instructors add up to expected.out of GET /reports/finance for the same period.
+
+
+        kpis: activeInstructors (active rows), held and actualMinutes (totals of the rows), paid, due and
+        expectedOutflow (sums of the rows).
+      x-permission: reports.read
+      x-story: US-40
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the first day of the current local month.
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the last day of the current local month.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstructorsReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /reports/overview:
     get:
       tags:
@@ -4763,6 +4837,108 @@ components:
         - granularity
         - kpis
         - buckets
+    InstructorsReportRow:
+      type: object
+      properties:
+        instructorId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        isActive:
+          type: boolean
+        activeGroups:
+          type: integer
+          description: Active groups whose current instructor they are.
+        held:
+          type: integer
+        cancelled:
+          type: integer
+        actualMinutes:
+          type: integer
+          description: Whole minutes of their held sessions that have actual times.
+        heldWithoutActualTimes:
+          type: integer
+          description: Held sessions with no actual times; never replaced by the planned length.
+        attendanceRate:
+          description: Percent with one decimal; null when their held sessions have no attendance rows.
+          anyOf:
+            - type: number
+            - type: 'null'
+        paid:
+          type: string
+          description: Decimal string in EGP.
+        due:
+          $ref: '#/components/schemas/OutstandingTotal'
+        expected:
+          type: string
+          description: Decimal string in EGP.
+      additionalProperties: false
+      required:
+        - instructorId
+        - name
+        - isActive
+        - activeGroups
+        - held
+        - cancelled
+        - actualMinutes
+        - heldWithoutActualTimes
+        - attendanceRate
+        - paid
+        - due
+        - expected
+    InstructorsReportKpis:
+      type: object
+      properties:
+        activeInstructors:
+          type: integer
+        held:
+          type: integer
+        actualMinutes:
+          type: integer
+        paid:
+          type: string
+          description: Decimal string in EGP.
+        due:
+          $ref: '#/components/schemas/OutstandingTotal'
+        expectedOutflow:
+          type: string
+          description: Decimal string in EGP.
+      additionalProperties: false
+      required:
+        - activeInstructors
+        - held
+        - actualMinutes
+        - paid
+        - due
+        - expectedOutflow
+    InstructorsReport:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+          additionalProperties: false
+          required:
+            - from
+            - to
+        kpis:
+          $ref: '#/components/schemas/InstructorsReportKpis'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstructorsReportRow'
+      additionalProperties: false
+      required:
+        - period
+        - kpis
+        - rows
     DashboardHeldSession:
       type: object
       properties:

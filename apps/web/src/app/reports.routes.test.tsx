@@ -1,5 +1,6 @@
 import type {
   FinanceReport,
+  InstructorsReport,
   Me,
   OverviewReport,
   Payment,
@@ -86,6 +87,62 @@ const sessionsReport: SessionsReport = {
   ],
 };
 
+const instructorsReport: InstructorsReport = {
+  period: { from: '2026-11-01', to: '2026-11-30' },
+  kpis: {
+    activeInstructors: 2,
+    held: 12,
+    actualMinutes: 905,
+    paid: '3000.00',
+    due: { count: 2, total: '2700.00' },
+    expectedOutflow: '5000.00',
+  },
+  rows: [
+    {
+      instructorId: 'ana-id',
+      name: 'Ana',
+      isActive: true,
+      activeGroups: 2,
+      held: 8,
+      cancelled: 1,
+      actualMinutes: 600,
+      heldWithoutActualTimes: 2,
+      attendanceRate: 87.5,
+      paid: '2000.00',
+      due: { count: 1, total: '1500.00' },
+      expected: '2700.00',
+    },
+    {
+      instructorId: 'omar-id',
+      name: 'Omar',
+      isActive: true,
+      activeGroups: 1,
+      held: 4,
+      cancelled: 0,
+      actualMinutes: 305,
+      heldWithoutActualTimes: 0,
+      attendanceRate: null,
+      paid: '500.00',
+      due: { count: 1, total: '1200.00' },
+      expected: '2300.00',
+    },
+    {
+      instructorId: 'zed-id',
+      name: 'Zed',
+      isActive: false,
+      activeGroups: 0,
+      held: 0,
+      cancelled: 2,
+      actualMinutes: 0,
+      heldWithoutActualTimes: 0,
+      attendanceRate: null,
+      paid: '500.00',
+      due: { count: 0, total: '0.00' },
+      expected: '0.00',
+    },
+  ],
+};
+
 const reportSession = (id: string, over: Partial<Session> = {}): Session => ({
   id,
   group: { id: 'g1', name: 'Scratch A' },
@@ -127,6 +184,7 @@ let fetchMock: MockInstance<typeof fetch>;
 let calls: URL[];
 let financeResponse: (url: URL) => Response;
 let sessionsReportResponse: (url: URL) => Response;
+let instructorsReportResponse: (url: URL) => Response;
 
 function api(me: Me) {
   fetchMock.mockImplementation((input) => {
@@ -137,6 +195,7 @@ function api(me: Me) {
     if (path === '/reports/overview') return Promise.resolve(json(200, overview));
     if (path === '/reports/finance') return Promise.resolve(financeResponse(url));
     if (path === '/reports/sessions') return Promise.resolve(sessionsReportResponse(url));
+    if (path === '/reports/instructors') return Promise.resolve(instructorsReportResponse(url));
     if (path === '/sessions') {
       return Promise.resolve(
         json(200, {
@@ -209,6 +268,7 @@ beforeEach(() => {
   calls = [];
   financeResponse = () => json(200, finance);
   sessionsReportResponse = () => json(200, sessionsReport);
+  instructorsReportResponse = () => json(200, instructorsReport);
   fetchMock = vi.spyOn(globalThis, 'fetch');
 });
 afterEach(() => {
@@ -655,5 +715,203 @@ describe('the sessions report', () => {
         expect(request.searchParams.get('status')).toBe('held');
       });
     });
+  });
+});
+
+describe('the instructors report', () => {
+  const PERIOD = '?from=2026-11-01&to=2026-11-30';
+  const kpi = async (label: string) => {
+    const region = await screen.findByRole('region', { name: 'المدرسين في الفترة' });
+    return within(region).getByText(label).parentElement?.textContent ?? '';
+  };
+  /** The names in the first column, in the order the table shows them. */
+  const order = async () => {
+    const table = await screen.findByRole('table');
+    return within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((tableRow) => within(tableRow).getAllByRole('cell')[0]!.textContent);
+  };
+  const rowOf = async (name: string) => {
+    const table = await screen.findByRole('table');
+    return within(table)
+      .getAllByRole('row')
+      .find((tableRow) => within(tableRow).queryAllByText(name, { exact: false }).length > 0)!;
+  };
+
+  it('is a page of the workspace, and its sidebar link keeps the period', async () => {
+    api(admin);
+    const router = renderAt(`/reports${PERIOD}`);
+    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(sidebar).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
+      'href',
+      `/reports/instructors${PERIOD}`,
+    );
+
+    await userEvent.click(within(sidebar).getByRole('link', { name: 'المدرسين' }));
+    await screen.findByText('مدرسين نشطين');
+    expect(router.state.location.pathname).toBe('/reports/instructors');
+    expect(search(router)).toBe(PERIOD);
+    const request = callsTo('/reports/instructors').at(-1)!;
+    expect(request.searchParams.get('from')).toBe('2026-11-01');
+    expect(request.searchParams.get('to')).toBe('2026-11-30');
+  });
+
+  it('is forbidden for an instructor, with no report request', async () => {
+    api(instructorUser);
+    renderAt('/reports/instructors');
+    expect(await screen.findByText(/مش مسموح/)).toBeInTheDocument();
+    expect(callsTo('/reports/instructors')).toHaveLength(0);
+  });
+
+  it('does not ask for a report when the range ends before it starts', async () => {
+    api(admin);
+    renderAt('/reports/instructors?from=2026-11-10&to=2026-11-01');
+    await screen.findByText('تاريخ البداية بعد تاريخ النهاية');
+    expect(callsTo('/reports/instructors')).toHaveLength(0);
+  });
+
+  it('shows the six totals', async () => {
+    api(admin);
+    renderAt(`/reports/instructors${PERIOD}`);
+    expect(await kpi('مدرسين نشطين')).toContain('2');
+    expect(await kpi('حصص اتعملت')).toContain('12');
+    expect(await kpi('ساعات التدريس الفعلية')).toContain('15 ساعة و5 دقايق');
+    expect(await kpi('اتدفع للمدرسين')).toContain('3,000.00');
+    const due = await kpi('مستحق دلوقتي');
+    expect(due).toContain('2,700.00');
+    expect(due).toContain('2 دورة مستحقة');
+    expect(await kpi('متوقع صرفه في الفترة')).toContain('5,000.00');
+  });
+
+  it('shows every row, most held sessions first by default', async () => {
+    api(admin);
+    renderAt(`/reports/instructors${PERIOD}`);
+    expect((await order()).map((cell) => cell?.replace('غير نشط', ''))).toEqual([
+      'Ana',
+      'Omar',
+      'Zed',
+    ]);
+    expect(screen.getByRole('columnheader', { name: 'اتعملت' })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
+  });
+
+  it('marks an inactive instructor and says how many held sessions have no actual time', async () => {
+    api(admin);
+    renderAt(`/reports/instructors${PERIOD}`);
+    const zed = await rowOf('Zed');
+    expect(within(zed).getByText('غير نشط')).toBeInTheDocument();
+    const ana = await rowOf('Ana');
+    expect(within(ana).getByText('10 ساعات')).toBeInTheDocument(); // 600 minutes
+    expect(within(ana).getByText(/2 من غير وقت فعلي/)).toBeInTheDocument();
+    expect(within(ana).getByText('87.5%')).toBeInTheDocument();
+    const omar = await rowOf('Omar');
+    expect(within(omar).queryByText(/من غير وقت فعلي/)).not.toBeInTheDocument();
+    expect(within(omar).getByText('—')).toBeInTheDocument(); // no attendance rate
+  });
+
+  it('sorts by a column that is pressed, flips it on a second press, and keeps it in the URL', async () => {
+    api(admin);
+    const router = renderAt(`/reports/instructors${PERIOD}`);
+    await screen.findByRole('table');
+
+    await userEvent.click(screen.getByRole('button', { name: 'اتعملت' }));
+    expect(search(router)).toContain('sort=held%3Aasc');
+    expect((await order()).map((cell) => cell?.replace('غير نشط', ''))).toEqual([
+      'Zed',
+      'Omar',
+      'Ana',
+    ]);
+    expect(screen.getByRole('columnheader', { name: 'اتعملت' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+
+    // Another column starts with the highest first; equal amounts fall back to the name.
+    await userEvent.click(screen.getByRole('button', { name: 'اتدفع' }));
+    expect(search(router)).toContain('sort=paid%3Adesc');
+    expect((await order()).map((cell) => cell?.replace('غير نشط', ''))).toEqual([
+      'Ana',
+      'Omar',
+      'Zed',
+    ]);
+    expect(screen.getByRole('columnheader', { name: 'اتعملت' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'المدرس' }));
+    expect((await order()).map((cell) => cell?.replace('غير نشط', ''))).toEqual([
+      'Ana',
+      'Omar',
+      'Zed',
+    ]);
+    expect(search(router)).toContain('sort=name%3Aasc');
+  });
+
+  it('starts from the sort in the URL', async () => {
+    api(admin);
+    renderAt(`/reports/instructors${PERIOD}&sort=expected%3Aasc`);
+    expect((await order()).map((cell) => cell?.replace('غير نشط', ''))).toEqual([
+      'Zed',
+      'Omar',
+      'Ana',
+    ]);
+  });
+
+  it('opens the instructor, and their sessions with the same period', async () => {
+    api(admin);
+    const router = renderAt(`/reports/instructors${PERIOD}`);
+    const ana = await rowOf('Ana');
+    expect(within(ana).getByRole('link', { name: 'فتح المدرس' })).toHaveAttribute(
+      'href',
+      '/instructors/ana-id',
+    );
+    const sessions = within(ana).getByRole('link', { name: 'حصصه' });
+    expect(sessions).toHaveAttribute(
+      'href',
+      '/reports/sessions?from=2026-11-01&to=2026-11-30&instructorId=ana-id',
+    );
+
+    await userEvent.click(sessions);
+    await screen.findByText('نسبة الحضور');
+    expect(router.state.location.pathname).toBe('/reports/sessions');
+    expect(search(router)).toBe('?from=2026-11-01&to=2026-11-30&instructorId=ana-id');
+    await waitFor(() =>
+      expect(callsTo('/sessions').at(-1)!.searchParams.get('instructorId')).toBe('ana-id'),
+    );
+    expect(callsTo('/reports/sessions').at(-1)!.searchParams.get('from')).toBe('2026-11-01');
+  });
+
+  it('hides "open the instructor" without instructors.read, but keeps their sessions', async () => {
+    api({
+      ...admin,
+      permissions: admin.permissions.filter((key) => key !== 'instructors.read:any'),
+    });
+    renderAt(`/reports/instructors${PERIOD}`);
+    const ana = await rowOf('Ana');
+    expect(within(ana).queryByRole('link', { name: 'فتح المدرس' })).not.toBeInTheDocument();
+    expect(within(ana).getByRole('link', { name: 'حصصه' })).toBeInTheDocument();
+  });
+
+  it('keeps the filter of an inactive instructor on the sessions report', async () => {
+    api(admin);
+    const inactive = '11111111-1111-4111-8111-111111111111';
+    renderAt(`/reports/sessions${PERIOD}&instructorId=${inactive}`);
+    await screen.findByRole('table');
+    expect(screen.getByLabelText('المدرس')).toHaveValue(inactive);
+    expect(screen.getByRole('option', { name: 'مدرس غير نشط' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(callsTo('/sessions').at(-1)!.searchParams.get('instructorId')).toBe(inactive),
+    );
+  });
+
+  it('drops an instructor id that is neither listed nor well formed', async () => {
+    api(admin);
+    renderAt(`/reports/sessions${PERIOD}&instructorId=nobody`);
+    await screen.findByRole('table');
+    expect(callsTo('/sessions').at(-1)!.searchParams.get('instructorId')).toBeNull();
   });
 });

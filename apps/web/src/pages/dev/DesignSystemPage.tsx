@@ -23,6 +23,7 @@ import {
   SearchInput,
   SelectField,
   Skeleton,
+  SortableHead,
   Spinner,
   StackedBarChart,
   Table,
@@ -209,6 +210,32 @@ function PairTable({ pairs, min }: { pairs: readonly (readonly [string, string])
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SortableHeadDemo() {
+  const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>المدرس</TableHead>
+          <SortableHead
+            label="اتعملت"
+            direction={direction}
+            onSort={() => setDirection(direction === 'asc' ? 'desc' : 'asc')}
+          />
+          <SortableHead label="اتدفع" direction={null} onSort={() => undefined} />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell>Ana</TableCell>
+          <TableCell className="numeric">8</TableCell>
+          <TableCell className="numeric">{formatMoney('2000.00')}</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -483,6 +510,10 @@ export function DesignSystemPage() {
             </FullScreenMessage>
           </div>
         </div>
+      </Section>
+
+      <Section title="Sortable table header">
+        <SortableHeadDemo />
       </Section>
 
       <Section title="Charts">

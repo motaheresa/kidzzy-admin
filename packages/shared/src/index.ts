@@ -743,3 +743,46 @@ export interface SessionsReport {
   kpis: SessionsReportKpis;
   buckets: SessionsBucket[];
 }
+
+/** One instructor of an instructors report (openapi.yaml: InstructorsReportRow). */
+export interface InstructorsReportRow {
+  instructorId: string;
+  name: string;
+  isActive: boolean;
+  /** Active groups whose current instructor they are. */
+  activeGroups: number;
+  /** Sessions in the period held by them (the instructor on the session, not the group's current one). */
+  held: number;
+  cancelled: number;
+  /** Real minutes of their held sessions that have actual times. */
+  actualMinutes: number;
+  /** Held sessions with no actual times: left out of actualMinutes, never replaced by the planned length. */
+  heldWithoutActualTimes: number;
+  /** Present over all attendance rows of their held sessions, percent with one decimal; null when none. */
+  attendanceRate: number | null;
+  /** Payments on their cycles with paid_on in the period, decimal string in EGP. */
+  paid: string;
+  /** Their cycles Due now, not filtered by the period. */
+  due: OutstandingTotal;
+  /** What the period should bring them: the finance projection for their (instructor, group) pairs. */
+  expected: string;
+}
+
+/** The totals of an instructors report (openapi.yaml: InstructorsReportKpis). */
+export interface InstructorsReportKpis {
+  /** Active instructors among the rows. */
+  activeInstructors: number;
+  held: number;
+  /** Total real minutes; the screen shows hours. */
+  actualMinutes: number;
+  paid: string;
+  due: OutstandingTotal;
+  expectedOutflow: string;
+}
+
+/** GET /reports/instructors (openapi.yaml: InstructorsReport). Admin only, every row, not paginated. */
+export interface InstructorsReport {
+  period: ReportPeriod;
+  kpis: InstructorsReportKpis;
+  rows: InstructorsReportRow[];
+}

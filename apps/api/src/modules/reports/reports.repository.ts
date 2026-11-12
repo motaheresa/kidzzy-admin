@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionHost } from '@nestjs-cls/transactional';
+import { SystemRole } from '@kidzzy/shared';
 import type { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { stringToDate } from '../sessions/dates';
+import type { InstructorSession, StatInstructor } from './instructor-stats';
 import type { StatSession } from './session-stats';
 
 /** What a student contributes to the projection and to the overview. */
@@ -53,6 +55,8 @@ export interface InstructorPlanRow {
 /** A cycle with the amount of its plan, for the sums of the report. */
 export interface CycleAmountRow {
   payeeType: 'student' | 'instructor';
+  /** Set for an instructor cycle: the instructors report groups by it. */
+  instructorId: string | null;
   amount: Prisma.Decimal;
 }
 
@@ -96,18 +100,26 @@ export class ReportsRepository {
   async listCyclesDueBetween(start: Date, end: Date): Promise<CycleAmountRow[]> {
     const rows = await this.txHost.tx.paymentCycle.findMany({
       where: { dueAt: { gte: start, lt: end } },
-      select: { payeeType: true, plan: { select: { amount: true } } },
+      select: { payeeType: true, instructorId: true, plan: { select: { amount: true } } },
     });
-    return rows.map((row) => ({ payeeType: row.payeeType, amount: row.plan.amount }));
+    return rows.map((row) => ({
+      payeeType: row.payeeType,
+      instructorId: row.instructorId,
+      amount: row.plan.amount,
+    }));
   }
 
   /** Cycles that are Due and unpaid, with their plan amount (not filtered by a period). */
   async listOutstandingCycles(): Promise<CycleAmountRow[]> {
     const rows = await this.txHost.tx.paymentCycle.findMany({
       where: { status: 'due' },
-      select: { payeeType: true, plan: { select: { amount: true } } },
+      select: { payeeType: true, instructorId: true, plan: { select: { amount: true } } },
     });
-    return rows.map((row) => ({ payeeType: row.payeeType, amount: row.plan.amount }));
+    return rows.map((row) => ({
+      payeeType: row.payeeType,
+      instructorId: row.instructorId,
+      amount: row.plan.amount,
+    }));
   }
 
   /**
@@ -199,6 +211,66 @@ export class ReportsRepository {
       where: { scheduledAt: { gte: start, lt: end } },
       select: { status: true, scheduledAt: true, actualStartedAt: true, actualEndedAt: true },
     });
+  }
+
+  /** Every instructor of the academy (users holding the Instructor role), active or not, by name. */
+  listInstructors(): Promise<StatInstructor[]> {
+    return this.txHost.tx.user.findMany({
+      where: { roles: { some: { role: { name: SystemRole.Instructor, isSystem: true } } } },
+      select: { id: true, name: true, isActive: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /** The held and cancelled sessions scheduled in [start, end), with the instructor on each. */
+  async listInstructorSessions(start: Date, end: Date): Promise<InstructorSession[]> {
+    return this.txHost.tx.session.findMany({
+      where: { status: { in: ['held', 'cancelled'] }, scheduledAt: { gte: start, lt: end } },
+      select: {
+        id: true,
+        instructorId: true,
+        status: true,
+        actualStartedAt: true,
+        actualEndedAt: true,
+      },
+    });
+  }
+
+  /** Attendance of the held sessions scheduled in [start, end), counted per session. */
+  async countAttendanceBySession(
+    start: Date,
+    end: Date,
+  ): Promise<Map<string, { present: number; total: number }>> {
+    const groups = await this.txHost.tx.attendance.groupBy({
+      by: ['sessionId', 'status'],
+      where: { session: { status: 'held', scheduledAt: { gte: start, lt: end } } },
+      _count: { _all: true },
+    });
+    const bySession = new Map<string, { present: number; total: number }>();
+    for (const group of groups) {
+      const counts = bySession.get(group.sessionId) ?? { present: 0, total: 0 };
+      counts.total += group._count._all;
+      if (group.status === 'present') counts.present += group._count._all;
+      bySession.set(group.sessionId, counts);
+    }
+    return bySession;
+  }
+
+  /** The payments on instructor cycles whose paid_on is in [from, to] (dates, both included). */
+  async listInstructorPayments(
+    from: string,
+    to: string,
+  ): Promise<{ instructorId: string; amount: Prisma.Decimal }[]> {
+    const rows = await this.txHost.tx.payment.findMany({
+      where: {
+        cycle: { payeeType: 'instructor' },
+        paidOn: { gte: stringToDate(from), lte: stringToDate(to) },
+      },
+      select: { amount: true, cycle: { select: { instructorId: true } } },
+    });
+    return rows.flatMap((row) =>
+      row.cycle.instructorId ? [{ instructorId: row.cycle.instructorId, amount: row.amount }] : [],
+    );
   }
 
   /** The attendance rows of the held sessions scheduled in [start, end): how many, and how many present. */
