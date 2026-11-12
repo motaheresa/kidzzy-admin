@@ -3,6 +3,7 @@ import { TransactionHost } from '@nestjs-cls/transactional';
 import type { Prisma } from '../../generated/prisma/client';
 import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { stringToDate } from '../sessions/dates';
+import type { StatSession } from './session-stats';
 
 /** What a student contributes to the projection and to the overview. */
 const STUDENT_SELECT = {
@@ -190,5 +191,29 @@ export class ReportsRepository {
       select: { groupId: true, instructorId: true, scheduledAt: true },
       orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
     });
+  }
+
+  /** Every session of any state whose scheduled_at is in [start, end): only the fields the statistics read. */
+  listSessionsBetween(start: Date, end: Date): Promise<StatSession[]> {
+    return this.txHost.tx.session.findMany({
+      where: { scheduledAt: { gte: start, lt: end } },
+      select: { status: true, scheduledAt: true, actualStartedAt: true, actualEndedAt: true },
+    });
+  }
+
+  /** The attendance rows of the held sessions scheduled in [start, end): how many, and how many present. */
+  async countAttendanceOfHeld(start: Date, end: Date): Promise<{ present: number; total: number }> {
+    const groups = await this.txHost.tx.attendance.groupBy({
+      by: ['status'],
+      where: { session: { status: 'held', scheduledAt: { gte: start, lt: end } } },
+      _count: { _all: true },
+    });
+    let present = 0;
+    let total = 0;
+    for (const group of groups) {
+      total += group._count._all;
+      if (group.status === 'present') present = group._count._all;
+    }
+    return { present, total };
   }
 }

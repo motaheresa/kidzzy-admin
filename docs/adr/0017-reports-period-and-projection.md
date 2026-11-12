@@ -32,3 +32,13 @@ The projection is a pure function (`finance-projection.ts`): the repository load
 - The expected figure moves when sessions are cancelled or plans change, as it should.
 - A period far ahead depends on the groups' slots, so it is a projection of the schedule, not of attendance.
 - A new report page reuses the same period (`from`, `to` in the URL) and the `reports.read` permission.
+
+## Note (2026-11-12): session statistics
+
+The sessions report (US-39, `GET /reports/sessions`) reuses the same period (from, to, both included, 400 and 422) and the same permission.
+
+- **A session belongs to the academy-local date of its `scheduled_at`**, never a UTC slice, so a 23:30 session in Cairo counts on its own day. The period's instants clip what the repository loads; the bucketing derives the local date again.
+- **State:** held and cancelled as stored; Scheduled before now is unmarked, Scheduled at or after now is upcoming.
+- **Buckets:** a period of 62 days or less is one bucket per local day (empty days included), a longer one is one bucket per local month (first and last may be partial).
+- **Attendance rate** is present over all attendance rows of the period's held sessions; **average duration** is over held sessions with actual times.
+- The bucketing and the KPIs are a pure function (`session-stats.ts`), like the projection.

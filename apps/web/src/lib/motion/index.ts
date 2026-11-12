@@ -1,6 +1,7 @@
 // Motion (docs/design-system.md, "Motion"): short, purposeful, transform and opacity only, and
 // nothing at all under prefers-reduced-motion.
 export {
+  chartAnimation,
   CSS_EASE,
   fadeUp,
   MOTION,

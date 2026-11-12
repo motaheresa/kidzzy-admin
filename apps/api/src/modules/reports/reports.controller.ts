@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { FinanceReport, OverviewReport } from '@kidzzy/shared';
+import type { FinanceReport, OverviewReport, SessionsReport } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
 import { ReportPeriodQueryDto } from './dto/report-period.query';
 import { ReportsService } from './reports.service';
@@ -13,6 +13,12 @@ export class ReportsController {
   @Get('finance')
   finance(@Query() query: ReportPeriodQueryDto): Promise<FinanceReport> {
     return this.reports.finance(query);
+  }
+
+  @RequirePermission('reports.read')
+  @Get('sessions')
+  sessions(@Query() query: ReportPeriodQueryDto): Promise<SessionsReport> {
+    return this.reports.sessions(query);
   }
 
   @RequirePermission('reports.read')

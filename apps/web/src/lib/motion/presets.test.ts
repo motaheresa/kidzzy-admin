@@ -2,7 +2,7 @@ import { gsap } from 'gsap';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CSS_EASE, fadeUp, MOTION, MOTION_ALLOWED, stagger } from './presets';
+import { chartAnimation, CSS_EASE, fadeUp, MOTION, MOTION_ALLOWED, stagger } from './presets';
 
 /** Tween settings; every other key of the vars passed to gsap.from is an animated property. */
 const TWEEN_SETTINGS = new Set(['duration', 'ease', 'delay', 'stagger', 'clearProps']);
@@ -134,5 +134,27 @@ describe('motion presets', () => {
     expect(token('duration-slow')).toBe(`${MOTION.duration.slow * 1000}ms`);
     expect(token('ease-out')).toBe(CSS_EASE.out);
     expect(token('ease-in-out')).toBe(CSS_EASE.inOut);
+  });
+});
+
+describe('chartAnimation', () => {
+  it('animates the chart entrance for 400 ms when motion is allowed', () => {
+    setReducedMotion(false);
+    expect(chartAnimation()).toEqual({
+      isAnimationActive: true,
+      animationDuration: MOTION.duration.slow * 1000,
+      animationEasing: 'ease-out',
+    });
+    expect(window.matchMedia).toHaveBeenCalledWith(MOTION_ALLOWED);
+  });
+
+  it('does nothing under prefers-reduced-motion', () => {
+    setReducedMotion(true);
+    expect(chartAnimation().isAnimationActive).toBe(false);
+  });
+
+  it('does nothing where the browser cannot tell (no matchMedia)', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    expect(chartAnimation().isAnimationActive).toBe(false);
   });
 });

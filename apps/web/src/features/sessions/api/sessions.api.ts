@@ -20,6 +20,7 @@ export function listSessions(
   if (params.from) query.set('from', params.from);
   if (params.to) query.set('to', params.to);
   if (params.groupId) query.set('groupId', params.groupId);
+  if (params.instructorId) query.set('instructorId', params.instructorId);
   if (params.status) query.set('status', params.status);
   if (params.isMakeup !== undefined) query.set('isMakeup', String(params.isMakeup));
   return http.get<Page<Session>>(`/sessions?${query.toString()}`, { signal });

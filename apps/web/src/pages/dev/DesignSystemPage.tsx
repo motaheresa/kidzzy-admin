@@ -24,6 +24,7 @@ import {
   SelectField,
   Skeleton,
   Spinner,
+  StackedBarChart,
   Table,
   TableBody,
   TableCell,
@@ -482,6 +483,26 @@ export function DesignSystemPage() {
             </FullScreenMessage>
           </div>
         </div>
+      </Section>
+
+      <Section title="Charts">
+        <StackedBarChart
+          xKey="day"
+          ariaLabel="مثال: عدد الحصص في خمس أيام حسب حالتها"
+          series={[
+            { key: 'held', label: 'اتعملت', color: 'var(--color-chart-held)' },
+            { key: 'cancelled', label: 'اتلغت', color: 'var(--color-chart-cancelled)' },
+            { key: 'unmarked', label: 'مش متسجلة', color: 'var(--color-chart-unmarked)' },
+            { key: 'upcoming', label: 'جاية', color: 'var(--color-chart-upcoming)' },
+          ]}
+          data={[
+            { day: '1', held: 3, cancelled: 1, unmarked: 0, upcoming: 0 },
+            { day: '2', held: 4, cancelled: 0, unmarked: 1, upcoming: 0 },
+            { day: '3', held: 0, cancelled: 0, unmarked: 0, upcoming: 0 },
+            { day: '4', held: 2, cancelled: 2, unmarked: 0, upcoming: 3 },
+            { day: '5', held: 0, cancelled: 0, unmarked: 0, upcoming: 5 },
+          ]}
+        />
       </Section>
 
       <Section title="Motion">

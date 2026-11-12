@@ -707,3 +707,39 @@ export interface OverviewReport {
   /** Average weeks one cycle lasts (one decimal); null when there is no student to average. */
   averageRoundWeeks: number | null;
 }
+
+/** How a sessions report groups its buckets: one per academy-local day, or one per local month. */
+export type ReportGranularity = 'day' | 'month';
+
+/** The sessions of one local day or month, by state (openapi.yaml: SessionsBucket). */
+export interface SessionsBucket {
+  /** YYYY-MM-DD for a day, YYYY-MM for a month */
+  key: string;
+  held: number;
+  cancelled: number;
+  /** Scheduled and already past: nobody marked it held or cancelled. */
+  unmarked: number;
+  /** Scheduled and not started yet. */
+  upcoming: number;
+}
+
+/** The numbers of a sessions report (openapi.yaml: SessionsReportKpis). */
+export interface SessionsReportKpis {
+  held: number;
+  cancelled: number;
+  unmarked: number;
+  upcoming: number;
+  /** Present over all attendance rows of the held sessions, in percent with one decimal; null when there is none. */
+  attendanceRate: number | null;
+  /** Mean real length of the held sessions that have actual times, in whole minutes; null when none. */
+  averageActualDurationMin: number | null;
+}
+
+/** GET /reports/sessions (openapi.yaml: SessionsReport). Admin only. */
+export interface SessionsReport {
+  period: ReportPeriod;
+  /** day when the period is 62 days or less, month when it is longer. */
+  granularity: ReportGranularity;
+  kpis: SessionsReportKpis;
+  buckets: SessionsBucket[];
+}

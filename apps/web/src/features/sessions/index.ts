@@ -5,4 +5,5 @@ export { SessionActions } from './components/SessionActions';
 export { SessionDetails } from './components/SessionDetails';
 export { SessionStatusBadge } from './components/SessionStatusBadge';
 export { TodaySessions } from './components/TodaySessions';
-export type { Session } from './types';
+export { useSessions } from './hooks/useSessions';
+export type { Session, SessionListParams } from './types';

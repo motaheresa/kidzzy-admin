@@ -18,6 +18,7 @@ describe('DesignSystemPage (dev)', () => {
       'Empty state',
       'Toasts',
       'Full-screen states',
+      'Charts',
       'Motion',
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();

@@ -82,3 +82,20 @@ export function stagger(
 
 // Press feedback is CSS, not GSAP: Button has `motion-safe:active:scale-[0.98]` with
 // `duration-fast ease-out` (the same tokens), so no JavaScript runs per control.
+
+/**
+ * The entrance of a chart (Recharts animates its own SVG, so it takes props, not a GSAP tween).
+ * Under prefers-reduced-motion nothing animates. Read at render time, in the browser only.
+ */
+export function chartAnimation(): {
+  isAnimationActive: boolean;
+  animationDuration: number;
+  animationEasing: 'ease-out';
+} {
+  const allowed = typeof window !== 'undefined' && window.matchMedia?.(MOTION_ALLOWED).matches;
+  return {
+    isAnimationActive: Boolean(allowed),
+    animationDuration: MOTION.duration.slow * 1000,
+    animationEasing: 'ease-out',
+  };
+}

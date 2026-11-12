@@ -4,6 +4,7 @@ import {
   isBackwards,
   lastOfMonth,
   presetOf,
+  periodInstants,
   presetPeriod,
   resolvePeriod,
 } from './period';
@@ -54,5 +55,33 @@ describe('period', () => {
   it('knows a backwards period', () => {
     expect(isBackwards({ from: '2026-11-10', to: '2026-11-09' })).toBe(true);
     expect(isBackwards({ from: '2026-11-10', to: '2026-11-10' })).toBe(false);
+  });
+});
+
+describe('periodInstants', () => {
+  it('is local midnight of the first day up to local midnight after the last, in winter time', () => {
+    // Cairo is UTC+2 in November.
+    expect(periodInstants({ from: '2026-11-01', to: '2026-11-30' }, 'Africa/Cairo')).toEqual({
+      from: '2026-10-31T22:00:00.000Z',
+      to: '2026-11-30T22:00:00.000Z',
+    });
+  });
+
+  it('is 23 hours on the day Egypt springs forward and 25 on the day it falls back', () => {
+    // 24 April 2026: midnight does not exist, the clock goes 00:00 -> 01:00 (UTC+2 -> UTC+3).
+    expect(periodInstants({ from: '2026-04-24', to: '2026-04-24' }, 'Africa/Cairo')).toEqual({
+      from: '2026-04-23T22:00:00.000Z',
+      to: '2026-04-24T21:00:00.000Z',
+    });
+    // 29 October 2026: the day starts at UTC+3 (21:00Z the day before) and ends at UTC+2.
+    expect(periodInstants({ from: '2026-10-29', to: '2026-10-29' }, 'Africa/Cairo')).toEqual({
+      from: '2026-10-28T21:00:00.000Z',
+      to: '2026-10-29T22:00:00.000Z',
+    });
+  });
+
+  it('rolls the end over a month and a year', () => {
+    const range = periodInstants({ from: '2026-12-31', to: '2026-12-31' }, 'Africa/Cairo');
+    expect(range.to).toBe('2026-12-31T22:00:00.000Z');
   });
 });

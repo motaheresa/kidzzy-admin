@@ -56,6 +56,8 @@ const boundaryPolicies = [
 
 const FETCH_MESSAGE =
   'Use the http client from src/lib/http (timeout, refresh, AppError), never fetch directly (ADR-0012).';
+const CHART_MESSAGE =
+  'Draw charts with a component from src/components/ui (StackedBarChart…), which is the only place that imports recharts.';
 const QUERY_MESSAGE =
   'Use useApiQuery / useApiMutation / useQueryClient from src/lib/query, not @tanstack/react-query (ADR-0012).';
 
@@ -152,6 +154,24 @@ export default tseslint.config(
     // app layer (QueryClientProvider) import TanStack Query itself.
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/lib/query/**', 'src/app/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: '@tanstack/react-query', message: QUERY_MESSAGE },
+            { name: 'recharts', message: CHART_MESSAGE },
+          ],
+          patterns: [{ group: ['@tanstack/react-query/*'], message: QUERY_MESSAGE }],
+        },
+      ],
+    },
+  },
+  {
+    // Charts: only the shared ui components import recharts, so the next report reuses one
+    // chart component instead of drawing its own. (Same query restriction as above, repeated
+    // because a later block replaces the rule's options.)
+    files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',

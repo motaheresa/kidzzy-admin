@@ -2,7 +2,7 @@ import { useListParams } from '@/lib/hooks';
 import { localToday } from '@/lib/format';
 import { useApiQuery } from '@/lib/query';
 import { useSession } from '@/features/auth';
-import { getFinanceReport, getOverviewReport } from '../api/reports.api';
+import { getFinanceReport, getOverviewReport, getSessionsReport } from '../api/reports.api';
 import { reportKeys } from '../api/reports.keys';
 import {
   isBackwards,
@@ -55,6 +55,17 @@ export function useOverviewReport() {
   return useApiQuery({
     queryKey: reportKeys.overview(),
     queryFn: ({ signal }) => getOverviewReport(signal),
+    meta: { errorHandling: 'local' },
+  });
+}
+
+/** The session statistics of a period. The screen shows its own error. `enabled` skips a bad range. */
+export function useSessionsReport(period: Period, enabled = true) {
+  return useApiQuery({
+    queryKey: reportKeys.sessions(period),
+    queryFn: ({ signal }) => getSessionsReport(period, signal),
+    placeholderData: (previous) => previous,
+    enabled,
     meta: { errorHandling: 'local' },
   });
 }
