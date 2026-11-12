@@ -18,6 +18,7 @@ describe('DesignSystemPage (dev)', () => {
       'Empty state',
       'Toasts',
       'Full-screen states',
+      'Sortable table header',
       'Charts',
       'Motion',
     ]) {

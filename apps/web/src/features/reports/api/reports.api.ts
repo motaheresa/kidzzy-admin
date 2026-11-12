@@ -1,5 +1,5 @@
 import { http } from '@/lib/http';
-import type { FinanceReport, OverviewReport, SessionsReport } from '../types';
+import type { FinanceReport, InstructorsReport, OverviewReport, SessionsReport } from '../types';
 
 // The report endpoints (openapi.yaml, tag Reports). Components never call them; the hooks do.
 
@@ -24,4 +24,13 @@ export function getSessionsReport(
 ): Promise<SessionsReport> {
   const query = new URLSearchParams({ from: period.from, to: period.to });
   return http.get<SessionsReport>('/reports/sessions?' + query.toString(), { signal });
+}
+
+/** GET /reports/instructors?from&to: every instructor's sessions, pay and expected pay, not paginated. */
+export function getInstructorsReport(
+  period: { from: string; to: string },
+  signal?: AbortSignal,
+): Promise<InstructorsReport> {
+  const query = new URLSearchParams({ from: period.from, to: period.to });
+  return http.get<InstructorsReport>('/reports/instructors?' + query.toString(), { signal });
 }

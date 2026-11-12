@@ -2,6 +2,7 @@
 // only (ESLint boundaries).
 export { FinanceScreen } from './components/FinanceScreen';
 export { OverviewScreen } from './components/OverviewScreen';
+export { InstructorsReportScreen } from './components/InstructorsReportScreen';
 export { PeriodFilter } from './components/PeriodFilter';
 export { SessionsReportScreen } from './components/SessionsReportScreen';
 export { useReportPeriod } from './hooks/useReports';

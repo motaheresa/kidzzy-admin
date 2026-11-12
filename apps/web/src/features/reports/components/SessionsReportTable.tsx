@@ -25,6 +25,8 @@ import { useListParams } from '@/lib/hooks';
 import { periodInstants, type Period } from '../lib/period';
 import { REPORT_PAGE_SIZE } from './FinancePayments';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const STATUSES = [SessionStatus.Scheduled, SessionStatus.Held, SessionStatus.Cancelled] as const;
 const STATUS_LABEL: Record<(typeof STATUSES)[number], string> = {
   [SessionStatus.Scheduled]: 'مجدولة',
@@ -48,7 +50,16 @@ export function SessionsReportTable({ period, disabled }: { period: Period; disa
   const instructors = useInstructorOptions();
 
   const groupId = groups.data?.data.find((group) => group.id === param('groupId'))?.id;
-  const instructorId = instructors.data?.data.find((item) => item.id === param('instructorId'))?.id;
+  // The instructors report links here with the id of any instructor, an inactive one too, and the
+  // option list only has the active ones: a well-formed id is kept, and shown as its own option.
+  const rawInstructor = param('instructorId');
+  const instructorOptions = instructors.data?.data ?? [];
+  const instructorId =
+    rawInstructor &&
+    (instructorOptions.some((item) => item.id === rawInstructor) || UUID.test(rawInstructor))
+      ? rawInstructor
+      : undefined;
+  const instructorIsListed = instructorOptions.some((item) => item.id === instructorId);
   const status = STATUSES.find((value) => value === param('status'));
 
   const range = periodInstants(period, timeZone);
@@ -84,6 +95,9 @@ export function SessionsReportTable({ period, disabled }: { period: Period; disa
             onChange={(event) => setParam('instructorId', event.target.value)}
           >
             <option value="">الكل</option>
+            {instructorId && !instructorIsListed && (
+              <option value={instructorId}>مدرس غير نشط</option>
+            )}
             {instructors.data?.data.map((instructor) => (
               <option key={instructor.id} value={instructor.id}>
                 {instructor.name}

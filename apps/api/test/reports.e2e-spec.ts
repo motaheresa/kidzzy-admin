@@ -4,6 +4,7 @@ import type { INestApplication } from '@nestjs/common';
 import {
   SystemRole,
   type FinanceReport,
+  type InstructorsReport,
   type OverviewReport,
   type Page,
   type SessionsReport,
@@ -734,6 +735,212 @@ describe('Reports (e2e)', () => {
       ).body as SessionsReport;
       expect(days.granularity).toBe('day');
       expect(days.buckets).toHaveLength(62);
+    });
+  });
+
+  describe('GET /reports/instructors', () => {
+    const instructorsReport = (token: string, query: Record<string, string> = {}) =>
+      request(server()).get(api('/reports/instructors')).query(query).set(as(token));
+    const rowsOf = async (token: string, from: string, to: string) =>
+      (await instructorsReport(token, { from, to }).expect(200)).body as InstructorsReport;
+    const rowOf = (body: InstructorsReport, id: string) =>
+      body.rows.find((row) => row.instructorId === id);
+
+    /** A held session, with real start and end times when `minutes` is given. */
+    async function held(
+      s: Setup,
+      groupId: string,
+      day: string,
+      instructorId: string,
+      minutes: number | null = null,
+    ) {
+      const created = await session(s, groupId, at(day), 'held', instructorId);
+      if (minutes !== null) {
+        await prisma.unscoped.session.update({
+          where: { id: created.id },
+          data: {
+            actualStartedAt: new Date(at(day)),
+            actualEndedAt: new Date(new Date(at(day)).getTime() + minutes * 60_000),
+          },
+        });
+      }
+      return created;
+    }
+
+    async function mark(s: Setup, sessionId: string, statuses: ('present' | 'absent')[]) {
+      for (const status of statuses) {
+        const student = await newStudent(s, 'Mark');
+        await prisma.unscoped.attendance.create({
+          data: {
+            academyId: s.academyId,
+            sessionId,
+            studentId: student.id,
+            status,
+            recordedById: s.anaId,
+            recordedAt: NOW,
+          },
+        });
+      }
+    }
+
+    it('is for the admin: an instructor is 403, no login is 401', async () => {
+      const s = await setup('instructors-access');
+      await instructorsReport(s.adminToken).expect(200);
+      await instructorsReport(s.anaToken).expect(403);
+      await request(server()).get(api('/reports/instructors')).expect(401);
+    });
+
+    it('defaults to the current local month, echoes the period and lists the instructors, not the admin', async () => {
+      const s = await setup('instructors-default');
+      const body = (await instructorsReport(s.adminToken).expect(200)).body as InstructorsReport;
+      expect(body.period).toEqual({ from: '2026-11-01', to: '2026-11-30' });
+      expect(body.rows.map((row) => row.instructorId).sort()).toEqual([s.anaId, s.omarId].sort());
+      expect(body.kpis).toEqual({
+        activeInstructors: 2,
+        held: 0,
+        actualMinutes: 0,
+        paid: '0.00',
+        due: { count: 0, total: '0.00' },
+        expectedOutflow: '0.00',
+      });
+    });
+
+    it('refuses a to before from (400) and more than 366 days (422)', async () => {
+      const s = await setup('instructors-period');
+      await instructorsReport(s.adminToken, { from: '2026-11-10', to: '2026-11-01' }).expect(400);
+      const long = await instructorsReport(s.adminToken, {
+        from: '2026-01-01',
+        to: '2027-01-02',
+      }).expect(422);
+      expect((long.body as { code: string }).code).toBe('REPORT_PERIOD_TOO_LONG');
+    });
+
+    it("never counts another academy's rows", async () => {
+      const mine = await setup('instructors-mine');
+      const theirs = await setup('instructors-theirs');
+      const g = await group(theirs, 'Theirs');
+      await held(theirs, g.id, '2026-11-05', theirs.anaId, 60);
+      const pair = await paired(theirs, g.id, theirs.anaId, { amount: '700.00' });
+      await pay(theirs, pair.cycleId, '2026-11-06', '700.00');
+
+      const body = await rowsOf(mine.adminToken, '2026-11-01', '2026-11-30');
+      expect(body.rows.map((row) => row.instructorId).sort()).toEqual(
+        [mine.anaId, mine.omarId].sort(),
+      );
+      expect(body.kpis).toMatchObject({ held: 0, actualMinutes: 0, paid: '0.00' });
+    });
+
+    it('counts sessions by the instructor on the session, so a former instructor keeps what they taught', async () => {
+      const s = await setup('instructors-sessions');
+      // Omar teaches the group now; Ana held and cancelled sessions of it before the change.
+      const g = await group(s, 'G', s.omarId);
+      const first = await held(s, g.id, '2026-11-02', s.anaId, 60);
+      await held(s, g.id, '2026-11-03', s.anaId); // no actual times
+      await session(s, g.id, at('2026-11-04'), 'cancelled', s.anaId);
+      await held(s, g.id, '2026-11-05', s.omarId, 30);
+      await held(s, g.id, '2026-12-02', s.anaId, 60); // after the period
+      await session(s, g.id, at('2026-11-06'), 'scheduled', s.anaId); // not held, not cancelled
+      await mark(s, first.id, ['present', 'present', 'absent']);
+
+      const body = await rowsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(rowOf(body, s.anaId)).toMatchObject({
+        activeGroups: 0,
+        held: 2,
+        cancelled: 1,
+        actualMinutes: 60,
+        heldWithoutActualTimes: 1,
+        attendanceRate: 66.7,
+      });
+      expect(rowOf(body, s.omarId)).toMatchObject({
+        activeGroups: 1,
+        held: 1,
+        cancelled: 0,
+        actualMinutes: 30,
+        heldWithoutActualTimes: 0,
+        attendanceRate: null,
+      });
+      expect(body.kpis).toMatchObject({ held: 3, actualMinutes: 90 });
+    });
+
+    it('sums what was paid by paid_on, both edges of the period included', async () => {
+      const s = await setup('instructors-paid');
+      // A payment cannot be dated after today (the 12th), so the period ends in the past.
+      const days = ['2026-10-19', '2026-10-20', '2026-11-10', '2026-11-11'];
+      for (const [index, day] of days.entries()) {
+        const g = await group(s, `G${index}`);
+        const pair = await paired(s, g.id, s.anaId, { amount: '1000.00' });
+        await pay(s, pair.cycleId, day, '1000.00');
+      }
+      const body = await rowsOf(s.adminToken, '2026-10-20', '2026-11-10');
+      expect(rowOf(body, s.anaId)?.paid).toBe('2000.00'); // the 20th and the 10th, not the days around
+      expect(rowOf(body, s.omarId)?.paid).toBe('0.00');
+      expect(body.kpis.paid).toBe('2000.00');
+    });
+
+    it('counts the cycles due now whatever the period', async () => {
+      const s = await setup('instructors-due');
+      const october = await group(s, 'October');
+      const december = await group(s, 'December');
+      const oct = await paired(s, october.id, s.anaId, { amount: '1500.00' });
+      const dec = await paired(s, december.id, s.anaId, { amount: '1200.00' });
+      await makeDue(oct.cycleId, '2026-10-12T10:00:00.000Z');
+      await makeDue(dec.cycleId, '2026-12-20T10:00:00.000Z');
+
+      const body = await rowsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(rowOf(body, s.anaId)?.due).toEqual({ count: 2, total: '2700.00' });
+      expect(body.kpis.due).toEqual({ count: 2, total: '2700.00' });
+    });
+
+    it('expects, per instructor, what the finance report expects for instructors in total', async () => {
+      const s = await setup('instructors-expected');
+      // Ana: two groups, each completing a cycle in November. Omar: one group completing a cycle,
+      // and one cycle that already fell due on the 5th (the passed part of the period).
+      const first = await group(s, 'First', s.anaId);
+      const second = await group(s, 'Second', s.anaId);
+      const third = await group(s, 'Third', s.omarId);
+      const fourth = await group(s, 'Fourth', s.omarId);
+      await paired(s, first.id, s.anaId, { amount: '1500.00', counted: 2 });
+      await paired(s, second.id, s.anaId, { amount: '1200.00', counted: 2 });
+      await paired(s, third.id, s.omarId, { amount: '800.00', counted: 2 });
+      const passed = await paired(s, fourth.id, s.omarId, { amount: '1500.00' });
+      await makeDue(passed.cycleId, '2026-11-05T10:00:00.000Z');
+      for (const [g, instructorId] of [
+        [first, s.anaId],
+        [second, s.anaId],
+        [third, s.omarId],
+      ] as const) {
+        await session(s, g.id, at('2026-11-19'), 'scheduled', instructorId);
+        await session(s, g.id, at('2026-11-26'), 'scheduled', instructorId);
+      }
+
+      const body = await rowsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(rowOf(body, s.anaId)?.expected).toBe('2700.00');
+      expect(rowOf(body, s.omarId)?.expected).toBe('2300.00');
+      expect(body.kpis.expectedOutflow).toBe('5000.00');
+      const finance = await report(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(body.kpis.expectedOutflow).toBe(finance.expected.out);
+    });
+
+    it('lists an inactive instructor only when they held, cancelled or were paid in the period', async () => {
+      const s = await setup('instructors-inactive');
+      const zedId = await createUser(prisma, s.academyId, {
+        name: 'zed',
+        email: mail('zed', 'instructors-inactive'),
+        password,
+        role: SystemRole.Instructor,
+        isActive: false,
+      });
+      const before = await rowsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(rowOf(before, zedId)).toBeUndefined();
+
+      const g = await group(s, 'G');
+      await held(s, g.id, '2026-11-03', zedId, 45);
+      const after = await rowsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(rowOf(after, zedId)).toMatchObject({ isActive: false, held: 1, actualMinutes: 45 });
+      expect(after.kpis.activeInstructors).toBe(2);
+      // Another period has nothing of theirs.
+      const december = await rowsOf(s.adminToken, '2026-12-01', '2026-12-31');
+      expect(rowOf(december, zedId)).toBeUndefined();
     });
   });
 

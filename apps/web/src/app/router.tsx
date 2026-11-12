@@ -14,6 +14,7 @@ import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage
 import { AuditLogPage } from '@/pages/audit/AuditLogPage';
 import { ReminderRulesPage } from '@/pages/reminder-rules/ReminderRulesPage';
 import { ReportsFinancePage } from '@/pages/reports/ReportsFinancePage';
+import { ReportsInstructorsPage } from '@/pages/reports/ReportsInstructorsPage';
 import { ReportsOverviewPage } from '@/pages/reports/ReportsOverviewPage';
 import { ReportsSessionsPage } from '@/pages/reports/ReportsSessionsPage';
 import { LoginPage } from '@/pages/LoginPage';
@@ -55,7 +56,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
  *     SessionGateLayout  (same sign-in rules, no app shell)
  *       RequirePermission reports.read (any)
- *         ReportsLayout  the reports workspace frame: /reports, /reports/finance, /reports/sessions
+ *         ReportsLayout  the reports workspace frame: /reports, /reports/finance, /reports/sessions, /reports/instructors
  *     NotFoundPage     *
  *     DesignSystemPage /dev/design-system   development only
  * A new signed-in screen is a child of ProtectedLayout, inside a RequirePermission for the
@@ -182,6 +183,7 @@ export const routes: RouteObject[] = [
                   { path: '/reports', element: <ReportsOverviewPage /> },
                   { path: '/reports/finance', element: <ReportsFinancePage /> },
                   { path: '/reports/sessions', element: <ReportsSessionsPage /> },
+                  { path: '/reports/instructors', element: <ReportsInstructorsPage /> },
                 ],
               },
             ],

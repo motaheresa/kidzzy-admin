@@ -45,6 +45,7 @@ export function toProjectedStudent(row: StudentReportRow): ProjectedPayee {
   const plan = row.plans[0];
   return {
     kind: 'student',
+    payeeId: row.id,
     groupId: row.enrollments[0]?.groupId ?? null,
     instructorId: null,
     open: cycle
@@ -92,6 +93,7 @@ export function toProjectedPairs(
     const plan = planOf.get(key);
     return {
       kind: 'instructor' as const,
+      payeeId: pair.instructorId,
       groupId: pair.groupId,
       instructorId: pair.instructorId,
       open: cycle

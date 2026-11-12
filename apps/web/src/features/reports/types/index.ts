@@ -1,5 +1,8 @@
 import type {
   FinanceReport,
+  InstructorsReport,
+  InstructorsReportKpis,
+  InstructorsReportRow,
   OutstandingTotal,
   OverviewReport,
   ReportGranularity,
@@ -11,6 +14,9 @@ import type {
 /** The API's report shapes (openapi.yaml: FinanceReport, OverviewReport, SessionsReport). */
 export type {
   FinanceReport,
+  InstructorsReport,
+  InstructorsReportKpis,
+  InstructorsReportRow,
   OutstandingTotal,
   OverviewReport,
   ReportGranularity,

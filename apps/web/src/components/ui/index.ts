@@ -50,6 +50,7 @@ export { PageSizeSelect } from './molecules/PageSizeSelect';
 export { Pagination } from './molecules/Pagination';
 export { SEARCH_DEBOUNCE_MS, SearchInput } from './molecules/SearchInput';
 export { SelectField } from './molecules/SelectField';
+export { SortableHead, type SortDirection } from './molecules/SortableHead';
 export { StackedBarChart, type ChartSeries } from './molecules/StackedBarChart';
 export { TextareaField } from './molecules/TextareaField';
 export { Toaster } from './molecules/Toaster';
