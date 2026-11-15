@@ -276,25 +276,77 @@ afterEach(() => {
 });
 
 describe('the reports workspace: access and frame', () => {
-  it('has its own frame with the sidebar, not the app shell', async () => {
+  it('has its own frame: the app header, the back item first, then the report pages', async () => {
     api(admin);
     renderAt('/reports');
 
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'نظرة عامة' })).toHaveAttribute(
-      'href',
-      '/reports',
-    );
-    expect(within(sidebar).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
-      'href',
-      '/reports/finance',
-    );
-    expect(within(sidebar).getByRole('link', { name: 'رجوع للتطبيق' })).toHaveAttribute(
-      'href',
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('title'))).toEqual([
+      'التطبيق',
+      'نظرة عامة',
+      'الفلوس',
+      'الحصص',
+      'المدرسين',
+    ]);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/',
-    );
-    // The app shell's navigation is not drawn.
+      '/reports',
+      '/reports/finance',
+      '/reports/sessions',
+      '/reports/instructors',
+    ]);
+    // The same header as the app shell: the logo, the title and the academy.
+    expect(screen.getByText('KidzzyCoders')).toBeInTheDocument();
+    // The app shell's own navigation is not drawn, and the sidebar and its menu button are gone.
     expect(screen.queryByRole('navigation', { name: 'الأقسام' })).not.toBeInTheDocument();
+    expect(document.getElementById('reports-sidebar')).toBeNull();
+    expect(document.querySelector('[aria-expanded]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /القايمة/ })).not.toBeInTheDocument();
+  });
+
+  it('draws the report links like the app does: an icon, the label from sm up, a title', async () => {
+    api(admin);
+    renderAt('/reports/finance');
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    const finance = within(nav).getByRole('link', { name: 'الفلوس' });
+    expect(finance).toHaveAttribute('aria-current', 'page');
+    expect(finance).toHaveAttribute('title', 'الفلوس');
+    expect(finance.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(finance).getByText('الفلوس')).toHaveClass('sr-only', 'sm:not-sr-only');
+    // Overview is the start of the others but is current only on itself.
+    expect(within(nav).getByRole('link', { name: 'نظرة عامة' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('keeps the period on every report link, and the back item goes home without it', async () => {
+    api(admin);
+    const router = renderAt('/reports/finance?from=2026-11-02&to=2026-11-09');
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    const period = '?from=2026-11-02&to=2026-11-09';
+    expect(within(nav).getByRole('link', { name: 'نظرة عامة' })).toHaveAttribute(
+      'href',
+      `/reports${period}`,
+    );
+    expect(within(nav).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
+      'href',
+      `/reports/finance${period}`,
+    );
+    expect(within(nav).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
+      'href',
+      `/reports/sessions${period}`,
+    );
+    expect(within(nav).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
+      'href',
+      `/reports/instructors${period}`,
+    );
+    const back = within(nav).getByRole('link', { name: 'التطبيق' });
+    expect(back).toHaveAttribute('href', '/');
+
+    await userEvent.click(back);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(search(router)).toBe('');
   });
 
   it('is forbidden for an instructor, with no report request', async () => {
@@ -327,22 +379,6 @@ describe('the reports workspace: access and frame', () => {
     renderAt('/');
     await screen.findByRole('navigation', { name: 'الأقسام' });
     expect(screen.queryByRole('link', { name: 'التقارير' })).not.toBeInTheDocument();
-  });
-
-  it('collapses the sidebar behind a menu button on a phone', async () => {
-    api(admin);
-    renderAt('/reports');
-    const button = await screen.findByRole('button', { name: 'افتح القايمة' });
-    const sidebar = document.getElementById('reports-sidebar');
-    expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(sidebar).toHaveClass('hidden');
-
-    await userEvent.click(button);
-    expect(screen.getByRole('button', { name: 'اقفل القايمة' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(sidebar).toHaveClass('block');
   });
 });
 
@@ -383,16 +419,16 @@ describe('the period filter', () => {
     expect(request.searchParams.get('to')).toMatch(new RegExp(`^${year}-${month}-\\d\\d$`));
   });
 
-  it('is kept in the URL and in the sidebar links while moving between pages', async () => {
+  it('is kept in the URL and in the navigation links while moving between pages', async () => {
     api(admin);
     const router = renderAt('/reports?from=2026-11-02&to=2026-11-09');
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
       'href',
       '/reports/finance?from=2026-11-02&to=2026-11-09',
     );
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'الفلوس' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'الفلوس' }));
     await screen.findByText('دخل متوقع');
     expect(router.state.location.pathname).toBe('/reports/finance');
     expect(search(router)).toBe('?from=2026-11-02&to=2026-11-09');
@@ -400,7 +436,7 @@ describe('the period filter', () => {
     expect(request.searchParams.get('from')).toBe('2026-11-02');
     expect(request.searchParams.get('to')).toBe('2026-11-09');
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'نظرة عامة' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'نظرة عامة' }));
     expect(router.state.location.pathname).toBe('/reports');
     expect(search(router)).toBe('?from=2026-11-02&to=2026-11-09');
   });
@@ -545,16 +581,16 @@ describe('the sessions report', () => {
     return within(region).getByText(label).parentElement?.textContent ?? '';
   };
 
-  it('is a page of the workspace, and its sidebar link keeps the period', async () => {
+  it('is a page of the workspace, and its navigation link keeps the period', async () => {
     api(admin);
     const router = renderAt(`/reports${PERIOD}`);
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
       'href',
       `/reports/sessions${PERIOD}`,
     );
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'الحصص' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'الحصص' }));
     await screen.findByText('نسبة الحضور');
     expect(router.state.location.pathname).toBe('/reports/sessions');
     expect(search(router)).toBe(PERIOD);
@@ -739,16 +775,16 @@ describe('the instructors report', () => {
       .find((tableRow) => within(tableRow).queryAllByText(name, { exact: false }).length > 0)!;
   };
 
-  it('is a page of the workspace, and its sidebar link keeps the period', async () => {
+  it('is a page of the workspace, and its navigation link keeps the period', async () => {
     api(admin);
     const router = renderAt(`/reports${PERIOD}`);
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
       'href',
       `/reports/instructors${PERIOD}`,
     );
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'المدرسين' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'المدرسين' }));
     await screen.findByText('مدرسين نشطين');
     expect(router.state.location.pathname).toBe('/reports/instructors');
     expect(search(router)).toBe(PERIOD);

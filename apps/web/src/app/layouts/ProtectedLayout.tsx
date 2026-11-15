@@ -4,6 +4,7 @@ import { Button } from '@/components/ui';
 import { EnableNotifications, NotificationBell, PushProvider } from '@/features/notifications';
 import { CHANGE_PASSWORD_PATH } from '@/lib/routing';
 import { AppNav } from './AppNav';
+import { BrandHeader } from './BrandHeader';
 import { SessionGate } from './SessionGate';
 
 /**
@@ -22,21 +23,7 @@ export function ProtectedLayout() {
             <div className="flex min-h-dvh flex-col">
               <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
                 <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-3 px-4">
-                  <img
-                    src="/pwa-64x64.png"
-                    alt=""
-                    width={40}
-                    height={40}
-                    className="size-10 shrink-0"
-                  />
-                  <div className="grid min-w-0 leading-tight">
-                    <span className="truncate font-display text-lg font-bold text-primary">
-                      كيدزي كودرز
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {me.academy.name}
-                    </span>
-                  </div>
+                  <BrandHeader title="كيدزي كودرز" subtitle={me.academy.name} />
                   {!mustChange && (
                     <div className="ms-auto flex shrink-0 items-center gap-1">
                       <EnableNotifications />
