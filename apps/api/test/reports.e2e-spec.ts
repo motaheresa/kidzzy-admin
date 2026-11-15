@@ -9,6 +9,7 @@ import {
   type Page,
   type SessionsReport,
   type Payment,
+  type StudentsReport,
 } from '@kidzzy/shared';
 import request from 'supertest';
 import type { App } from 'supertest/types';
@@ -966,6 +967,234 @@ describe('Reports (e2e)', () => {
       // Another period has nothing of theirs.
       const december = await rowsOf(s.adminToken, '2026-12-01', '2026-12-31');
       expect(rowOf(december, zedId)).toBeUndefined();
+    });
+  });
+
+  describe('GET /reports/students', () => {
+    const studentsReport = (token: string, query: Record<string, string> = {}) =>
+      request(server()).get(api('/reports/students')).query(query).set(as(token));
+    const studentsOf = async (token: string, from: string, to: string) =>
+      (await studentsReport(token, { from, to }).expect(200)).body as StudentsReport;
+    const rowOf = (body: StudentsReport, id: string) =>
+      body.rows.find((row) => row.studentId === id);
+
+    /** An enrollment written directly, so a period edge can be tested: dates are YYYY-MM-DD. */
+    function enrollment(
+      s: Setup,
+      studentId: string,
+      groupId: string,
+      startDate: string,
+      endDate: string | null = null,
+    ) {
+      return prisma.unscoped.enrollment.create({
+        data: {
+          academyId: s.academyId,
+          studentId,
+          groupId,
+          startDate: new Date(`${startDate}T00:00:00.000Z`),
+          endDate: endDate ? new Date(`${endDate}T00:00:00.000Z`) : null,
+        },
+      });
+    }
+
+    function attend(
+      s: Setup,
+      sessionId: string,
+      studentId: string,
+      status: 'present' | 'absent',
+      extra: { performanceRating?: number; homeworkRating?: number; note?: string } = {},
+    ) {
+      return prisma.unscoped.attendance.create({
+        data: {
+          academyId: s.academyId,
+          sessionId,
+          studentId,
+          status,
+          recordedById: s.anaId,
+          recordedAt: NOW,
+          ...extra,
+        },
+      });
+    }
+
+    it('is for the admin: an instructor is 403, no login is 401', async () => {
+      const s = await setup('students-access');
+      await studentsReport(s.adminToken).expect(200);
+      await studentsReport(s.anaToken).expect(403);
+      await request(server()).get(api('/reports/students')).expect(401);
+    });
+
+    it('defaults to the current local month, one bucket per day, and echoes the period', async () => {
+      const s = await setup('students-default');
+      const body = (await studentsReport(s.adminToken).expect(200)).body as StudentsReport;
+      expect(body.period).toEqual({ from: '2026-11-01', to: '2026-11-30' });
+      expect(body.granularity).toBe('day');
+      expect(body.buckets).toHaveLength(30);
+      expect(body.rows).toEqual([]);
+      expect(body.kpis).toEqual({
+        activeStudents: 0,
+        joined: 0,
+        left: 0,
+        present: 0,
+        absent: 0,
+        attendanceRate: null,
+        averagePerformance: null,
+        averageHomework: null,
+        repeatedAbsence: 0,
+      });
+    });
+
+    it('refuses a to before from (400) and more than 366 days (422)', async () => {
+      const s = await setup('students-period');
+      await studentsReport(s.adminToken, { from: '2026-11-10', to: '2026-11-01' }).expect(400);
+      const long = await studentsReport(s.adminToken, {
+        from: '2026-01-01',
+        to: '2027-01-02',
+      }).expect(422);
+      expect((long.body as { code: string }).code).toBe('REPORT_PERIOD_TOO_LONG');
+    });
+
+    it("never counts another academy's rows", async () => {
+      const mine = await setup('students-mine');
+      const theirs = await setup('students-theirs');
+      const g = await group(theirs, 'Theirs');
+      const kid = await newStudent(theirs, 'Theirs kid');
+      await enrollment(theirs, kid.id, g.id, '2026-11-02');
+      const held = await session(theirs, g.id, at('2026-11-03'), 'held');
+      await attend(theirs, held.id, kid.id, 'absent');
+
+      const body = await studentsOf(mine.adminToken, '2026-11-01', '2026-11-30');
+      expect(body.rows).toEqual([]);
+      expect(body.kpis).toMatchObject({ activeStudents: 0, joined: 0, present: 0, absent: 0 });
+    });
+
+    it('never returns an attendance note', async () => {
+      const s = await setup('students-notes');
+      const g = await group(s, 'G');
+      const kid = await newStudent(s, 'Kid');
+      await enrollment(s, kid.id, g.id, '2026-10-01');
+      const held = await session(s, g.id, at('2026-11-03'), 'held');
+      await attend(s, held.id, kid.id, 'absent', { note: 'SECRET-NOTE-ABOUT-A-CHILD' });
+
+      const response = await studentsReport(s.adminToken, {
+        from: '2026-11-01',
+        to: '2026-11-30',
+      }).expect(200);
+      expect(JSON.stringify(response.body)).not.toContain('SECRET-NOTE-ABOUT-A-CHILD');
+      expect(JSON.stringify(response.body)).not.toMatch(/"notes?"/);
+    });
+
+    it('puts attendance at 23:30 local on its own day, and 00:30 on the next', async () => {
+      const s = await setup('students-midnight');
+      const g = await group(s, 'G');
+      const kid = await newStudent(s, 'Kid');
+      await enrollment(s, kid.id, g.id, '2026-10-01');
+      // Cairo is UTC+2 in November: 21:30Z is 23:30 on the 3rd, 22:30Z is 00:30 on the 4th.
+      const late = await session(s, g.id, '2026-11-03T21:30:00.000Z', 'held');
+      const after = await session(s, g.id, '2026-11-03T22:30:00.000Z', 'held');
+      await attend(s, late.id, kid.id, 'present');
+      await attend(s, after.id, kid.id, 'absent');
+
+      const body = await studentsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(body.buckets.find((b) => b.key === '2026-11-03')).toEqual({
+        key: '2026-11-03',
+        present: 1,
+        absent: 0,
+      });
+      expect(body.buckets.find((b) => b.key === '2026-11-04')).toEqual({
+        key: '2026-11-04',
+        present: 0,
+        absent: 1,
+      });
+    });
+
+    it('adds up known data: totals, ratings, streak across the period, who is listed', async () => {
+      const s = await setup('students-totals');
+      const g = await group(s, 'Scratch A');
+      // A: enrolled through the API (a plan and a cycle in progress). B: joined in November.
+      // C: left in November but has attendance. D: left in November with none.
+      const a = await enrolled(s, g.id, 'A', { sessionsPerCycle: 4 });
+      const b = await newStudent(s, 'B');
+      const c = await newStudent(s, 'C');
+      const d = await newStudent(s, 'D');
+      await enrollment(s, b.id, g.id, '2026-11-02');
+      await enrollment(s, c.id, g.id, '2026-01-01', '2026-11-20');
+      await enrollment(s, d.id, g.id, '2026-01-01', '2026-11-10');
+
+      const october = await session(s, g.id, at('2026-10-27'), 'held');
+      const first = await session(s, g.id, at('2026-11-03'), 'held');
+      const second = await session(s, g.id, at('2026-11-10'), 'held');
+      const third = await session(s, g.id, at('2026-11-17'), 'held');
+      await attend(s, october.id, a.student.id, 'absent'); // before the period
+      for (const held of [first, second, third]) await attend(s, held.id, a.student.id, 'absent');
+      await attend(s, first.id, b.id, 'present', { performanceRating: 4, homeworkRating: 5 });
+      await attend(s, second.id, b.id, 'present', { performanceRating: 5 }); // no homework
+      await attend(s, third.id, b.id, 'absent');
+      await attend(s, first.id, c.id, 'present', { performanceRating: 3, homeworkRating: 3 });
+
+      const body = await studentsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(body.kpis).toEqual({
+        activeStudents: 2, // A and B have an open enrollment
+        joined: 1, // B (A started in October, C and D in January)
+        left: 2, // C and D, although D is not a row
+        present: 3,
+        absent: 4,
+        attendanceRate: 42.9, // 3 of 7
+        averagePerformance: 4, // (4 + 5 + 3) / 3
+        averageHomework: 4, // (5 + 3) / 2: B's missing homework is not counted
+        repeatedAbsence: 1, // A's streak is 4: three in the period and one before it
+      });
+      expect(body.rows.map((row) => row.name)).toEqual(['A', 'B', 'C']); // D has nothing in the period
+
+      expect(rowOf(body, a.student.id)).toMatchObject({
+        isActive: true,
+        currentGroup: { id: g.id, name: 'Scratch A' },
+        present: 0,
+        absent: 3,
+        attendanceRate: 0,
+        absenceStreak: 4,
+        lastPresentAt: null,
+        cycle: { sessionsCounted: 0, sessionsPerCycle: 4, status: 'in_progress' },
+      });
+      expect(rowOf(body, b.id)).toMatchObject({
+        present: 2,
+        absent: 1,
+        attendanceRate: 66.7,
+        absenceStreak: 1,
+        lastPresentAt: new Date(at('2026-11-10')).toISOString(),
+        averagePerformance: 4.5,
+        averageHomework: 5,
+        cycle: null,
+      });
+      expect(rowOf(body, c.id)).toMatchObject({ currentGroup: null, present: 1, absenceStreak: 0 });
+      // The streak does not depend on the period: a December period still sees A's four.
+      const december = await studentsOf(s.adminToken, '2026-12-01', '2026-12-31');
+      expect(rowOf(december, a.student.id)).toMatchObject({
+        present: 0,
+        absent: 0,
+        absenceStreak: 4,
+      });
+    });
+
+    it('shows the latest Due cycle when none is in progress', async () => {
+      const s = await setup('students-cycle');
+      const g = await group(s, 'G');
+      const kid = await enrolled(s, g.id, 'Kid');
+      await makeDue(kid.cycleId, '2026-11-05T10:00:00.000Z');
+
+      const body = await studentsOf(s.adminToken, '2026-11-01', '2026-11-30');
+      expect(rowOf(body, kid.student.id)?.cycle).toEqual({
+        sessionsCounted: 4,
+        sessionsPerCycle: 4,
+        status: 'due',
+      });
+    });
+
+    it('is one bucket per month above 62 days', async () => {
+      const s = await setup('students-granularity');
+      const body = await studentsOf(s.adminToken, '2026-10-01', '2026-12-02');
+      expect(body.granularity).toBe('month');
+      expect(body.buckets.map((b) => b.key)).toEqual(['2026-10', '2026-11', '2026-12']);
     });
   });
 

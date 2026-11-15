@@ -6,6 +6,7 @@ import type {
   Payment,
   Session,
   SessionsReport,
+  StudentsReport,
 } from '@kidzzy/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -143,6 +144,78 @@ const instructorsReport: InstructorsReport = {
   ],
 };
 
+const studentRow = (
+  name: string,
+  over: Partial<StudentsReport['rows'][number]> = {},
+): StudentsReport['rows'][number] => ({
+  studentId: `id-${name.toLowerCase()}`,
+  name,
+  isActive: true,
+  currentGroup: { id: 'g1', name: 'Scratch A' },
+  present: 4,
+  absent: 0,
+  attendanceRate: 100,
+  absenceStreak: 0,
+  lastPresentAt: '2026-11-10T15:00:00.000Z',
+  averagePerformance: 4,
+  averageHomework: 5,
+  cycle: null,
+  ...over,
+});
+
+const studentsReport: StudentsReport = {
+  period: { from: '2026-11-01', to: '2026-11-30' },
+  granularity: 'day',
+  kpis: {
+    activeStudents: 12,
+    joined: 3,
+    left: 2,
+    present: 40,
+    absent: 10,
+    attendanceRate: 80,
+    averagePerformance: 4.2,
+    averageHomework: 3.8,
+    repeatedAbsence: 2,
+  },
+  buckets: [
+    { key: '2026-11-01', present: 5, absent: 1 },
+    { key: '2026-11-02', present: 0, absent: 0 },
+    { key: '2026-11-03', present: 4, absent: 2 },
+  ],
+  rows: [
+    studentRow('Ana', {
+      present: 5,
+      absent: 3,
+      attendanceRate: 62.5,
+      absenceStreak: 4,
+      lastPresentAt: '2026-10-20T15:00:00.000Z',
+      averagePerformance: 4.5,
+      averageHomework: null,
+      cycle: { sessionsCounted: 2, sessionsPerCycle: 4, status: 'in_progress' },
+    }),
+    studentRow('Zed', {
+      isActive: false,
+      currentGroup: null,
+      present: 0,
+      absent: 3,
+      attendanceRate: null,
+      absenceStreak: 3,
+      lastPresentAt: null,
+      averagePerformance: null,
+      averageHomework: null,
+      cycle: { sessionsCounted: 4, sessionsPerCycle: 4, status: 'due' },
+    }),
+    studentRow('Omar', {
+      currentGroup: { id: 'g2', name: 'Scratch B' },
+      present: 3,
+      absent: 1,
+      attendanceRate: 75,
+      absenceStreak: 1,
+    }),
+    studentRow('Dina'),
+  ],
+};
+
 const reportSession = (id: string, over: Partial<Session> = {}): Session => ({
   id,
   group: { id: 'g1', name: 'Scratch A' },
@@ -185,6 +258,7 @@ let calls: URL[];
 let financeResponse: (url: URL) => Response;
 let sessionsReportResponse: (url: URL) => Response;
 let instructorsReportResponse: (url: URL) => Response;
+let studentsReportResponse: (url: URL) => Response;
 
 function api(me: Me) {
   fetchMock.mockImplementation((input) => {
@@ -196,6 +270,7 @@ function api(me: Me) {
     if (path === '/reports/finance') return Promise.resolve(financeResponse(url));
     if (path === '/reports/sessions') return Promise.resolve(sessionsReportResponse(url));
     if (path === '/reports/instructors') return Promise.resolve(instructorsReportResponse(url));
+    if (path === '/reports/students') return Promise.resolve(studentsReportResponse(url));
     if (path === '/sessions') {
       return Promise.resolve(
         json(200, {
@@ -269,6 +344,7 @@ beforeEach(() => {
   financeResponse = () => json(200, finance);
   sessionsReportResponse = () => json(200, sessionsReport);
   instructorsReportResponse = () => json(200, instructorsReport);
+  studentsReportResponse = () => json(200, studentsReport);
   fetchMock = vi.spyOn(globalThis, 'fetch');
 });
 afterEach(() => {
@@ -276,25 +352,79 @@ afterEach(() => {
 });
 
 describe('the reports workspace: access and frame', () => {
-  it('has its own frame with the sidebar, not the app shell', async () => {
+  it('has its own frame: the app header, the back item first, then the report pages', async () => {
     api(admin);
     renderAt('/reports');
 
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'نظرة عامة' })).toHaveAttribute(
-      'href',
-      '/reports',
-    );
-    expect(within(sidebar).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
-      'href',
-      '/reports/finance',
-    );
-    expect(within(sidebar).getByRole('link', { name: 'رجوع للتطبيق' })).toHaveAttribute(
-      'href',
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('title'))).toEqual([
+      'التطبيق',
+      'نظرة عامة',
+      'الفلوس',
+      'الحصص',
+      'المدرسين',
+      'الطلاب',
+    ]);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/',
-    );
-    // The app shell's navigation is not drawn.
+      '/reports',
+      '/reports/finance',
+      '/reports/sessions',
+      '/reports/instructors',
+      '/reports/students',
+    ]);
+    // The same header as the app shell: the logo, the title and the academy.
+    expect(screen.getByText('KidzzyCoders')).toBeInTheDocument();
+    // The app shell's own navigation is not drawn, and the sidebar and its menu button are gone.
     expect(screen.queryByRole('navigation', { name: 'الأقسام' })).not.toBeInTheDocument();
+    expect(document.getElementById('reports-sidebar')).toBeNull();
+    expect(document.querySelector('[aria-expanded]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /القايمة/ })).not.toBeInTheDocument();
+  });
+
+  it('draws the report links like the app does: an icon, the label from sm up, a title', async () => {
+    api(admin);
+    renderAt('/reports/finance');
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    const finance = within(nav).getByRole('link', { name: 'الفلوس' });
+    expect(finance).toHaveAttribute('aria-current', 'page');
+    expect(finance).toHaveAttribute('title', 'الفلوس');
+    expect(finance.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(finance).getByText('الفلوس')).toHaveClass('sr-only', 'sm:not-sr-only');
+    // Overview is the start of the others but is current only on itself.
+    expect(within(nav).getByRole('link', { name: 'نظرة عامة' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('keeps the period on every report link, and the back item goes home without it', async () => {
+    api(admin);
+    const router = renderAt('/reports/finance?from=2026-11-02&to=2026-11-09');
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    const period = '?from=2026-11-02&to=2026-11-09';
+    expect(within(nav).getByRole('link', { name: 'نظرة عامة' })).toHaveAttribute(
+      'href',
+      `/reports${period}`,
+    );
+    expect(within(nav).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
+      'href',
+      `/reports/finance${period}`,
+    );
+    expect(within(nav).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
+      'href',
+      `/reports/sessions${period}`,
+    );
+    expect(within(nav).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
+      'href',
+      `/reports/instructors${period}`,
+    );
+    const back = within(nav).getByRole('link', { name: 'التطبيق' });
+    expect(back).toHaveAttribute('href', '/');
+
+    await userEvent.click(back);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(search(router)).toBe('');
   });
 
   it('is forbidden for an instructor, with no report request', async () => {
@@ -327,22 +457,6 @@ describe('the reports workspace: access and frame', () => {
     renderAt('/');
     await screen.findByRole('navigation', { name: 'الأقسام' });
     expect(screen.queryByRole('link', { name: 'التقارير' })).not.toBeInTheDocument();
-  });
-
-  it('collapses the sidebar behind a menu button on a phone', async () => {
-    api(admin);
-    renderAt('/reports');
-    const button = await screen.findByRole('button', { name: 'افتح القايمة' });
-    const sidebar = document.getElementById('reports-sidebar');
-    expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(sidebar).toHaveClass('hidden');
-
-    await userEvent.click(button);
-    expect(screen.getByRole('button', { name: 'اقفل القايمة' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(sidebar).toHaveClass('block');
   });
 });
 
@@ -383,16 +497,16 @@ describe('the period filter', () => {
     expect(request.searchParams.get('to')).toMatch(new RegExp(`^${year}-${month}-\\d\\d$`));
   });
 
-  it('is kept in the URL and in the sidebar links while moving between pages', async () => {
+  it('is kept in the URL and in the navigation links while moving between pages', async () => {
     api(admin);
     const router = renderAt('/reports?from=2026-11-02&to=2026-11-09');
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'الفلوس' })).toHaveAttribute(
       'href',
       '/reports/finance?from=2026-11-02&to=2026-11-09',
     );
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'الفلوس' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'الفلوس' }));
     await screen.findByText('دخل متوقع');
     expect(router.state.location.pathname).toBe('/reports/finance');
     expect(search(router)).toBe('?from=2026-11-02&to=2026-11-09');
@@ -400,7 +514,7 @@ describe('the period filter', () => {
     expect(request.searchParams.get('from')).toBe('2026-11-02');
     expect(request.searchParams.get('to')).toBe('2026-11-09');
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'نظرة عامة' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'نظرة عامة' }));
     expect(router.state.location.pathname).toBe('/reports');
     expect(search(router)).toBe('?from=2026-11-02&to=2026-11-09');
   });
@@ -545,16 +659,16 @@ describe('the sessions report', () => {
     return within(region).getByText(label).parentElement?.textContent ?? '';
   };
 
-  it('is a page of the workspace, and its sidebar link keeps the period', async () => {
+  it('is a page of the workspace, and its navigation link keeps the period', async () => {
     api(admin);
     const router = renderAt(`/reports${PERIOD}`);
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'الحصص' })).toHaveAttribute(
       'href',
       `/reports/sessions${PERIOD}`,
     );
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'الحصص' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'الحصص' }));
     await screen.findByText('نسبة الحضور');
     expect(router.state.location.pathname).toBe('/reports/sessions');
     expect(search(router)).toBe(PERIOD);
@@ -739,16 +853,16 @@ describe('the instructors report', () => {
       .find((tableRow) => within(tableRow).queryAllByText(name, { exact: false }).length > 0)!;
   };
 
-  it('is a page of the workspace, and its sidebar link keeps the period', async () => {
+  it('is a page of the workspace, and its navigation link keeps the period', async () => {
     api(admin);
     const router = renderAt(`/reports${PERIOD}`);
-    const sidebar = await screen.findByRole('navigation', { name: 'التقارير' });
-    expect(within(sidebar).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'المدرسين' })).toHaveAttribute(
       'href',
       `/reports/instructors${PERIOD}`,
     );
 
-    await userEvent.click(within(sidebar).getByRole('link', { name: 'المدرسين' }));
+    await userEvent.click(within(nav).getByRole('link', { name: 'المدرسين' }));
     await screen.findByText('مدرسين نشطين');
     expect(router.state.location.pathname).toBe('/reports/instructors');
     expect(search(router)).toBe(PERIOD);
@@ -913,5 +1027,269 @@ describe('the instructors report', () => {
     renderAt(`/reports/sessions${PERIOD}&instructorId=nobody`);
     await screen.findByRole('table');
     expect(callsTo('/sessions').at(-1)!.searchParams.get('instructorId')).toBeNull();
+  });
+});
+
+describe('the students report', () => {
+  const PERIOD = '?from=2026-11-01&to=2026-11-30';
+  const kpi = async (label: string) => {
+    const region = await screen.findByRole('region', { name: 'الطلاب في الفترة' });
+    return within(region).getByText(label).parentElement?.textContent ?? '';
+  };
+  /** The names in the first column, in the order the table shows them (the badge text removed). */
+  const order = async () => {
+    const table = await screen.findByRole('table');
+    return within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((tableRow) =>
+        within(tableRow).getAllByRole('cell')[0]!.textContent!.replace('غير نشط', ''),
+      );
+  };
+  const manyStudents = (count: number): StudentsReport => ({
+    ...studentsReport,
+    rows: Array.from({ length: count }, (_, index) => ({
+      ...studentsReport.rows[3]!,
+      studentId: `kid-${index}`,
+      name: `Kid ${String(index).padStart(2, '0')}`,
+    })),
+  });
+
+  it('is a page of the workspace with its icon, and its link keeps the period', async () => {
+    api(admin);
+    const router = renderAt(`/reports${PERIOD}`);
+    const nav = await screen.findByRole('navigation', { name: 'التقارير' });
+    expect(within(nav).getByRole('link', { name: 'الطلاب' })).toHaveAttribute(
+      'href',
+      `/reports/students${PERIOD}`,
+    );
+
+    await userEvent.click(within(nav).getByRole('link', { name: 'الطلاب' }));
+    await screen.findByText('نسبة الحضور');
+    expect(router.state.location.pathname).toBe('/reports/students');
+    expect(search(router)).toBe(PERIOD);
+    const request = callsTo('/reports/students').at(-1)!;
+    expect(request.searchParams.get('from')).toBe('2026-11-01');
+    expect(request.searchParams.get('to')).toBe('2026-11-30');
+  });
+
+  it('is forbidden for an instructor, with no report request', async () => {
+    api(instructorUser);
+    renderAt('/reports/students');
+    expect(await screen.findByText(/مش مسموح/)).toBeInTheDocument();
+    expect(callsTo('/reports/students')).toHaveLength(0);
+  });
+
+  it('does not ask for a report when the range ends before it starts', async () => {
+    api(admin);
+    renderAt('/reports/students?from=2026-11-10&to=2026-11-01');
+    await screen.findByText('تاريخ البداية بعد تاريخ النهاية');
+    expect(callsTo('/reports/students')).toHaveLength(0);
+  });
+
+  it('shows the nine numbers', async () => {
+    api(admin);
+    renderAt(`/reports/students${PERIOD}`);
+    expect(await kpi('طلاب نشطين')).toContain('12');
+    expect(await kpi('انضموا في الفترة')).toContain('3');
+    expect(await kpi('سابوا في الفترة')).toContain('2');
+    expect(await kpi('حضور')).toContain('40');
+    expect(await kpi('غياب')).toContain('10');
+    expect(await kpi('نسبة الحضور')).toContain('80%');
+    expect(await kpi('متوسط الأداء')).toContain('4.2 / 5');
+    expect(await kpi('متوسط الواجب')).toContain('3.8 / 5');
+    expect(await kpi('غياب متكرر')).toContain('2');
+  });
+
+  it('shows a dash for a rate and ratings that are null', async () => {
+    studentsReportResponse = () =>
+      json(200, {
+        ...studentsReport,
+        kpis: {
+          ...studentsReport.kpis,
+          attendanceRate: null,
+          averagePerformance: null,
+          averageHomework: null,
+        },
+      });
+    api(admin);
+    renderAt(`/reports/students${PERIOD}`);
+    expect(await kpi('نسبة الحضور')).toContain('—');
+    expect(await kpi('متوسط الأداء')).toContain('—');
+    expect(await kpi('متوسط الواجب')).toContain('—');
+  });
+
+  it('draws present and absent per day, with a legend in words', async () => {
+    api(admin);
+    renderAt(`/reports/students${PERIOD}`);
+    const chart = await screen.findByRole('img', { name: /رسم بياني/ });
+    const legend = screen.getByRole('list', { name: 'مفتاح الألوان' });
+    expect(within(legend).getByText('حضر')).toBeInTheDocument();
+    expect(within(legend).getByText('غاب')).toBeInTheDocument();
+    await waitFor(() => {
+      const ticks = Array.from(
+        chart.querySelectorAll('.recharts-xAxis .recharts-cartesian-axis-tick'),
+      );
+      expect(ticks.map((tick) => tick.textContent)).toEqual(['1', '2', '3']);
+    });
+  });
+
+  it('says there is nothing to draw when no attendance was marked in the period', async () => {
+    studentsReportResponse = () =>
+      json(200, {
+        ...studentsReport,
+        buckets: studentsReport.buckets.map((b) => ({ ...b, present: 0, absent: 0 })),
+      });
+    api(admin);
+    renderAt(`/reports/students${PERIOD}`);
+    await screen.findByText('نسبة الحضور');
+    expect(screen.queryByRole('img', { name: /رسم بياني/ })).not.toBeInTheDocument();
+    expect(screen.getByText('مفيش حضور مسجل في الفترة دي')).toBeInTheDocument();
+  });
+
+  describe('the table', () => {
+    it('shows every row, the longest absence streak first by default', async () => {
+      api(admin);
+      renderAt(`/reports/students${PERIOD}`);
+      expect(await order()).toEqual(['Ana', 'Zed', 'Omar', 'Dina']);
+      expect(screen.getByRole('columnheader', { name: 'غياب ورا بعض' })).toHaveAttribute(
+        'aria-sort',
+        'descending',
+      );
+    });
+
+    it('shows the group, the streak badge, the last present date, ratings and the cycle', async () => {
+      api(admin);
+      renderAt(`/reports/students${PERIOD}`);
+      await screen.findByRole('table');
+      const rows = within(screen.getByRole('table')).getAllByRole('row');
+      const ana = within(rows[1]!);
+      expect(ana.getByText('Scratch A')).toBeInTheDocument();
+      expect(ana.getByText('غياب متكرر')).toBeInTheDocument(); // streak 4
+      expect(ana.getByText('62.5%')).toBeInTheDocument();
+      expect(ana.getByText('2/4')).toBeInTheDocument();
+      expect(ana.getByText('شغالة')).toBeInTheDocument();
+      const zed = within(rows[2]!);
+      expect(zed.getByText('غير نشط')).toBeInTheDocument();
+      expect(zed.getByText('مستحقة')).toBeInTheDocument();
+      expect(zed.getAllByText('—').length).toBeGreaterThanOrEqual(3); // no group, no rate, never present
+      const omar = within(rows[3]!);
+      expect(omar.queryByText('غياب متكرر')).not.toBeInTheDocument(); // streak 1
+    });
+
+    it('sorts by a pressed column, flips it, and keeps the sort in the URL', async () => {
+      api(admin);
+      const router = renderAt(`/reports/students${PERIOD}`);
+      await screen.findByRole('table');
+
+      await userEvent.click(screen.getByRole('button', { name: 'الطالب' }));
+      expect(search(router)).toContain('sort=name%3Aasc');
+      expect(await order()).toEqual(['Ana', 'Dina', 'Omar', 'Zed']);
+
+      await userEvent.click(screen.getByRole('button', { name: 'الطالب' }));
+      expect(search(router)).toContain('sort=name%3Adesc');
+      expect(await order()).toEqual(['Zed', 'Omar', 'Dina', 'Ana']);
+
+      await userEvent.click(screen.getByRole('button', { name: 'الحضور' }));
+      expect(search(router)).toContain('sort=attendanceRate%3Adesc');
+      // Zed has no rate (no attendance), so he is last whichever way it is sorted.
+      expect((await order()).at(-1)).toBe('Zed');
+    });
+
+    it('starts from the sort in the URL', async () => {
+      api(admin);
+      renderAt(`/reports/students${PERIOD}&sort=present%3Aasc`);
+      expect((await order())[0]).toBe('Zed');
+      expect(screen.getByRole('columnheader', { name: 'حضر' })).toHaveAttribute(
+        'aria-sort',
+        'ascending',
+      );
+    });
+
+    it('filters by group, by active flag and by repeated absence, kept in the URL', async () => {
+      api(admin);
+      const router = renderAt(`/reports/students${PERIOD}`);
+      await screen.findByRole('table');
+
+      await userEvent.selectOptions(screen.getByLabelText('الجروب'), 'g1');
+      expect(search(router)).toContain('group=g1');
+      expect(await order()).toEqual(['Ana', 'Dina']);
+
+      await userEvent.selectOptions(screen.getByLabelText('الجروب'), '');
+      await userEvent.selectOptions(screen.getByLabelText('الحالة'), 'false');
+      expect(search(router)).toContain('active=false');
+      expect(await order()).toEqual(['Zed']);
+
+      await userEvent.selectOptions(screen.getByLabelText('الحالة'), '');
+      await userEvent.selectOptions(screen.getByLabelText('غياب متكرر'), '1');
+      expect(search(router)).toContain('repeated=1');
+      expect(await order()).toEqual(['Ana', 'Zed']);
+    });
+
+    it('starts from the filters in the URL', async () => {
+      api(admin);
+      renderAt(`/reports/students${PERIOD}&group=g2&active=true`);
+      expect(await order()).toEqual(['Omar']);
+      expect(screen.getByLabelText('الجروب')).toHaveValue('g2');
+      expect(screen.getByLabelText('الحالة')).toHaveValue('true');
+    });
+
+    it('is filtered by the repeated-absence card, with the period kept', async () => {
+      api(admin);
+      const router = renderAt(`/reports/students${PERIOD}`);
+      expect(await order()).toHaveLength(4);
+
+      const card = screen.getByRole('link', { name: 'غياب متكرر' });
+      await userEvent.click(card);
+      expect(search(router)).toContain('repeated=1');
+      expect(search(router)).toContain('from=2026-11-01');
+      expect(await order()).toEqual(['Ana', 'Zed']);
+      expect(screen.getByLabelText('غياب متكرر')).toHaveValue('1');
+    });
+
+    it('shows 50 rows per page by default, with 25 and 100 to pick, and pages the rest', async () => {
+      studentsReportResponse = () => json(200, manyStudents(60));
+      api(admin);
+      const router = renderAt(`/reports/students${PERIOD}`);
+      expect(await order()).toHaveLength(50);
+      expect(search(router)).not.toContain('pageSize');
+
+      await userEvent.click(screen.getByRole('button', { name: /التالي/ }));
+      expect(await order()).toHaveLength(10);
+
+      await userEvent.selectOptions(screen.getByLabelText('عدد الصفوف في الصفحة'), '25');
+      expect(search(router)).toContain('pageSize=25');
+      expect(await order()).toHaveLength(25);
+
+      await userEvent.selectOptions(screen.getByLabelText('عدد الصفوف في الصفحة'), '100');
+      expect(await order()).toHaveLength(60);
+    }, 20_000);
+
+    it('opens the student from the row, and shows the name alone without students.read', async () => {
+      api(admin);
+      renderAt(`/reports/students${PERIOD}`);
+      const table = await screen.findByRole('table');
+      expect(within(table).getByRole('link', { name: 'Ana' })).toHaveAttribute(
+        'href',
+        '/students/id-ana',
+      );
+    });
+
+    it('does not link the name without students.read', async () => {
+      api({
+        ...admin,
+        permissions: admin.permissions.filter((key) => key !== 'students.read:any'),
+      });
+      renderAt(`/reports/students${PERIOD}`);
+      const table = await screen.findByRole('table');
+      expect(within(table).queryByRole('link', { name: 'Ana' })).not.toBeInTheDocument();
+      expect(within(table).getByText('Ana')).toBeInTheDocument();
+    });
+
+    it('says so when no row passes the filters', async () => {
+      api(admin);
+      renderAt(`/reports/students${PERIOD}&group=g2&repeated=1`);
+      expect(await screen.findByText('مفيش طلاب بالفلتر ده')).toBeInTheDocument();
+    });
   });
 });

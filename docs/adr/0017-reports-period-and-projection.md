@@ -51,3 +51,13 @@ The instructors report (US-40, `GET /reports/instructors`) reuses the same perio
 - **A session counts for the instructor on the session**, not the group's current one, so a former instructor keeps what they taught. Real time is only what the actual start and end say; held sessions without them are counted apart, never replaced by the planned length.
 - **Expected per instructor** is the same two parts as the finance report: the cycles that fell due in the passed part of the period (read from `due_at`) plus the completions of the projection, grouped by person. The projection (`finance-projection.ts`) now returns the payee's id on each completion; its logic and the finance totals are unchanged, so the instructors' expected figures add up to `expected.out` of the finance report for the same period.
 - The rows are built by a pure function (`instructor-stats.ts`), like the sessions statistics.
+
+## Note (2026-11-15): student statistics
+
+The students report (US-41, `GET /reports/students`) reuses the same period and permission, and the buckets of the sessions report (a local day up to 62 days, a local month above).
+
+- **Attendance rows** are those of held sessions scheduled in the period, each on the academy-local date of its session's `scheduled_at`. An attendance note is never loaded or returned: the repository selects no `note`.
+- **Absence streak:** the consecutive absent rows counted back from the student's latest attendance row (by `scheduled_at`), over all time and not limited to the period, because whether a child has missed three sessions in a row right now does not depend on which month is read. A present row resets it. `REPEATED_ABSENCE_THRESHOLD` (3) is a constant in `packages/shared`.
+- **Joined** is the first enrollment's `start_date` in the period; **left** is the latest enrollment's `end_date` in the period with no open enrollment. A student who came back is not "left".
+- **Rows:** every student with an open enrollment, plus any student with attendance in the period. The totals that add up rows (`repeatedAbsence`) count the listed rows; `joined` and `left` count every student.
+- The KPIs, buckets and rows are built by a pure function (`student-stats.ts`), like the sessions and instructors reports.

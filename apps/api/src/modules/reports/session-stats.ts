@@ -53,7 +53,7 @@ export function buildSessionStats(input: SessionStatsInput): SessionStats {
   const durations: number[] = [];
   for (const session of input.sessions) {
     const day = localDateOf(session.scheduledAt, zone);
-    const bucket = byKey.get(granularity === 'day' ? day : day.slice(0, 7));
+    const bucket = byKey.get(bucketKeyOf(day, granularity));
     if (!bucket) continue; // outside the period: the repository already clips, this is a guard
     if (session.status === 'held') {
       bucket.held += 1;
@@ -91,10 +91,14 @@ export function granularityOf(period: { from: string; to: string }): ReportGranu
   return days + 1 <= MAX_DAILY_BUCKET_DAYS ? 'day' : 'month';
 }
 
-function emptyBuckets(
+/**
+ * The keys of the buckets of a period, in order: every local day (YYYY-MM-DD) or every local month
+ * (YYYY-MM) from `from` to `to`, empty ones included. The sessions and the students reports share it.
+ */
+export function bucketKeys(
   period: { from: string; to: string },
   granularity: ReportGranularity,
-): SessionsBucket[] {
+): string[] {
   const keys: string[] = [];
   if (granularity === 'day') {
     for (let day = period.from; day <= period.to; day = addDays(day, 1)) keys.push(day);
@@ -110,7 +114,25 @@ function emptyBuckets(
       keys.push(month);
     }
   }
-  return keys.map((key) => ({ key, held: 0, cancelled: 0, unmarked: 0, upcoming: 0 }));
+  return keys;
+}
+
+/** The key of the bucket an academy-local date (YYYY-MM-DD) falls in. */
+export function bucketKeyOf(localDate: string, granularity: ReportGranularity): string {
+  return granularity === 'day' ? localDate : localDate.slice(0, 7);
+}
+
+function emptyBuckets(
+  period: { from: string; to: string },
+  granularity: ReportGranularity,
+): SessionsBucket[] {
+  return bucketKeys(period, granularity).map((key) => ({
+    key,
+    held: 0,
+    cancelled: 0,
+    unmarked: 0,
+    upcoming: 0,
+  }));
 }
 
 function sum(buckets: readonly SessionsBucket[], field: keyof Omit<SessionsBucket, 'key'>): number {

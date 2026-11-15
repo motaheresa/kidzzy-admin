@@ -786,3 +786,68 @@ export interface InstructorsReport {
   kpis: InstructorsReportKpis;
   rows: InstructorsReportRow[];
 }
+
+/** A student with this many absences in a row, counted back from their latest session, is a repeated absence. */
+export const REPEATED_ABSENCE_THRESHOLD = 3;
+
+/** The present and absent attendance rows of one local day or month (openapi.yaml: StudentsBucket). */
+export interface StudentsBucket {
+  /** YYYY-MM-DD for a day, YYYY-MM for a month */
+  key: string;
+  present: number;
+  absent: number;
+}
+
+/** The numbers of a students report (openapi.yaml: StudentsReportKpis). */
+export interface StudentsReportKpis {
+  /** Students with an open enrollment now. */
+  activeStudents: number;
+  /** Students whose first enrollment started in the period. */
+  joined: number;
+  /** Students whose latest enrollment ended in the period and who have no open enrollment. */
+  left: number;
+  /** Attendance rows of the held sessions scheduled in the period. */
+  present: number;
+  absent: number;
+  /** Present over present plus absent, percent with one decimal; null when there is none. */
+  attendanceRate: number | null;
+  /** Mean of the non-null performance ratings of those rows, one decimal; null when none. */
+  averagePerformance: number | null;
+  /** Mean of the non-null homework ratings of those rows (null means no homework), one decimal; null when none. */
+  averageHomework: number | null;
+  /** Listed students whose current absence streak is REPEATED_ABSENCE_THRESHOLD or more. */
+  repeatedAbsence: number;
+}
+
+/** One student of a students report (openapi.yaml: StudentsReportRow). Never carries an attendance note. */
+export interface StudentsReportRow {
+  studentId: string;
+  name: string;
+  isActive: boolean;
+  /** The group of their open enrollment; null when they have none. */
+  currentGroup: GroupRef | null;
+  present: number;
+  absent: number;
+  attendanceRate: number | null;
+  /** Consecutive absences counted back from the latest attendance row, over all time (not the period). */
+  absenceStreak: number;
+  /** ISO 8601, UTC: the latest session they attended, any time; null if never. */
+  lastPresentAt: string | null;
+  averagePerformance: number | null;
+  averageHomework: number | null;
+  /** The cycle in progress, else the latest Due one; null when they have neither. */
+  cycle: {
+    sessionsCounted: number;
+    sessionsPerCycle: number;
+    status: Extract<CycleStatus, 'in_progress' | 'due'>;
+  } | null;
+}
+
+/** GET /reports/students (openapi.yaml: StudentsReport). Admin only, every row, not paginated. */
+export interface StudentsReport {
+  period: ReportPeriod;
+  granularity: ReportGranularity;
+  kpis: StudentsReportKpis;
+  buckets: StudentsBucket[];
+  rows: StudentsReportRow[];
+}

@@ -2727,6 +2727,76 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /reports/students:
+    get:
+      tags:
+        - Reports
+      operationId: getStudentsReport
+      summary: Attendance statistics of the students in a period
+      description: >
+        Attendance, ratings, the absence streak and the cycle of every student, and nine totals, with the present
+        and absent counts per day or month (US-41). Admin only (reports.read, scope any): an instructor is 403 from
+        the guard. Another academy's rows are never counted. Not paginated: every row is returned, ordered by name.
+        An attendance note is never loaded or returned.
+
+
+        The period is the same as in GET /reports/finance: from and to, academy-local dates (YYYY-MM-DD), both
+        included, a missing end is the edge of the current local month, to before from is 400 and more than 366
+        days is 422 REPORT_PERIOD_TOO_LONG.
+
+
+        Attendance rows are those of held sessions scheduled in the period. A row belongs to the academy-local date
+        of its session's scheduled_at (so a 23:30 session in Cairo is on its own day). granularity is day when the
+        period is 62 days or less (one bucket per local day, empty ones included, key YYYY-MM-DD) and month above
+        that (one bucket per local month, key YYYY-MM).
+
+
+        kpis: activeStudents is the students with an open enrollment now. joined is the students whose first
+        enrollment started in the period. left is the students whose latest enrollment ended in the period and who
+        have no open enrollment. present and absent count the attendance rows of the period; attendanceRate is
+        present over both, percent with one decimal, null when there is none. averagePerformance and
+        averageHomework are the means of the non-null ratings of those rows, one decimal, null when none (a null
+        homework rating means there was no homework and is never counted; an absent student is never rated).
+        repeatedAbsence is the listed students whose absenceStreak is 3 or more.
+
+
+        Rows: every student with an open enrollment, plus any student with an attendance row in the period. A former
+        student without attendance in the period is not listed. absenceStreak is the number of consecutive absent
+        rows counted back from the student's latest attendance row (ordered by the session's scheduled_at), over all
+        time and not limited to the period; a present row resets it. lastPresentAt is the latest session they
+        attended, at any time, or null. cycle is the cycle in progress, or else the latest Due one, or null.
+      x-permission: reports.read
+      x-story: US-41
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the first day of the current local month.
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Academy-local date, included. Defaults to the last day of the current local month.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentsReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /reports/overview:
     get:
       tags:
@@ -4938,6 +5008,174 @@ components:
       required:
         - period
         - kpis
+        - rows
+    StudentsBucket:
+      type: object
+      properties:
+        key:
+          type: string
+          description: YYYY-MM-DD for a day bucket, YYYY-MM for a month bucket.
+        present:
+          type: integer
+        absent:
+          type: integer
+      additionalProperties: false
+      required:
+        - key
+        - present
+        - absent
+    StudentsReportKpis:
+      type: object
+      properties:
+        activeStudents:
+          type: integer
+        joined:
+          type: integer
+        left:
+          type: integer
+        present:
+          type: integer
+        absent:
+          type: integer
+        attendanceRate:
+          description: Percent with one decimal; null when there are no attendance rows in the period.
+          anyOf:
+            - type: number
+            - type: 'null'
+        averagePerformance:
+          description: One decimal; null when no row has a performance rating.
+          anyOf:
+            - type: number
+            - type: 'null'
+        averageHomework:
+          description: One decimal; null when no row has a homework rating (null means no homework).
+          anyOf:
+            - type: number
+            - type: 'null'
+        repeatedAbsence:
+          type: integer
+      additionalProperties: false
+      required:
+        - activeStudents
+        - joined
+        - left
+        - present
+        - absent
+        - attendanceRate
+        - averagePerformance
+        - averageHomework
+        - repeatedAbsence
+    StudentsReportRow:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        isActive:
+          type: boolean
+        currentGroup:
+          description: The group of the open enrollment; null when there is none.
+          anyOf:
+            - $ref: '#/components/schemas/GroupRef'
+            - type: 'null'
+        present:
+          type: integer
+        absent:
+          type: integer
+        attendanceRate:
+          anyOf:
+            - type: number
+            - type: 'null'
+        absenceStreak:
+          type: integer
+          description: Consecutive absences counted back from the latest attendance row, over all time.
+        lastPresentAt:
+          description: The latest session they attended, at any time; null if never.
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        averagePerformance:
+          anyOf:
+            - type: number
+            - type: 'null'
+        averageHomework:
+          anyOf:
+            - type: number
+            - type: 'null'
+        cycle:
+          description: The cycle in progress, else the latest Due one; null when there is neither.
+          anyOf:
+            - type: object
+              properties:
+                sessionsCounted:
+                  type: integer
+                sessionsPerCycle:
+                  type: integer
+                status:
+                  type: string
+                  enum:
+                    - in_progress
+                    - due
+              additionalProperties: false
+              required:
+                - sessionsCounted
+                - sessionsPerCycle
+                - status
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - studentId
+        - name
+        - isActive
+        - currentGroup
+        - present
+        - absent
+        - attendanceRate
+        - absenceStreak
+        - lastPresentAt
+        - averagePerformance
+        - averageHomework
+        - cycle
+    StudentsReport:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+          additionalProperties: false
+          required:
+            - from
+            - to
+        granularity:
+          type: string
+          enum:
+            - day
+            - month
+        kpis:
+          $ref: '#/components/schemas/StudentsReportKpis'
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentsBucket'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentsReportRow'
+      additionalProperties: false
+      required:
+        - period
+        - granularity
+        - kpis
+        - buckets
         - rows
     DashboardHeldSession:
       type: object

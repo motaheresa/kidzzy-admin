@@ -4,6 +4,7 @@ import type {
   InstructorsReport,
   OverviewReport,
   SessionsReport,
+  StudentsReport,
 } from '@kidzzy/shared';
 import { RequirePermission } from '../auth/access.decorators';
 import { ReportPeriodQueryDto } from './dto/report-period.query';
@@ -30,6 +31,12 @@ export class ReportsController {
   @Get('instructors')
   instructors(@Query() query: ReportPeriodQueryDto): Promise<InstructorsReport> {
     return this.reports.instructors(query);
+  }
+
+  @RequirePermission('reports.read')
+  @Get('students')
+  students(@Query() query: ReportPeriodQueryDto): Promise<StudentsReport> {
+    return this.reports.students(query);
   }
 
   @RequirePermission('reports.read')
