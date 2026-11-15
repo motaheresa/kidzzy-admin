@@ -7,6 +7,7 @@ import {
   getInstructorsReport,
   getOverviewReport,
   getSessionsReport,
+  getStudentsReport,
 } from '../api/reports.api';
 import { reportKeys } from '../api/reports.keys';
 import {
@@ -80,6 +81,17 @@ export function useInstructorsReport(period: Period, enabled = true) {
   return useApiQuery({
     queryKey: reportKeys.instructors(period),
     queryFn: ({ signal }) => getInstructorsReport(period, signal),
+    placeholderData: (previous) => previous,
+    enabled,
+    meta: { errorHandling: 'local' },
+  });
+}
+
+/** The attendance statistics of the students in a period. The screen shows its own error. `enabled` skips a bad range. */
+export function useStudentsReport(period: Period, enabled = true) {
+  return useApiQuery({
+    queryKey: reportKeys.students(period),
+    queryFn: ({ signal }) => getStudentsReport(period, signal),
     placeholderData: (previous) => previous,
     enabled,
     meta: { errorHandling: 'local' },

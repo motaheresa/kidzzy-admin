@@ -2,6 +2,7 @@ import {
   ArrowRightIcon,
   BanknoteIcon,
   CalendarCheckIcon,
+  GraduationCapIcon,
   LayoutDashboardIcon,
   PresentationIcon,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ const REPORT_PAGES: Omit<SectionNavItem, 'search'>[] = [
   { to: '/reports/finance', label: 'الفلوس', icon: BanknoteIcon },
   { to: '/reports/sessions', label: 'الحصص', icon: CalendarCheckIcon },
   { to: '/reports/instructors', label: 'المدرسين', icon: PresentationIcon },
+  { to: '/reports/students', label: 'الطلاب', icon: GraduationCapIcon },
 ];
 
 /**

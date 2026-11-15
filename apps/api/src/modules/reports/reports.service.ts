@@ -5,6 +5,7 @@ import type {
   InstructorsReport,
   OverviewReport,
   SessionsReport,
+  StudentsReport,
 } from '@kidzzy/shared';
 import { AcademyRepository } from '../academies/academy.repository';
 import { subtractMoney, sumMoney, toMoney, toMoneyOrZero } from '../prisma/money';
@@ -24,6 +25,7 @@ import {
 import { ReportsRepository } from './reports.repository';
 import { buildInstructorStats } from './instructor-stats';
 import { buildSessionStats } from './session-stats';
+import { buildStudentStats } from './student-stats';
 
 /**
  * The reports of the admin (US-38). Money is a decimal string end to end: Decimal sums in the
@@ -99,6 +101,44 @@ export class ReportsService {
       attendance,
       period: { from: period.from, to: period.to },
       now,
+      zone,
+    });
+    return { period: { from: period.from, to: period.to }, ...stats };
+  }
+
+  /**
+   * The statistics of the students in the period (US-41). Who is listed is decided by the pure
+   * buildStudentStats; here only the loading is ordered: the enrollments and the students with
+   * attendance in the period first, then, for those students only, their details, their whole
+   * attendance (the streak looks back beyond the period) and their cycles.
+   */
+  async students(query: { from?: string; to?: string }): Promise<StudentsReport> {
+    const zone = await this.academies.findTimezone();
+    const now = this.clock.now();
+    const period = resolvePeriod(query, localDateOf(now, zone), zone);
+
+    const [enrollments, withAttendance] = await Promise.all([
+      this.reports.listEnrollments(),
+      this.reports.listStudentIdsWithAttendance(period.start, period.end),
+    ]);
+    const ids = [
+      ...new Set([
+        ...enrollments.filter((e) => e.endDate === null).map((e) => e.studentId),
+        ...withAttendance,
+      ]),
+    ];
+    const [students, attendance, cycles] = await Promise.all([
+      this.reports.listStudentsByIds(ids),
+      this.reports.listAttendanceHistory(ids),
+      this.reports.listStudentCycles(ids),
+    ]);
+
+    const stats = buildStudentStats({
+      students,
+      enrollments,
+      attendance,
+      cycles,
+      period: { from: period.from, to: period.to },
       zone,
     });
     return { period: { from: period.from, to: period.to }, ...stats };

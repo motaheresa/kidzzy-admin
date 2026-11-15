@@ -6,6 +6,7 @@ import type { TenantTransactionalAdapter } from '../prisma/transaction';
 import { stringToDate } from '../sessions/dates';
 import type { InstructorSession, StatInstructor } from './instructor-stats';
 import type { StatSession } from './session-stats';
+import type { StatAttendance, StatCycle, StatEnrollment, StatStudent } from './student-stats';
 
 /** What a student contributes to the projection and to the overview. */
 const STUDENT_SELECT = {
@@ -211,6 +212,92 @@ export class ReportsRepository {
       where: { scheduledAt: { gte: start, lt: end } },
       select: { status: true, scheduledAt: true, actualStartedAt: true, actualEndedAt: true },
     });
+  }
+
+  /** Every enrollment of every student, with the group; dates are academy-local (YYYY-MM-DD). */
+  async listEnrollments(): Promise<StatEnrollment[]> {
+    const rows = await this.txHost.tx.enrollment.findMany({
+      select: {
+        studentId: true,
+        startDate: true,
+        endDate: true,
+        group: { select: { id: true, name: true } },
+      },
+    });
+    return rows.map((row) => ({
+      studentId: row.studentId,
+      startDate: row.startDate.toISOString().slice(0, 10),
+      endDate: row.endDate ? row.endDate.toISOString().slice(0, 10) : null,
+      group: row.group,
+    }));
+  }
+
+  /** The students with an attendance row in a held session scheduled in [start, end). */
+  async listStudentIdsWithAttendance(start: Date, end: Date): Promise<string[]> {
+    const rows = await this.txHost.tx.attendance.findMany({
+      where: { session: { status: 'held', scheduledAt: { gte: start, lt: end } } },
+      distinct: ['studentId'],
+      select: { studentId: true },
+    });
+    return rows.map((row) => row.studentId);
+  }
+
+  /** The students with these ids: only what the report shows (never the parent's phone or notes). */
+  listStudentsByIds(ids: readonly string[]): Promise<StatStudent[]> {
+    return this.txHost.tx.student.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, name: true, isActive: true },
+    });
+  }
+
+  /**
+   * Every attendance row of these students in held sessions, over all time (the absence streak and
+   * the last present session look back beyond the period). The select has no `note`: a note is
+   * about a child and never goes into a report.
+   */
+  async listAttendanceHistory(ids: readonly string[]): Promise<StatAttendance[]> {
+    const rows = await this.txHost.tx.attendance.findMany({
+      where: { studentId: { in: [...ids] }, session: { status: 'held' } },
+      select: {
+        studentId: true,
+        sessionId: true,
+        status: true,
+        performanceRating: true,
+        homeworkRating: true,
+        session: { select: { scheduledAt: true } },
+      },
+    });
+    return rows.map((row) => ({
+      studentId: row.studentId,
+      sessionId: row.sessionId,
+      scheduledAt: row.session.scheduledAt,
+      status: row.status,
+      performanceRating: row.performanceRating,
+      homeworkRating: row.homeworkRating,
+    }));
+  }
+
+  /** The cycles of these students that are in progress or Due. */
+  async listStudentCycles(ids: readonly string[]): Promise<StatCycle[]> {
+    const rows = await this.txHost.tx.paymentCycle.findMany({
+      where: {
+        payeeType: 'student',
+        studentId: { in: [...ids] },
+        status: { in: ['in_progress', 'due'] },
+      },
+      select: {
+        studentId: true,
+        status: true,
+        sessionsCounted: true,
+        sessionsPerCycle: true,
+        cycleNumber: true,
+      },
+    });
+    return rows.flatMap((row) =>
+      row.studentId && (row.status === 'in_progress' || row.status === 'due')
+        ? [{ ...row, studentId: row.studentId, status: row.status }]
+        : [],
+    );
   }
 
   /** Every instructor of the academy (users holding the Instructor role), active or not, by name. */

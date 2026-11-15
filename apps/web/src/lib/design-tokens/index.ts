@@ -58,4 +58,6 @@ export const UI_PAIRS: readonly (readonly [string, string])[] = [
   ['chart-cancelled', 'surface'],
   ['chart-unmarked', 'surface'],
   ['chart-upcoming', 'surface'],
+  ['chart-present', 'surface'],
+  ['chart-absent', 'surface'],
 ];

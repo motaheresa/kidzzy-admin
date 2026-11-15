@@ -1,5 +1,5 @@
-import type { SortDirection } from '@/components/ui';
 import type { InstructorsReportRow } from '../types';
+import { createSort, type SortState as BaseSortState } from './sort';
 
 /** The columns of the instructors table that can be sorted. */
 export const SORT_COLUMNS = [
@@ -14,43 +14,22 @@ export const SORT_COLUMNS = [
   'expected',
 ] as const;
 export type SortColumn = (typeof SORT_COLUMNS)[number];
-
-export interface SortState {
-  column: SortColumn;
-  direction: SortDirection;
-}
+export type SortState = BaseSortState<SortColumn>;
 
 /** Most held sessions first. */
 export const DEFAULT_SORT: SortState = { column: 'held', direction: 'desc' };
 
+// A column opens in the direction people want first: names A to Z, numbers highest first.
+const sort = createSort(SORT_COLUMNS, DEFAULT_SORT, (column) =>
+  column === 'name' ? 'asc' : 'desc',
+);
+
 /** The URL form, "held:desc". The default is not written to the URL. */
-export function formatSort(state: SortState): string | null {
-  if (state.column === DEFAULT_SORT.column && state.direction === DEFAULT_SORT.direction) {
-    return null;
-  }
-  return `${state.column}:${state.direction}`;
-}
-
+export const formatSort = sort.format;
 /** Reads ?sort=; anything that is not a known column and direction is the default. */
-export function parseSort(raw: string | null): SortState {
-  const [column, direction] = (raw ?? '').split(':');
-  const known = SORT_COLUMNS.find((candidate) => candidate === column);
-  if (!known || (direction !== 'asc' && direction !== 'desc')) return DEFAULT_SORT;
-  return { column: known, direction };
-}
-
-/** A column opens in the direction people want first: names A to Z, numbers highest first. */
-function firstDirection(column: SortColumn): SortDirection {
-  return column === 'name' ? 'asc' : 'desc';
-}
-
+export const parseSort = sort.parse;
 /** Pressing the sorted column flips it; pressing another one starts it in its first direction. */
-export function nextSort(current: SortState, column: SortColumn): SortState {
-  if (current.column === column) {
-    return { column, direction: current.direction === 'asc' ? 'desc' : 'asc' };
-  }
-  return { column, direction: firstDirection(column) };
-}
+export const nextSort = sort.next;
 
 /**
  * Money is a decimal string ("1500.00", "-0.50") and is compared exactly, as whole piasters, never

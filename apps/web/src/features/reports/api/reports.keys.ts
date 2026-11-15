@@ -6,6 +6,8 @@ export const reportKeys = {
     [...reportKeys.all, 'finance', period.from, period.to] as const,
   instructors: (period: { from: string; to: string }) =>
     [...reportKeys.all, 'instructors', period.from, period.to] as const,
+  students: (period: { from: string; to: string }) =>
+    [...reportKeys.all, 'students', period.from, period.to] as const,
   sessions: (period: { from: string; to: string }) =>
     [...reportKeys.all, 'sessions', period.from, period.to] as const,
 };
