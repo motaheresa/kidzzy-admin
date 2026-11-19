@@ -22,6 +22,7 @@ const admin: Me = {
     'students.read:any',
   ],
   mustChangePassword: false,
+  pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
 const instructorUser: Me = {

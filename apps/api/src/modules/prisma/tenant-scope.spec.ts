@@ -26,6 +26,7 @@ describe('TENANT_MODELS', () => {
       'SessionReminder',
       'SessionReport',
       'Student',
+      'StudentEvaluation',
       'User',
     ]);
   });

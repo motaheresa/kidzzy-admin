@@ -2,6 +2,8 @@
 export {
   CHANGE_PASSWORD_PATH,
   changePasswordPathFor,
+  EVALUATION_PATH,
+  evaluationPathFor,
   HOME_PATH,
   LOGIN_PATH,
   loginPathFor,

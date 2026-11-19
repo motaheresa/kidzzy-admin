@@ -18,6 +18,8 @@ export interface AuthenticatedRequest extends Request {
     permissions: string[];
     /** A temporary password must be replaced first (US-02); see PermissionsGuard. */
     mustChangePassword: boolean;
+    /** An evaluation must be written first (US-42); see PermissionsGuard. */
+    pendingEvaluation: boolean;
   };
 }
 
@@ -64,6 +66,7 @@ export class JwtAuthGuard implements CanActivate {
       sessionId: payload.sid,
       permissions: payload.perms,
       mustChangePassword: payload.mustChangePassword,
+      pendingEvaluation: payload.pendingEvaluation,
     };
     return true;
   }

@@ -1,6 +1,7 @@
 import {
   BarChart3Icon,
   BellRingIcon,
+  ClipboardCheckIcon,
   GraduationCapIcon,
   HistoryIcon,
   HouseIcon,
@@ -42,6 +43,13 @@ const NAV_ITEMS: SectionNavItem[] = [
     label: 'قواعد التذكير',
     icon: BellRingIcon,
     permission: 'reminders.manage',
+    scope: 'any',
+  },
+  {
+    to: '/settings/evaluations',
+    label: 'التقييمات',
+    icon: ClipboardCheckIcon,
+    permission: 'evaluations.manage',
     scope: 'any',
   },
 ];

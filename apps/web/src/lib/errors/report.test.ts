@@ -34,4 +34,9 @@ describe('reportError', () => {
     reportError(error);
     expect(toast.error).not.toHaveBeenCalled();
   });
+
+  it('never toasts EVALUATION_REQUIRED: the app opens the evaluation screen instead', () => {
+    reportError(fromResponse(403, { status: 403, code: ErrorCode.EvaluationRequired }));
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 });

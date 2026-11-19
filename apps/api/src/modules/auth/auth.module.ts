@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { Clock } from '../sessions/clock';
+import { EvaluationsDataModule } from '../evaluations/evaluations-data.module';
 import { UsersModule } from '../users/users.module';
 import { AccessContext } from './access-context';
 import { ACCESS_TOKEN_TTL_SECONDS } from './auth.config';
@@ -22,6 +23,7 @@ import { RefreshTokenRepository } from './refresh-token.repository';
 @Module({
   imports: [
     UsersModule,
+    EvaluationsDataModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

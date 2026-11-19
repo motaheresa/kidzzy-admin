@@ -68,6 +68,16 @@ function needsRefresh(error: unknown, path: string): boolean {
 }
 
 /** POST /auth/refresh: the browser sends the refresh cookie, which is scoped to that path. */
+/**
+ * Refreshes the session now (POST /auth/refresh, single-flight with the automatic one), so the
+ * access token carries the current claims at once: after the last evaluation is written, or after a
+ * Held that asked for one (US-42). True when it worked; false when the session has expired (the
+ * session-expired signal then fires, like for any refresh).
+ */
+export async function refreshSession(): Promise<boolean> {
+  return (await refreshOnce(sendRefresh)) === 'refreshed';
+}
+
 async function sendRefresh(): Promise<RefreshOutcome> {
   try {
     await attempt<void>('POST', '/auth/refresh', {});

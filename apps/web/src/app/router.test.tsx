@@ -14,6 +14,7 @@ const me = {
   roles: ['Admin'],
   permissions: [],
   mustChangePassword: false,
+  pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
 const json = (status: number, body: unknown) =>

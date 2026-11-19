@@ -33,6 +33,7 @@ const admin: Me = {
     'groups.read:any',
   ],
   mustChangePassword: false,
+  pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
 const instructorUser: Me = {

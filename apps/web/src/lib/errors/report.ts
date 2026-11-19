@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { ErrorCode } from '@kidzzy/shared';
 import type { ErrorKind } from './app-error';
 import { normalizeError } from './normalize';
 
@@ -8,6 +9,12 @@ import { normalizeError } from './normalize';
  * - validation: it belongs next to the form fields, so the screen shows it itself
  */
 const SILENT_KINDS: ReadonlySet<ErrorKind> = new Set(['unauthenticated', 'validation']);
+
+/**
+ * Codes the global reporter never toasts: EVALUATION_REQUIRED, because the app opens the
+ * evaluation screen instead (US-42), and a toast on every refused request would only be noise.
+ */
+const SILENT_CODES: ReadonlySet<string> = new Set([ErrorCode.EvaluationRequired]);
 
 /** A request the caller cancelled (left the screen, newer query): not an error to report. */
 export function isCancellation(error: unknown): boolean {
@@ -23,5 +30,6 @@ export function reportError(error: unknown): void {
   if (isCancellation(error)) return;
   const appError = normalizeError(error);
   if (SILENT_KINDS.has(appError.kind)) return;
+  if (appError.code && SILENT_CODES.has(appError.code)) return;
   toast.error(appError.message, { id: appError.message });
 }

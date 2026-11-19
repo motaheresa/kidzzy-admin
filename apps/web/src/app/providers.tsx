@@ -32,7 +32,12 @@ export function AppProviders({
 
   useEffect(() => {
     const onError = (error: unknown) => {
-      if (isAppError(error) && error.code === ErrorCode.PasswordChangeRequired) {
+      // A gate the token says is closed: refetch the user, whose fields open the right screen.
+      if (
+        isAppError(error) &&
+        (error.code === ErrorCode.PasswordChangeRequired ||
+          error.code === ErrorCode.EvaluationRequired)
+      ) {
         void queryClient.invalidateQueries({ queryKey: authKeys.me() });
       }
     };

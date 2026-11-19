@@ -45,6 +45,8 @@ tags:
     description: Dashboard and audit log (E8)
   - name: Reports
     description: Reports workspace and finance report (E8)
+  - name: Evaluations
+    description: Required student evaluations and the academy settings (US-42)
 paths:
   /auth/login:
     post:
@@ -121,6 +123,10 @@ paths:
       tags:
         - Auth
       summary: Current user, roles and permissions
+      description: >
+        Works while a temporary password must be changed and while an evaluation must be written. pendingEvaluations
+        is read from the database on every call (the requests that block the user now), so the web can open the
+        evaluation screen without waiting for the access token to be refreshed.
       operationId: getMe
       x-permission: signed in
       x-story: US-03
@@ -139,7 +145,8 @@ paths:
         - Auth
       summary: Change own password
       description:
-        Works while a temporary password must be changed (it is one of the three routes allowed then). On success the
+        Works while a temporary password must be changed and while an evaluation must be written (it is one of the
+        routes allowed then). On success the
         password is replaced, mustChangePassword becomes false, every other session of the user ends, and this device
         gets new auth cookies (a new session). At most 5 attempts a minute per user.
       operationId: changePassword
@@ -2797,6 +2804,261 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /students/{id}/evaluation-requests:
+    post:
+      tags:
+        - Evaluations
+      summary: Ask for an evaluation of a student now
+      description: >
+        The admin asks the instructor of the group of the student's open enrollment for an evaluation (source admin),
+        whatever the academy setting. It blocks that instructor until it is written. 409 EVALUATION_PENDING when the
+        student already has a pending request; 422 NO_ACTIVE_ENROLLMENT when the student has no open enrollment.
+        The instructor gets an in-app notification and a web push naming the student, never any text.
+      operationId: requestStudentEvaluation
+      x-permission: evaluations.manage
+      x-story: US-42
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /students/{id}/evaluations:
+    get:
+      tags:
+        - Evaluations
+      summary: The student's written evaluations
+      description: Submitted evaluations of the student, newest first. Unknown or another academy's student is 404.
+      operationId: listStudentEvaluations
+      x-permission: evaluations.read
+      x-story: US-42
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentEvaluation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /evaluation-requests:
+    get:
+      tags:
+        - Evaluations
+      summary: The academy's pending evaluation requests
+      description: Every pending request, newest first (the admin's settings screen). Only status=pending is listed.
+      operationId: listEvaluationRequests
+      x-permission: evaluations.manage
+      x-story: US-42
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EvaluationRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /evaluation-requests/{id}/cancel:
+    post:
+      tags:
+        - Evaluations
+      summary: Cancel a pending evaluation request
+      description: Only a pending request can be cancelled; otherwise 409 EVALUATION_NOT_PENDING. Audited (ids and status).
+      operationId: cancelEvaluationRequest
+      x-permission: evaluations.manage
+      x-story: US-42
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /evaluation-requests/{id}/submit:
+    post:
+      tags:
+        - Evaluations
+      summary: Write a pending evaluation
+      description: >
+        Only the instructor the request is addressed to (403 otherwise), only while it is pending (409
+        EVALUATION_NOT_PENDING). Works while an evaluation must be written. After the last one, the web refreshes the
+        session so the new access token drops pendingEvaluation. The text is never copied into a notification or an
+        audit row; the audit row has ids and status only.
+      operationId: submitEvaluation
+      x-permission: evaluations.write
+      x-story: US-42
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitEvaluationRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentEvaluation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/evaluation-requests:
+    get:
+      tags:
+        - Evaluations
+      summary: The evaluations I must write
+      description: >
+        The requests addressed to the caller that block them now, oldest first, with the student, the group and the
+        number of the cycle that became Due (null for a request by the admin).
+
+
+        The evaluation gate (ADR-0013 amendment, SCRUM-87): the access token carries pendingEvaluation, written at
+        login and at every refresh. While it is true, every non-public route answers 403 EVALUATION_REQUIRED except
+        GET /auth/me, POST /auth/change-password, GET /me/evaluation-requests and POST
+        /evaluation-requests/{id}/submit. The password gate is checked first.
+      operationId: listMyEvaluationRequests
+      x-permission: evaluations.write
+      x-story: US-42
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EvaluationRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /me/evaluations:
+    get:
+      tags:
+        - Evaluations
+      summary: The evaluations I wrote
+      description: Submitted evaluations written by the caller, newest first.
+      operationId: listMyEvaluations
+      x-permission: evaluations.write
+      x-story: US-42
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentEvaluation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /academy/settings:
+    get:
+      tags:
+        - Evaluations
+      summary: The academy's settings
+      operationId: getAcademySettings
+      x-permission: evaluations.manage
+      x-story: US-42
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademySettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags:
+        - Evaluations
+      summary: Change the academy's settings
+      description: >
+        evaluationsRequired on: a student cycle becoming Due asks the instructor on the Held session for an evaluation
+        that blocks them until it is written. Off (the default): cycle_due requests stay pending but no longer block; a
+        request by the admin blocks whatever the setting. Audited (before and after).
+      operationId: updateAcademySettings
+      x-permission: evaluations.manage
+      x-story: US-42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcademySettings'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademySettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /reports/overview:
     get:
       tags:
@@ -2993,8 +3255,8 @@ components:
             $ref: '#/components/schemas/Problem'
     Forbidden:
       description:
-        Missing permission or not the user's own record (FORBIDDEN), or a temporary password must be changed first
-        (PASSWORD_CHANGE_REQUIRED)
+        Missing permission or not the user's own record (FORBIDDEN), a temporary password must be changed first
+        (PASSWORD_CHANGE_REQUIRED), or an evaluation must be written first (EVALUATION_REQUIRED)
       content:
         application/problem+json:
           schema:
@@ -3060,7 +3322,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     PasswordChangeRequired:
-      description: A temporary password must be changed first (PASSWORD_CHANGE_REQUIRED)
+      description:
+        A temporary password must be changed first (PASSWORD_CHANGE_REQUIRED), or an evaluation must be written first
+        (EVALUATION_REQUIRED)
       content:
         application/problem+json:
           schema:
@@ -3215,6 +3479,13 @@ components:
             example: sessions.update:own
         mustChangePassword:
           type: boolean
+        pendingEvaluations:
+          type: integer
+          minimum: 0
+          description: >
+            How many evaluations the user must write before using the app (US-42): pending requests addressed to them
+            that block (from the admin always, from a Due cycle while the academy setting evaluationsRequired is on).
+            Login and every refresh put pendingEvaluation (this count above zero) into the access token.
         academy:
           type: object
           properties:
@@ -3238,6 +3509,7 @@ components:
         - roles
         - permissions
         - mustChangePassword
+        - pendingEvaluations
         - academy
     Instructor:
       type: object
@@ -5177,6 +5449,135 @@ components:
         - kpis
         - buckets
         - rows
+    EvaluationRequest:
+      type: object
+      description: A pending (or cancelled) request for an evaluation. It never carries any text.
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum:
+            - cycle_due
+            - admin
+        status:
+          type: string
+          enum:
+            - pending
+            - submitted
+            - cancelled
+        student:
+          $ref: '#/components/schemas/GroupRef'
+        group:
+          $ref: '#/components/schemas/GroupRef'
+        instructor:
+          $ref: '#/components/schemas/GroupRef'
+        cycleNumber:
+          description: The number of the cycle that became Due; null for a request by the admin.
+          anyOf:
+            - type: integer
+            - type: 'null'
+        requestedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+      required:
+        - id
+        - source
+        - status
+        - student
+        - group
+        - instructor
+        - cycleNumber
+        - requestedAt
+    StudentEvaluation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum:
+            - cycle_due
+            - admin
+        student:
+          $ref: '#/components/schemas/GroupRef'
+        group:
+          $ref: '#/components/schemas/GroupRef'
+        instructor:
+          $ref: '#/components/schemas/GroupRef'
+        cycleNumber:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        overallRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        summary:
+          type: string
+        strengths:
+          anyOf:
+            - type: string
+            - type: 'null'
+        toImprove:
+          anyOf:
+            - type: string
+            - type: 'null'
+        submittedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+      required:
+        - id
+        - source
+        - student
+        - group
+        - instructor
+        - cycleNumber
+        - overallRating
+        - summary
+        - strengths
+        - toImprove
+        - submittedAt
+    SubmitEvaluationRequest:
+      type: object
+      properties:
+        overallRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        summary:
+          type: string
+          minLength: 20
+          maxLength: 2000
+          description: Trimmed before the length is checked.
+        strengths:
+          description: Optional; blank is stored as null.
+          anyOf:
+            - type: string
+              maxLength: 2000
+            - type: 'null'
+        toImprove:
+          description: Optional; blank is stored as null.
+          anyOf:
+            - type: string
+              maxLength: 2000
+            - type: 'null'
+      additionalProperties: false
+      required:
+        - overallRating
+        - summary
+    AcademySettings:
+      type: object
+      properties:
+        evaluationsRequired:
+          type: boolean
+      additionalProperties: false
+      required:
+        - evaluationsRequired
     DashboardHeldSession:
       type: object
       properties:

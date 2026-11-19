@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import {
   accessDeclarationsOf,
+  isAllowedDuringEvaluation,
   isAllowedDuringPasswordChange,
 } from '../src/modules/auth/access.decorators';
 
@@ -45,6 +46,7 @@ describe('Route access declarations (e2e)', () => {
             route: `${RequestMethod[method]} /${segments.join('/')}`,
             declarations: accessDeclarationsOf(handler, controller),
             allowedDuringPasswordChange: isAllowedDuringPasswordChange(handler),
+            allowedDuringEvaluation: isAllowedDuringEvaluation(handler),
           },
         ];
       });
@@ -74,5 +76,20 @@ describe('Route access declarations (e2e)', () => {
       .sort();
     // POST /auth/logout is @Public() (SCRUM-54), so it never waits on a password change.
     expect(allowed).toEqual(['GET /auth/me', 'POST /auth/change-password']);
+  });
+
+  it('only these routes work while an evaluation must be written (US-42)', () => {
+    // Adding @AllowedDuringEvaluation() to any other route fails here, by name: an instructor with
+    // a pending evaluation writes it before reaching anything else. Public routes never wait.
+    const allowed = routes()
+      .filter((r) => r.allowedDuringEvaluation)
+      .map((r) => r.route)
+      .sort();
+    expect(allowed).toEqual([
+      'GET /auth/me',
+      'GET /me/evaluation-requests',
+      'POST /auth/change-password',
+      'POST /evaluation-requests/:id/submit',
+    ]);
   });
 });

@@ -20,7 +20,7 @@ const user: UserWithAccess = {
 
 describe('toMe', () => {
   it('sorts roles and permissions, and lists a permission granted twice once', () => {
-    const me = toMe(user);
+    const me = toMe(user, 0);
     expect(me.roles).toEqual(['Admin', 'Instructor']);
     expect(me.permissions).toEqual(['materials.read:any', 'sessions.read:own']);
   });
@@ -31,7 +31,7 @@ describe('toMe', () => {
       passwordHash: 'secret',
       academy: { ...user.academy, createdAt: new Date() },
     };
-    const me = toMe(row); // extra columns on the row must not reach the response
+    const me = toMe(row, 0); // extra columns on the row must not reach the response
     expect(Object.keys(me).sort()).toEqual(
       [
         'academy',
@@ -39,11 +39,17 @@ describe('toMe', () => {
         'id',
         'mustChangePassword',
         'name',
+        'pendingEvaluations',
         'permissions',
         'phone',
         'roles',
       ].sort(),
     );
     expect(Object.keys(me.academy).sort()).toEqual(['id', 'name', 'timezone']);
+  });
+
+  it('carries the count of blocking evaluations as it is given', () => {
+    expect(toMe(user, 0).pendingEvaluations).toBe(0);
+    expect(toMe(user, 2).pendingEvaluations).toBe(2);
   });
 });

@@ -6,6 +6,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AppException } from '../../common/errors/app.exception';
 import { Clock } from '../sessions/clock';
 import { TenantContext } from '../tenancy/tenant-context';
+import { EvaluationRepository } from '../evaluations/evaluation.repository';
 import { UserRepository } from '../users/user.repository';
 import {
   isAccessTokenPayload,
@@ -39,6 +40,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly passwords: PasswordService,
     private readonly clock: Clock,
+    private readonly evaluations: EvaluationRepository,
   ) {}
 
   /**
@@ -239,18 +241,20 @@ export class AuthService {
   /**
    * The signed-in user with roles and permission keys; runs in the user's tenant context.
    * A user deactivated after logging in gets 401 UNAUTHENTICATED, never a stale Me.
+   * pendingEvaluations is read from the database every time (US-42): login and refresh turn it
+   * into the token's pendingEvaluation claim, and /auth/me lets the web gate at once.
    */
   async loadMe(userId: string): Promise<Me> {
     const user = await this.users.findActiveWithAccess(userId);
     if (!user) throw unauthenticated();
-    return toMe(user);
+    return toMe(user, await this.evaluations.countBlocking(userId));
   }
 
   private async issueTokens(
     userId: string,
     academyId: string,
     sessionId: string,
-    access: Pick<Me, 'permissions' | 'mustChangePassword'>,
+    access: Pick<Me, 'permissions' | 'mustChangePassword' | 'pendingEvaluations'>,
     sessionExpiresAt: Date | undefined,
   ): Promise<IssuedTokens> {
     const payload: AccessTokenPayload = {
@@ -259,6 +263,7 @@ export class AuthService {
       sid: sessionId,
       perms: access.permissions,
       mustChangePassword: access.mustChangePassword,
+      pendingEvaluation: access.pendingEvaluations > 0,
     };
     const accessToken = await this.jwt.signAsync(payload);
 

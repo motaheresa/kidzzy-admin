@@ -3,7 +3,13 @@ import type { Me } from '@kidzzy/shared';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { Button, FullScreenMessage } from '@/components/ui';
 import { useSession } from '@/features/auth';
-import { CHANGE_PASSWORD_PATH, changePasswordPathFor, loginPathFor } from '@/lib/routing';
+import {
+  CHANGE_PASSWORD_PATH,
+  changePasswordPathFor,
+  EVALUATION_PATH,
+  evaluationPathFor,
+  loginPathFor,
+} from '@/lib/routing';
 
 /**
  * The check every signed-in screen needs, whatever frame it is shown in (the app shell or the
@@ -26,6 +32,15 @@ export function SessionGate({ children }: { children: (me: Me) => ReactNode }) {
   if (session.data) {
     if (session.data.mustChangePassword && location.pathname !== CHANGE_PASSWORD_PATH) {
       return <Navigate to={changePasswordPathFor(location)} replace />;
+    }
+    // An evaluation to write comes next (US-42). /auth/me counts it from the database, so the
+    // screen opens at once, without waiting for the access token to be refreshed.
+    if (
+      !session.data.mustChangePassword &&
+      session.data.pendingEvaluations > 0 &&
+      location.pathname !== EVALUATION_PATH
+    ) {
+      return <Navigate to={evaluationPathFor(location)} replace />;
     }
     return <>{children(session.data)}</>;
   }

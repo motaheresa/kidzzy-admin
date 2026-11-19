@@ -3,7 +3,7 @@ import type { PermissionAction } from '@kidzzy/shared';
 
 // Every route declares EXACTLY ONE access rule (fail closed, CLAUDE.md "Authorization"):
 //   @Public()                      anyone, no login (login, refresh, health)
-//   @SignedIn()                    any signed-in user (/auth/me, /auth/logout)
+//   @SignedIn()                    any signed-in user (/auth/me, /auth/change-password)
 //   @RequirePermission('x.y')      a signed-in user holding x.y:any or x.y:own
 // PermissionsGuard refuses a route that declares none or several, and
 // test/route-declarations.e2e-spec.ts fails CI before such a route ships.
@@ -28,7 +28,7 @@ export const ALLOWED_DURING_PASSWORD_CHANGE_KEY = 'access:allowedDuringPasswordC
 
 /**
  * A signed-in route that still works while the user must replace a temporary password (US-02):
- * only /auth/me, /auth/logout and /auth/change-password. Every other non-public route answers
+ * only /auth/me and /auth/change-password (logout is @Public()). Every other non-public route answers
  * 403 PASSWORD_CHANGE_REQUIRED until the password is changed. It is not an access rule: the
  * route still declares exactly one of the three above. test/route-declarations.e2e-spec.ts pins
  * the list, so adding it to another route fails CI by name.
@@ -39,6 +39,21 @@ export const AllowedDuringPasswordChange = () =>
 /** True when the handler is marked @AllowedDuringPasswordChange() (never the class). */
 export function isAllowedDuringPasswordChange(handler: DecoratedTarget): boolean {
   return Reflect.getMetadata(ALLOWED_DURING_PASSWORD_CHANGE_KEY, handler) === true;
+}
+
+export const ALLOWED_DURING_EVALUATION_KEY = 'access:allowedDuringEvaluation';
+
+/**
+ * A signed-in route that still works while the user has an evaluation to write (US-42): /auth/me,
+ * /auth/change-password and the two evaluation routes (list mine, submit). Every other non-public
+ * route answers 403 EVALUATION_REQUIRED until it is written. Like the password one, it is not an
+ * access rule, and test/route-declarations.e2e-spec.ts pins the list by name.
+ */
+export const AllowedDuringEvaluation = () => SetMetadata(ALLOWED_DURING_EVALUATION_KEY, true);
+
+/** True when the handler is marked @AllowedDuringEvaluation() (never the class). */
+export function isAllowedDuringEvaluation(handler: DecoratedTarget): boolean {
+  return Reflect.getMetadata(ALLOWED_DURING_EVALUATION_KEY, handler) === true;
 }
 
 export type AccessDeclaration =

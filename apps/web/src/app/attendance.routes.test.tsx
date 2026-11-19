@@ -23,6 +23,7 @@ const admin: Me = {
   roles: ['Admin'],
   permissions: ['attendance.read:any', 'sessions.read:any', 'groups.read:any', 'students.read:any'],
   mustChangePassword: false,
+  pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
 const noAttendance: Me = { ...admin, permissions: ['groups.read:any', 'students.read:any'] };

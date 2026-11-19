@@ -29,6 +29,9 @@ model Academy {
   name      String
   /// IANA name, e.g. Africa/Cairo; drives schedules and reminders.
   timezone  String   @default("Africa/Cairo")
+  /// When on, a student cycle becoming Due asks the instructor on the session for an evaluation
+  /// that blocks the app until it is written (US-42, SCRUM-87). Off by default; the admin turns it on.
+  evaluationsRequired Boolean @default(false) @map("evaluations_required")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -53,6 +56,7 @@ model Academy {
   sessionReports    SessionReport[]
   paymentReminders  PaymentReminder[]
   reminderRules     ReminderRule[]
+  studentEvaluations StudentEvaluation[]
 
   @@map("academies")
 }
@@ -89,6 +93,8 @@ model User {
   sessionReminders     SessionReminder[]
   instructorPlans      PaymentPlan[]
   instructorCycles     PaymentCycle[]
+  evaluationsToWrite   StudentEvaluation[] @relation("EvaluationInstructor")
+  evaluationsRequested StudentEvaluation[] @relation("EvaluationRequester")
 
   @@unique([academyId, email])
   @@unique([academyId, phone])
@@ -211,6 +217,7 @@ model Student {
   plans       PaymentPlan[]
   cycles      PaymentCycle[]
   attendance  Attendance[]
+  evaluations StudentEvaluation[]
 
   @@unique([academyId, code])
   /// Composite key for tenant-safe foreign keys: a later table (enrollments, attendance)
@@ -244,6 +251,7 @@ model Group {
   enrollments   Enrollment[]
   paymentPlans  PaymentPlan[]
   paymentCycles PaymentCycle[]
+  evaluations   StudentEvaluation[]
 
   /// Composite key for tenant-safe foreign keys (schedule_slots, sessions).
   @@unique([id, academyId])
@@ -489,6 +497,7 @@ model PaymentCycle {
   group      Group?         @relation(fields: [groupId, groupAcademyId], references: [id, academyId], onDelete: Restrict)
   plan       PaymentPlan    @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
   sessions   CycleSession[]
+  evaluations StudentEvaluation[]
   payments   Payment[]
   reminders  PaymentReminder[]
 
@@ -625,6 +634,7 @@ enum NotificationType {
   payment_recorded
   session_report
   announcement
+  evaluation_request
 
   @@map("notification_type")
 }
@@ -780,4 +790,64 @@ model ReminderRule {
   @@unique([academyId, type, leadMinutes])
   @@unique([academyId, type, sessionsBeforeEnd])
   @@map("reminder_rules")
+}
+
+/// Why an evaluation was asked for: a student cycle became Due, or the admin asked (US-42).
+enum EvaluationSource {
+  cycle_due
+  admin
+
+  @@map("evaluation_source")
+}
+
+/// pending blocks the instructor (see academies.evaluations_required); submitted and cancelled are final.
+enum EvaluationStatus {
+  pending
+  submitted
+  cancelled
+
+  @@map("evaluation_status")
+}
+
+/// An evaluation of a student by an instructor (US-42, SCRUM-87): asked for when a student cycle
+/// becomes Due (source cycle_due, cycle set) or by the admin (source admin, requested_by set),
+/// then written by the instructor it is addressed to. The text is about a child: it never goes
+/// into a notification or an audit row. At most one pending row per student (partial unique).
+/// CHECKs in the migration: submitted <=> rating, summary and submitted_at set; cancelled <=>
+/// cancelled_at set; rating 1-5; the mirror columns of the nullable references set together and
+/// equal to academy_id; cycle_due <=> cycle_id set; admin <=> requested_by set.
+model StudentEvaluation {
+  id                   String           @id @default(uuid()) @db.Uuid
+  academyId            String           @map("academy_id") @db.Uuid
+  studentId            String           @map("student_id") @db.Uuid
+  instructorId         String           @map("instructor_id") @db.Uuid
+  groupId              String           @map("group_id") @db.Uuid
+  cycleId              String?          @map("cycle_id") @db.Uuid
+  cycleAcademyId       String?          @map("cycle_academy_id") @db.Uuid
+  source               EvaluationSource
+  status               EvaluationStatus @default(pending)
+  requestedById        String?          @map("requested_by") @db.Uuid
+  requestedByAcademyId String?          @map("requested_by_academy_id") @db.Uuid
+  requestedAt          DateTime         @map("requested_at") @db.Timestamptz(3)
+  overallRating        Int?             @map("overall_rating") @db.SmallInt
+  summary              String?
+  strengths            String?
+  toImprove            String?          @map("to_improve")
+  submittedAt          DateTime?        @map("submitted_at") @db.Timestamptz(3)
+  cancelledAt          DateTime?        @map("cancelled_at") @db.Timestamptz(3)
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academy     Academy       @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  student     Student       @relation(fields: [studentId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor  User          @relation("EvaluationInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  group       Group         @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+  cycle       PaymentCycle? @relation(fields: [cycleId, cycleAcademyId], references: [id, academyId], onDelete: Restrict)
+  requestedBy User?         @relation("EvaluationRequester", fields: [requestedById, requestedByAcademyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@unique([studentId], map: "student_evaluations_student_pending_key", where: raw("status = 'pending'"))
+  @@index([instructorId, status])
+  @@index([studentId, submittedAt])
+  @@map("student_evaluations")
 }
