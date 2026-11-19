@@ -1,5 +1,7 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { EvaluationPage } from '@/pages/EvaluationPage';
+import { EvaluationSettingsPage } from '@/pages/settings/EvaluationSettingsPage';
 import { EditGroupPage } from '@/pages/groups/EditGroupPage';
 import { EnrollStudentPage } from '@/pages/groups/EnrollStudentPage';
 import { GroupPage } from '@/pages/groups/GroupPage';
@@ -43,6 +45,7 @@ import { RequirePermission } from './RequirePermission';
  *     PublicLayout     /login        signed-in users are sent home
  *     ProtectedLayout  /             signed-out users are sent to /login?returnTo=…
  *       /change-password   any signed-in user; the only screen during a temporary password
+ *       /evaluation        any signed-in user; the only screen while an evaluation must be written
  *       RequirePermission sessions.read        /sessions/:id
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
@@ -53,6 +56,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission payments.manage      /students/:id/plan, /instructors/:id/plan
  *       RequirePermission audit.read (any)     /audit-log
  *       RequirePermission reminders.manage (any) /reminder-rules
+ *       RequirePermission evaluations.manage (any) /settings/evaluations
  *       RequirePermission instructors.read     /instructors, /instructors/:id
  *       RequirePermission instructors.manage   /instructors/new, /instructors/:id/edit
  *     SessionGateLayout  (same sign-in rules, no app shell)
@@ -96,6 +100,7 @@ export const routes: RouteObject[] = [
           },
           // Every signed-in user may change their password: no RequirePermission (US-02).
           { path: '/change-password', element: <ChangePasswordPage /> },
+          { path: '/evaluation', element: <EvaluationPage /> },
           // Every signed-in user has a notification center: no extra permission (TS-02).
           { path: '/notifications', element: <NotificationsPage /> },
           {
@@ -159,6 +164,10 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="reminders.manage" scope="any" />,
             children: [{ path: '/reminder-rules', element: <ReminderRulesPage /> }],
+          },
+          {
+            element: <RequirePermission permission="evaluations.manage" scope="any" />,
+            children: [{ path: '/settings/evaluations', element: <EvaluationSettingsPage /> }],
           },
           {
             element: <RequirePermission permission="instructors.manage" />,

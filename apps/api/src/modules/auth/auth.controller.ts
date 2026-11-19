@@ -28,7 +28,12 @@ import { AuthService, type IssuedTokens } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
-import { AllowedDuringPasswordChange, Public, SignedIn } from './access.decorators';
+import {
+  AllowedDuringEvaluation,
+  AllowedDuringPasswordChange,
+  Public,
+  SignedIn,
+} from './access.decorators';
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 /**
@@ -77,6 +82,7 @@ export class AuthController {
   /** GET /auth/me (US-03): who is signed in. The web app's session check on every start. */
   @SignedIn()
   @AllowedDuringPasswordChange() // the app needs it to show the change-password screen
+  @AllowedDuringEvaluation() // and to show the evaluation screen (US-42)
   @Get('me')
   me(@Req() req: AuthenticatedRequest): Promise<Me> {
     return this.auth.loadMe(req.auth.userId);
@@ -88,6 +94,7 @@ export class AuthController {
    */
   @SignedIn()
   @AllowedDuringPasswordChange()
+  @AllowedDuringEvaluation()
   @UseGuards(UserThrottlerGuard)
   @SkipThrottle({ login: true }) // only the 'password' throttler counts here
   @Post('change-password')

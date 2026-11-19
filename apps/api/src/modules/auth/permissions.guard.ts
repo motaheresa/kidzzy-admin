@@ -1,7 +1,11 @@
 import { CanActivate, ExecutionContext, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ErrorCode } from '@kidzzy/shared';
 import { AppException } from '../../common/errors/app.exception';
-import { accessDeclarationsOf, isAllowedDuringPasswordChange } from './access.decorators';
+import {
+  accessDeclarationsOf,
+  isAllowedDuringEvaluation,
+  isAllowedDuringPasswordChange,
+} from './access.decorators';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
 import { scopeOf } from './permission-scope';
 
@@ -47,6 +51,15 @@ export class PermissionsGuard implements CanActivate {
         ErrorCode.PasswordChangeRequired,
         HttpStatus.FORBIDDEN,
         'Change your password first',
+      );
+    }
+    // An evaluation must be written before anything else (US-42), after the password: a user
+    // with a temporary password changes it first, then writes the evaluation.
+    if (request.auth.pendingEvaluation && !isAllowedDuringEvaluation(handler)) {
+      throw new AppException(
+        ErrorCode.EvaluationRequired,
+        HttpStatus.FORBIDDEN,
+        'Write the pending evaluation first',
       );
     }
     if (declaration.kind === 'signedIn') return true;

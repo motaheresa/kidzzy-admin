@@ -3,6 +3,9 @@ export const HOME_PATH = '/';
 /** Where a user with a temporary password must go first (US-02). */
 export const CHANGE_PASSWORD_PATH = '/change-password';
 
+/** The only screen while an evaluation must be written (US-42). */
+export const EVALUATION_PATH = '/evaluation';
+
 // Control characters (C0, DEL, C1) and whitespace. Browsers silently drop tabs and newlines from
 // URLs, so "/\t/evil.com" would turn into "//evil.com", another site.
 // eslint-disable-next-line no-control-regex
@@ -43,4 +46,10 @@ export function loginPathFor(location: { pathname: string; search: string }): st
 export function changePasswordPathFor(location: { pathname: string; search: string }): string {
   const returnTo = `${location.pathname}${location.search}`;
   return `${CHANGE_PASSWORD_PATH}?${new URLSearchParams({ returnTo }).toString()}`;
+}
+
+/** The evaluation screen, remembering where the user was so they come back after the last one. */
+export function evaluationPathFor(location: { pathname: string; search: string }): string {
+  const returnTo = `${location.pathname}${location.search}`;
+  return `${EVALUATION_PATH}?${new URLSearchParams({ returnTo }).toString()}`;
 }

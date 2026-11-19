@@ -47,19 +47,30 @@ export interface AccessTokenPayload {
    * login and at every refresh, like perms.
    */
   mustChangePassword: boolean;
+  /**
+   * The user has an evaluation to write first (US-42): true when a pending request blocks them
+   * (from the admin always, from a Due cycle while evaluations_required is on). While it is true,
+   * PermissionsGuard only lets the routes marked @AllowedDuringEvaluation() through. Written from
+   * the database at login and at every refresh, like perms; the guard never queries.
+   */
+  pendingEvaluation: boolean;
 }
 
 /** True when a verified JWT payload has the shape the app issues (anything else is invalid). */
 export function isAccessTokenPayload(value: unknown): value is AccessTokenPayload {
   if (typeof value !== 'object' || value === null) return false;
-  const { sub, aid, sid, perms, mustChangePassword } = value as Record<string, unknown>;
+  const { sub, aid, sid, perms, mustChangePassword, pendingEvaluation } = value as Record<
+    string,
+    unknown
+  >;
   return (
     typeof sub === 'string' &&
     typeof aid === 'string' &&
     typeof sid === 'string' &&
     Array.isArray(perms) &&
     perms.every((key) => typeof key === 'string') &&
-    typeof mustChangePassword === 'boolean'
+    typeof mustChangePassword === 'boolean' &&
+    typeof pendingEvaluation === 'boolean'
   );
 }
 

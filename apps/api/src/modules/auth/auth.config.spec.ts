@@ -7,6 +7,7 @@ describe('isAccessTokenPayload', () => {
     sid: 's1',
     perms: ['groups.read:own'],
     mustChangePassword: false,
+    pendingEvaluation: false,
   };
 
   it('accepts the shape the app issues, with either value of mustChangePassword', () => {
@@ -17,6 +18,11 @@ describe('isAccessTokenPayload', () => {
   it.each([
     ['no mustChangePassword', { ...valid, mustChangePassword: undefined }],
     ['mustChangePassword as a string', { ...valid, mustChangePassword: 'false' }],
+    [
+      'no pendingEvaluation (a token issued before US-42)',
+      { ...valid, pendingEvaluation: undefined },
+    ],
+    ['pendingEvaluation as a string', { ...valid, pendingEvaluation: 'true' }],
     ['no perms', { ...valid, perms: undefined }],
     ['a perms entry that is not a string', { ...valid, perms: [1] }],
     ['no sid', { ...valid, sid: undefined }],

@@ -40,6 +40,7 @@ export const NotificationType = {
   PaymentRecorded: 'payment_recorded',
   SessionReport: 'session_report',
   Announcement: 'announcement',
+  EvaluationRequest: 'evaluation_request',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -126,6 +127,12 @@ export const ErrorCode = {
   ReminderRulesLimit: 'REMINDER_RULES_LIMIT',
   ActualTimeInvalid: 'ACTUAL_TIME_INVALID',
   ReportPeriodTooLong: 'REPORT_PERIOD_TOO_LONG',
+  /** The user has a pending evaluation to write first (US-42): only the evaluation routes work. */
+  EvaluationRequired: 'EVALUATION_REQUIRED',
+  /** The student already has a pending evaluation request. */
+  EvaluationPending: 'EVALUATION_PENDING',
+  /** The request is no longer pending (submitted or cancelled), so it cannot be submitted or cancelled. */
+  EvaluationNotPending: 'EVALUATION_NOT_PENDING',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -161,6 +168,12 @@ export interface Me {
   roles: string[];
   permissions: string[];
   mustChangePassword: boolean;
+  /**
+   * How many evaluations the user must write before using the app (US-42), read from the
+   * database on every /auth/me, so the web opens the evaluation screen without waiting for the
+   * access token to be refreshed. The token's pendingEvaluation claim is this count > 0.
+   */
+  pendingEvaluations: number;
   academy: { id: string; name: string; timezone: string };
 }
 
@@ -850,4 +863,65 @@ export interface StudentsReport {
   kpis: StudentsReportKpis;
   buckets: StudentsBucket[];
   rows: StudentsReportRow[];
+}
+
+/** Why an evaluation was asked for (US-42). */
+export const EvaluationSource = { CycleDue: 'cycle_due', Admin: 'admin' } as const;
+export type EvaluationSource = (typeof EvaluationSource)[keyof typeof EvaluationSource];
+
+export const EvaluationStatus = {
+  Pending: 'pending',
+  Submitted: 'submitted',
+  Cancelled: 'cancelled',
+} as const;
+export type EvaluationStatus = (typeof EvaluationStatus)[keyof typeof EvaluationStatus];
+
+/**
+ * A pending evaluation request (openapi.yaml: EvaluationRequest): who it is about, the group,
+ * and the cycle that became Due (null for a request by the admin). It never carries any text.
+ */
+export interface EvaluationRequest {
+  id: string;
+  source: EvaluationSource;
+  status: EvaluationStatus;
+  student: { id: string; name: string };
+  group: GroupRef;
+  instructor: { id: string; name: string };
+  /** The number of the cycle that became Due; null for a request by the admin. */
+  cycleNumber: number | null;
+  /** ISO 8601, UTC */
+  requestedAt: string;
+}
+
+/** A written evaluation of a student (openapi.yaml: StudentEvaluation). */
+export interface StudentEvaluation {
+  id: string;
+  source: EvaluationSource;
+  student: { id: string; name: string };
+  group: GroupRef;
+  instructor: { id: string; name: string };
+  cycleNumber: number | null;
+  /** 1 to 5 */
+  overallRating: number;
+  summary: string;
+  strengths: string | null;
+  toImprove: string | null;
+  /** ISO 8601, UTC */
+  submittedAt: string;
+}
+
+/** POST /evaluation-requests/{id}/submit (openapi.yaml: SubmitEvaluationRequest). */
+export interface SubmitEvaluationInput {
+  /** 1 to 5 */
+  overallRating: number;
+  /** 20 to 2000 characters */
+  summary: string;
+  strengths?: string | null;
+  toImprove?: string | null;
+}
+
+/** GET and PATCH /academy/settings (openapi.yaml: AcademySettings). */
+export interface AcademySettings {
+  /** A student cycle becoming Due asks the instructor on the session for a blocking evaluation. */
+  evaluationsRequired: boolean;
 }

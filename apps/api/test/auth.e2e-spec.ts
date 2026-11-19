@@ -65,6 +65,7 @@ describe('Auth (e2e)', () => {
         email,
         roles: ['Admin'],
         mustChangePassword: false,
+        pendingEvaluations: 0,
         academy: { id: academyId, timezone: 'Africa/Cairo' },
       });
       expect([...(res.body as { permissions: string[] }).permissions].sort()).toEqual(
@@ -174,6 +175,7 @@ describe('Auth (e2e)', () => {
           sid: randomUUID(),
           perms: [],
           mustChangePassword: false,
+          pendingEvaluation: false,
         };
         secret = app.get(ConfigService).getOrThrow<string>('JWT_ACCESS_SECRET');
       });
@@ -265,6 +267,7 @@ describe('Auth (e2e)', () => {
           'id',
           'mustChangePassword',
           'name',
+          'pendingEvaluations',
           'permissions',
           'phone',
           'roles',

@@ -27,6 +27,9 @@ function kindFor(status: number, code: ErrorCode | undefined): ErrorKind {
     case ErrorCode.PasswordChangeRequired:
       // Kept as its own case: the user is signed in but must change the password first (US-02).
       return 'forbidden';
+    case ErrorCode.EvaluationRequired:
+      // Its own case too: signed in, but an evaluation must be written first (US-42).
+      return 'forbidden';
     case ErrorCode.Forbidden:
       return 'forbidden';
     case ErrorCode.NotFound:

@@ -16,6 +16,7 @@ const admin: Me = {
   roles: ['Admin'],
   permissions: ['students.read:any', 'students.manage:any', 'instructors.read:any'],
   mustChangePassword: false,
+  pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
 const instructorUser: Me = {

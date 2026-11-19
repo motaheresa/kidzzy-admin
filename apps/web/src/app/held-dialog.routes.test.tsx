@@ -25,6 +25,7 @@ const admin: Me = {
     'attendance.record:any',
   ],
   mustChangePassword: false,
+  pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
 
@@ -502,5 +503,45 @@ describe('the actual times of a session (SCRUM-80)', () => {
     await user.click(await screen.findByRole('button', { name: 'سجّل الوقت الفعلي' }));
     expect(screen.getByLabelText('بدأت')).toHaveValue('12:00');
     expect(screen.getByLabelText('خلصت')).toHaveValue('13:00');
+  });
+});
+
+describe('a Held that makes a student cycle Due (US-42)', () => {
+  it('refreshes the session at once, so a pending evaluation gates without waiting', async () => {
+    api({
+      [`GET ${detailPath}`]: () => json(200, session),
+      [`GET ${attendancePath}`]: () => json(200, roster),
+      [`POST ${detailPath}/held`]: () =>
+        json(200, {
+          ...heldSession,
+          cyclesUpdated: [
+            {
+              cycleId: 'c1',
+              payeeType: 'student',
+              studentId: 's1',
+              instructorId: null,
+              groupId: null,
+              sessionsCounted: 4,
+              sessionsPerCycle: 4,
+              status: 'due',
+            },
+          ],
+        }),
+      'POST /auth/refresh': () => new Response(null, { status: 204 }),
+    });
+    renderAt(detailPath);
+    const user = userEvent.setup();
+    await openDialog(user);
+    await user.type(screen.getByLabelText('شرحت ايه النهارده؟'), 'Loops');
+    await user.click(within(groupOf('Amal')).getByRole('radio', { name: 'حاضر' }));
+    await user.click(within(groupOf('Mona')).getByRole('radio', { name: 'غايب' }));
+    await user.click(screen.getByRole('radio', { name: 'مفيش واجب' }));
+    await user.click(confirmButton());
+
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.method === 'POST' && c.url.pathname.endsWith('/auth/refresh')),
+      ).toHaveLength(1),
+    );
   });
 });

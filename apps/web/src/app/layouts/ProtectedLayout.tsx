@@ -17,7 +17,8 @@ export function ProtectedLayout() {
   return (
     <SessionGate>
       {(me) => {
-        const mustChange = me.mustChangePassword;
+        // A gate (a temporary password, or an evaluation to write) shows only its own screen.
+        const mustChange = me.mustChangePassword || me.pendingEvaluations > 0;
         return (
           <PushProvider>
             <div className="flex min-h-dvh flex-col">

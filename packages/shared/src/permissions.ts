@@ -38,6 +38,9 @@ export const PERMISSIONS = {
   'dashboard.read:any': 'View the admin dashboard',
   'audit.read:any': 'View the audit log',
   'reports.read:any': 'View reports',
+  'evaluations.write:own': 'Write the evaluations asked of you',
+  'evaluations.read:any': 'View student evaluations',
+  'evaluations.manage:any': 'Request and cancel evaluations, and set the rule',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -75,5 +78,6 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly PermissionKey[
     'attendance.record:own',
     'payments.read:own',
     'materials.read:any',
+    'evaluations.write:own',
   ],
 };

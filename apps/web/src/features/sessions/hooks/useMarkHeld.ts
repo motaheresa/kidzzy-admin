@@ -1,4 +1,6 @@
 import type { HeldRequest, Session } from '@kidzzy/shared';
+import { authKeys } from '@/features/auth';
+import { refreshSession } from '@/lib/http';
 import { useApiMutation, useQueryClient } from '@/lib/query';
 import { markSessionHeld } from '../api/sessions.api';
 import { applySessionChange } from './applySessionChange';
@@ -28,6 +30,13 @@ export function useMarkHeld(id: string) {
         actualDurationMin: result.actualDurationMin,
       };
       applySessionChange(queryClient, session);
+      // A student cycle that became Due may ask this user for an evaluation (US-42): refresh the
+      // session at once so the token and /auth/me say so, instead of waiting up to 15 minutes.
+      if (result.cyclesUpdated.some((c) => c.payeeType === 'student' && c.status === 'due')) {
+        void refreshSession().then(() =>
+          queryClient.invalidateQueries({ queryKey: authKeys.me() }),
+        );
+      }
     },
   });
 }
