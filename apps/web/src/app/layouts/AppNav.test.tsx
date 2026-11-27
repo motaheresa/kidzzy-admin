@@ -39,7 +39,7 @@ describe('AppNav', () => {
   it('shows every section, in order, to an admin', () => {
     held = {
       'groups.read': 'any',
-      'materials.manage': 'any',
+      'materials.read': 'any',
       'students.read': 'any',
       'instructors.read': 'any',
       'payments.read': 'any',
@@ -74,6 +74,16 @@ describe('AppNav', () => {
       '/audit-log',
       '/reminder-rules',
     ]);
+  });
+
+  it('shows the materials to an instructor, who only reads them', () => {
+    held = { 'groups.read': 'own', 'materials.read': 'any' };
+    const nav = renderNav();
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['الرئيسية', 'الجروبات', 'المواد']);
   });
 
   it('shows the admin-only sections only with scope any', () => {

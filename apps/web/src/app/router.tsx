@@ -49,6 +49,7 @@ import { RequirePermission } from './RequirePermission';
  *       /change-password   any signed-in user; the only screen during a temporary password
  *       /evaluation        any signed-in user; the only screen while an evaluation must be written
  *       RequirePermission sessions.read        /sessions/:id
+ *       RequirePermission materials.read       /materials
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
  *       RequirePermission groups.update        /groups/:id/edit
@@ -56,7 +57,6 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission students.read        /students, /students/:id
  *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission payments.manage      /students/:id/plan, /instructors/:id/plan
- *       RequirePermission materials.manage (any) /materials
  *       RequirePermission audit.read (any)     /audit-log
  *       RequirePermission announcements.send (any) /announcements
  *       RequirePermission reminders.manage (any) /reminder-rules
@@ -107,6 +107,11 @@ export const routes: RouteObject[] = [
           { path: '/evaluation', element: <EvaluationPage /> },
           // Every signed-in user has a notification center: no extra permission (TS-02).
           { path: '/notifications', element: <NotificationsPage /> },
+          // The instructors read the material links and the admin manages them (US-32, US-33).
+          {
+            element: <RequirePermission permission="materials.read" />,
+            children: [{ path: '/materials', element: <MaterialsPage /> }],
+          },
           {
             element: <RequirePermission permission="groups.read" />,
             children: [
@@ -160,10 +165,6 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="payments.read" scope="any" />,
             children: [{ path: '/payments', element: <PaymentsPage /> }],
-          },
-          {
-            element: <RequirePermission permission="materials.manage" scope="any" />,
-            children: [{ path: '/materials', element: <MaterialsPage /> }],
           },
           {
             element: <RequirePermission permission="audit.read" scope="any" />,

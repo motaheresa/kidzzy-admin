@@ -17,13 +17,7 @@ import { SectionNav, type SectionNavItem } from './SectionNav';
 const NAV_ITEMS: SectionNavItem[] = [
   { to: '/', label: 'الرئيسية', icon: HouseIcon, end: true },
   { to: '/groups', label: 'الجروبات', icon: UsersRoundIcon, permission: 'groups.read' },
-  {
-    to: '/materials',
-    label: 'المواد',
-    icon: BookOpenIcon,
-    permission: 'materials.manage',
-    scope: 'any',
-  },
+  { to: '/materials', label: 'المواد', icon: BookOpenIcon, permission: 'materials.read' },
   { to: '/students', label: 'الطلاب', icon: GraduationCapIcon, permission: 'students.read' },
   { to: '/instructors', label: 'المدرسين', icon: PresentationIcon, permission: 'instructors.read' },
   {

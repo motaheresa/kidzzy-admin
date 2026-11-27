@@ -19,6 +19,12 @@ const admin: Me = {
   pendingEvaluations: 0,
   academy: { id: 'a1', name: 'KidzzyCoders', timezone: 'Africa/Cairo' },
 };
+const instructor: Me = {
+  ...admin,
+  id: 'ana-id',
+  roles: ['Instructor'],
+  permissions: ['materials.read:any'],
+};
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -217,7 +223,8 @@ describe('the material links screen, for the admin', () => {
     );
     renderAt('/materials');
     expect(await screen.findByText(/وصلت للحد الأقصى/)).toBeInTheDocument();
-    expect(button('اضافة لينك')).toBeDisabled();
+    // By its text, not by role: a role query walks all 400 row buttons and is slow in jsdom.
+    expect(screen.getByText('اضافة لينك').closest('button')).toBeDisabled();
   });
 
   it('edits a link, starting from its title and address', async () => {
@@ -353,5 +360,76 @@ describe('the material links screen, for the admin', () => {
     await user.click(button('حرّك Python لفوق'));
     expect(await screen.findByText('حصلت مشكلة في السيرفر، جرب تاني')).toBeInTheDocument();
     await waitFor(() => expect(titles()).toEqual(['Scratch', 'Python', 'Web']));
+  });
+});
+
+describe('the material links screen, for an instructor', () => {
+  it('is in the nav', async () => {
+    api(instructor);
+    renderAt('/');
+    expect(await screen.findByRole('link', { name: 'المواد' })).toHaveAttribute(
+      'href',
+      '/materials',
+    );
+  });
+
+  it('shows the links in the order of the admin, with no control to change them', async () => {
+    api(instructor);
+    links = [DEFAULTS[2], DEFAULTS[0], DEFAULTS[1]];
+    renderAt('/materials');
+    await list();
+    expect(titles()).toEqual(['Web', 'Scratch', 'Python']);
+    expect(screen.queryByRole('button', { name: 'اضافة لينك' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(حرّك|عدّل|امسح) / })).not.toBeInTheDocument();
+  });
+
+  it('opens each link in a new tab and shows its title and domain', async () => {
+    api(instructor);
+    renderAt('/materials');
+    const anchors = within(await list()).getAllByRole('link');
+    expect(anchors.map((anchor) => anchor.getAttribute('href'))).toEqual(
+      DEFAULTS.map((item) => item.url),
+    );
+    for (const anchor of anchors) {
+      expect(anchor).toHaveAttribute('target', '_blank');
+      expect(anchor).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    expect(anchors[1]).toHaveTextContent('Python');
+    expect(within(anchors[1]).getByText('docs.python.org')).toBeInTheDocument();
+    expect(anchors[1]).toHaveAccessibleName(/بيفتح في صفحة جديدة/);
+  });
+
+  it('says that nothing was added yet', async () => {
+    api(instructor);
+    links = [];
+    renderAt('/materials');
+    expect(await screen.findByText('مفيش مواد لسه')).toBeInTheDocument();
+    expect(screen.getByText('لما الأدمن يضيف لينكات المواد هتلاقيها هنا.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'اضافة لينك' })).not.toBeInTheDocument();
+  });
+
+  it('shows a failed read with a way to try again', async () => {
+    api(instructor);
+    const serve = fetchMock.getMockImplementation() as typeof fetch;
+    let failing = true;
+    fetchMock.mockImplementation((input, init) =>
+      failing && String(input).includes('/material-links')
+        ? Promise.resolve(problem(403, 'FORBIDDEN'))
+        : serve(input, init),
+    );
+    renderAt('/materials');
+    const user = userEvent.setup();
+    expect(await screen.findByRole('alert')).toHaveTextContent('مش مسموح لك تعمل ده');
+    failing = false;
+    await user.click(button('جرب تاني'));
+    expect(await list()).toBeInTheDocument();
+  });
+
+  it('is forbidden without materials.read, and the list is never asked for', async () => {
+    api({ ...instructor, permissions: ['sessions.read:own'] });
+    renderAt('/materials');
+    expect(await screen.findByText(/مش مسموح/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'المواد' })).not.toBeInTheDocument();
+    expect(calls.some((call) => call.path === '/material-links')).toBe(false);
   });
 });
