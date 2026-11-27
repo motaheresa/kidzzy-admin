@@ -59,6 +59,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   EVALUATION_REQUIRED: 'لازم تكتب التقييم المطلوب الأول',
   EVALUATION_PENDING: 'فيه طلب تقييم للطالب ده لسه مستني',
   EVALUATION_NOT_PENDING: 'الطلب ده اتقفل خلاص (اتكتب أو اتلغى)',
+  ANNOUNCEMENT_NO_RECIPIENTS: 'مفيش ولا حد نشط في الاختيار ده، فمش هيتبعت لحد',
   RATE_LIMITED: 'محاولات كثيرة، جرب تاني بعد دقيقة',
   INTERNAL_ERROR: 'حصلت مشكلة في السيرفر، جرب تاني',
 };
@@ -120,6 +121,11 @@ export const FIELD_MESSAGES: Record<string, string> = {
   sessionsBeforeEnd: 'اكتب عدد حصص من 1 لـ 20',
   startedAt: 'اكتب وقت البداية بالساعة والدقيقة',
   endedAt: 'اكتب وقت الخلاص بالساعة والدقيقة',
+  title: 'العنوان من 1 لـ 100 حرف',
+  body: 'نص الاعلان من 1 لـ 1000 حرف',
+  audience: 'اختار الاعلان لمين',
+  roleId: 'اختار دور من الاكاديمية',
+  userIds: 'اختار من 1 لـ 200 شخص، وكلهم لسه نشطين',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';

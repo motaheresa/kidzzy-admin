@@ -2325,6 +2325,7 @@ paths:
       tags:
         - Announcements
       summary: Announcements sent
+      description: Every announcement the academy sent, newest first. There is no edit and no delete.
       operationId: listAnnouncements
       x-permission: announcements.send
       x-story: US-31
@@ -2359,6 +2360,15 @@ paths:
       tags:
         - Announcements
       summary: Send an announcement
+      description: >
+        Sends to the audience at once. all is every active user of the academy, role is every active user holding
+        roleId, and users is the given userIds (1 to 200, each an active user of the academy). The sender never
+        receives their own announcement. Title and body are trimmed first (400 when empty or too long). 422
+        VALIDATION_FAILED on roleId or userIds when one is not this academy's active record, and 422
+        ANNOUNCEMENT_NO_RECIPIENTS when nobody is left. In one transaction every recipient gets a notification
+        (type announcement, data url and announcementId) at once; its web push goes out on the next tick, like
+        every other notification (50 per academy per tick). Audited as announcement.sent. An announcement is never
+        edited or deleted.
       operationId: createAnnouncement
       x-permission: announcements.send
       x-story: US-31
@@ -2383,6 +2393,128 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /announcements/recipients-count:
+    get:
+      tags:
+        - Announcements
+      summary: How many people an announcement would reach
+      description: >
+        The count a send with the same audience would reach now, by the same rules, including both 422 answers.
+        For the confirmation before sending. Changes nothing.
+      operationId: countAnnouncementRecipients
+      x-permission: announcements.send
+      x-story: US-31
+      parameters:
+        - name: audience
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - all
+              - role
+              - users
+        - name: roleId
+          in: query
+          required: false
+          description: Required when audience is role.
+          schema:
+            type: string
+            format: uuid
+        - name: userIds
+          in: query
+          required: false
+          description: Required when audience is users. One comma-separated value, 1 to 200 ids.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 200
+            uniqueItems: true
+            items:
+              type: string
+              format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipientsCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /announcements/audience/roles:
+    get:
+      tags:
+        - Announcements
+      summary: The roles an announcement can be sent to
+      operationId: listAnnouncementRoles
+      x-permission: announcements.send
+      x-story: US-31
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AudienceRole'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /announcements/audience/users:
+    get:
+      tags:
+        - Announcements
+      summary: The people an announcement can be sent to
+      description: >
+        The academy's active users by name, without the caller, one page at a time. search matches part of the
+        name or of the email.
+      operationId: listAnnouncementUsers
+      x-permission: announcements.send
+      x-story: US-31
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AudienceUser'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /material-links:
     get:
       tags:
@@ -4894,8 +5026,14 @@ components:
             - type: string
               format: uuid
             - type: 'null'
+        roleName:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: The role's name when audience is role.
         recipientCount:
           type: integer
+          minimum: 1
         sender:
           $ref: '#/components/schemas/GroupRef'
         createdAt:
@@ -4908,6 +5046,8 @@ components:
         - title
         - body
         - audience
+        - roleId
+        - roleName
         - recipientCount
         - sender
         - createdAt
@@ -4917,9 +5057,13 @@ components:
         title:
           type: string
           minLength: 1
+          maxLength: 100
+          description: Trimmed before the length check.
         body:
           type: string
           minLength: 1
+          maxLength: 1000
+          description: Trimmed before the length check.
         audience:
           type: string
           enum:
@@ -4929,8 +5073,13 @@ components:
         roleId:
           type: string
           format: uuid
+          description: Required when audience is role.
         userIds:
           type: array
+          description: Required when audience is users.
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
           items:
             type: string
             format: uuid
@@ -4939,6 +5088,45 @@ components:
         - title
         - body
         - audience
+    RecipientsCount:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+      required:
+        - count
+    AudienceRole:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      additionalProperties: false
+      required:
+        - id
+        - name
+    AudienceUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+          description: The names of the roles the person holds.
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - roles
     MaterialLink:
       type: object
       properties:

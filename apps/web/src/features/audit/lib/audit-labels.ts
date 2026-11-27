@@ -17,6 +17,7 @@ const ACTION_LABELS: Record<string, string> = {
   'reminder_rule.created': 'اضافة قاعدة تذكير',
   'reminder_rule.changed': 'تعديل قاعدة تذكير',
   'reminder_rule.deleted': 'مسح قاعدة تذكير',
+  'announcement.sent': 'ارسال اعلان',
 };
 
 export function actionLabel(action: string): string {
@@ -30,6 +31,7 @@ export const ENTITY_TYPES: { value: string; label: string }[] = [
   { value: 'payment_cycles', label: 'دورة دفع' },
   { value: 'payment_plans', label: 'خطة دفع' },
   { value: 'reminder_rules', label: 'قاعدة تذكير' },
+  { value: 'announcements', label: 'اعلان' },
 ];
 
 export function entityTypeLabel(entityType: string): string {
@@ -79,6 +81,11 @@ const FIELD_LABELS: Record<string, string> = {
   startDate: 'تاريخ البداية',
   endDate: 'تاريخ النهاية',
   previousGroupEndDate: 'اخر يوم في الجروب القديم',
+  title: 'العنوان',
+  audience: 'لمين',
+  roleId: 'الدور',
+  userIds: 'الاشخاص',
+  recipientCount: 'عدد المستلمين',
 };
 
 export function fieldLabel(key: string): string {
@@ -97,6 +104,9 @@ const VALUE_LABELS: Record<string, string> = {
   wallet: 'محفظة',
   student: 'طالب',
   instructor: 'مدرس',
+  all: 'الكل',
+  role: 'دور',
+  users: 'اشخاص',
 };
 
 export function valueLabel(value: string): string {

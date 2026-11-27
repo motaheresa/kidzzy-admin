@@ -43,6 +43,7 @@ describe('AppNav', () => {
       'instructors.read': 'any',
       'payments.read': 'any',
       'reports.read': 'any',
+      'announcements.send': 'any',
       'audit.read': 'any',
       'reminders.manage': 'any',
     };
@@ -55,6 +56,7 @@ describe('AppNav', () => {
       'المدرسين',
       'المدفوعات',
       'التقارير',
+      'الاعلانات',
       'سجل التغييرات',
       'قواعد التذكير',
     ]);
@@ -65,6 +67,7 @@ describe('AppNav', () => {
       '/instructors',
       '/payments',
       '/reports',
+      '/announcements',
       '/audit-log',
       '/reminder-rules',
     ]);

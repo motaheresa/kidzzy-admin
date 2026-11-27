@@ -133,6 +133,8 @@ export const ErrorCode = {
   EvaluationPending: 'EVALUATION_PENDING',
   /** The request is no longer pending (submitted or cancelled), so it cannot be submitted or cancelled. */
   EvaluationNotPending: 'EVALUATION_NOT_PENDING',
+  /** The audience of an announcement resolves to nobody (US-31), so there is nobody to send it to. */
+  AnnouncementNoRecipients: 'ANNOUNCEMENT_NO_RECIPIENTS',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -924,4 +926,58 @@ export interface SubmitEvaluationInput {
 export interface AcademySettings {
   /** A student cycle becoming Due asks the instructor on the session for a blocking evaluation. */
   evaluationsRequired: boolean;
+}
+
+/** Limits of an announcement (US-31); the API validates them and the web counters show them. */
+export const ANNOUNCEMENT_TITLE_MAX = 100;
+export const ANNOUNCEMENT_BODY_MAX = 1000;
+export const ANNOUNCEMENT_MAX_USERS = 200;
+
+export const AnnouncementAudience = { All: 'all', Role: 'role', Users: 'users' } as const;
+export type AnnouncementAudience = (typeof AnnouncementAudience)[keyof typeof AnnouncementAudience];
+
+/** A sent announcement (openapi.yaml: Announcement). It is never edited or deleted. */
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  audience: AnnouncementAudience;
+  roleId: string | null;
+  /** The role's name when audience is role. */
+  roleName: string | null;
+  recipientCount: number;
+  sender: { id: string; name: string };
+  /** ISO 8601, UTC */
+  createdAt: string;
+}
+
+/** POST /announcements (openapi.yaml: AnnouncementCreate). */
+export interface AnnouncementCreate {
+  /** 1 to 100 characters after trimming */
+  title: string;
+  /** 1 to 1000 characters after trimming */
+  body: string;
+  audience: AnnouncementAudience;
+  /** Required when audience is role. */
+  roleId?: string;
+  /** Required when audience is users: 1 to 200 ids. */
+  userIds?: string[];
+}
+
+/** GET /announcements/recipients-count (openapi.yaml: RecipientsCount). */
+export interface RecipientsCount {
+  count: number;
+}
+
+/** A role the audience picker offers (GET /announcements/audience/roles). */
+export interface AudienceRole {
+  id: string;
+  name: string;
+}
+
+/** A person the audience picker offers (GET /announcements/audience/users). */
+export interface AudienceUser {
+  id: string;
+  name: string;
+  roles: string[];
 }
