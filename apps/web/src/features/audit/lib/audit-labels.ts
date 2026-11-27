@@ -18,6 +18,10 @@ const ACTION_LABELS: Record<string, string> = {
   'reminder_rule.changed': 'تعديل قاعدة تذكير',
   'reminder_rule.deleted': 'مسح قاعدة تذكير',
   'announcement.sent': 'ارسال اعلان',
+  'material_link.created': 'اضافة لينك مواد',
+  'material_link.changed': 'تعديل لينك مواد',
+  'material_link.deleted': 'مسح لينك مواد',
+  'material_link.reordered': 'ترتيب لينكات المواد',
 };
 
 export function actionLabel(action: string): string {
@@ -32,6 +36,7 @@ export const ENTITY_TYPES: { value: string; label: string }[] = [
   { value: 'payment_plans', label: 'خطة دفع' },
   { value: 'reminder_rules', label: 'قاعدة تذكير' },
   { value: 'announcements', label: 'اعلان' },
+  { value: 'material_links', label: 'لينك مواد' },
 ];
 
 export function entityTypeLabel(entityType: string): string {
@@ -86,6 +91,8 @@ const FIELD_LABELS: Record<string, string> = {
   roleId: 'الدور',
   userIds: 'الاشخاص',
   recipientCount: 'عدد المستلمين',
+  url: 'اللينك',
+  ids: 'الترتيب',
 };
 
 export function fieldLabel(key: string): string {

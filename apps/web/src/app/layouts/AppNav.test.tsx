@@ -39,6 +39,7 @@ describe('AppNav', () => {
   it('shows every section, in order, to an admin', () => {
     held = {
       'groups.read': 'any',
+      'materials.manage': 'any',
       'students.read': 'any',
       'instructors.read': 'any',
       'payments.read': 'any',
@@ -52,6 +53,7 @@ describe('AppNav', () => {
     expect(links.map((link) => link.textContent)).toEqual([
       'الرئيسية',
       'الجروبات',
+      'المواد',
       'الطلاب',
       'المدرسين',
       'المدفوعات',
@@ -63,6 +65,7 @@ describe('AppNav', () => {
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/',
       '/groups',
+      '/materials',
       '/students',
       '/instructors',
       '/payments',

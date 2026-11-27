@@ -14,6 +14,7 @@ import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { HealthModule } from './modules/health/health.module';
 import { InstructorsModule } from './modules/instructors/instructors.module';
+import { MaterialLinksModule } from './modules/material-links/material-links.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
@@ -48,6 +49,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     ReportsModule,
     EvaluationsModule,
     AnnouncementsModule,
+    MaterialLinksModule,
     AcademySettingsModule,
   ],
 })

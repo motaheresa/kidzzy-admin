@@ -12,6 +12,7 @@ describe('TENANT_MODELS', () => {
       'CycleSession',
       'Enrollment',
       'Group',
+      'MaterialLink',
       'Notification',
       'Payment',
       'PaymentCycle',

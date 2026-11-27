@@ -60,6 +60,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   EVALUATION_PENDING: 'فيه طلب تقييم للطالب ده لسه مستني',
   EVALUATION_NOT_PENDING: 'الطلب ده اتقفل خلاص (اتكتب أو اتلغى)',
   ANNOUNCEMENT_NO_RECIPIENTS: 'مفيش ولا حد نشط في الاختيار ده، فمش هيتبعت لحد',
+  MATERIAL_LINKS_LIMIT: 'وصلت للحد الأقصى: 100 لينك. امسح لينك الاول',
   RATE_LIMITED: 'محاولات كثيرة، جرب تاني بعد دقيقة',
   INTERNAL_ERROR: 'حصلت مشكلة في السيرفر، جرب تاني',
 };
@@ -126,6 +127,8 @@ export const FIELD_MESSAGES: Record<string, string> = {
   audience: 'اختار الاعلان لمين',
   roleId: 'اختار دور من الاكاديمية',
   userIds: 'اختار من 1 لـ 200 شخص، وكلهم لسه نشطين',
+  url: 'اكتب لينك كامل يبدأ بـ https:// او http:// (لحد 2048 حرف)',
+  ids: 'قايمة اللينكات اتغيرت، فالترتيب ما اتحفظش. جرب تاني',
 };
 
 export const FIELD_FALLBACK = 'القيمة دي مش صحيحة';

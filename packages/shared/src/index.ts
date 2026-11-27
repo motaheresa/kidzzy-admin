@@ -135,6 +135,8 @@ export const ErrorCode = {
   EvaluationNotPending: 'EVALUATION_NOT_PENDING',
   /** The audience of an announcement resolves to nobody (US-31), so there is nobody to send it to. */
   AnnouncementNoRecipients: 'ANNOUNCEMENT_NO_RECIPIENTS',
+  /** The academy already has MATERIAL_LINKS_MAX material links (US-32). */
+  MaterialLinksLimit: 'MATERIAL_LINKS_LIMIT',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',
 } as const;
@@ -980,4 +982,35 @@ export interface AudienceUser {
   id: string;
   name: string;
   roles: string[];
+}
+
+/** Limits of the material links (US-32); the API validates them and the web inputs follow them. */
+export const MATERIAL_LINK_TITLE_MAX = 100;
+export const MATERIAL_LINK_URL_MAX = 2048;
+export const MATERIAL_LINKS_MAX = 100;
+
+/** A course material link (openapi.yaml: MaterialLink). */
+export interface MaterialLink {
+  id: string;
+  title: string;
+  /** An absolute http or https address, as the admin typed it. */
+  url: string;
+  /** The place in the list, from 1 with no gaps. */
+  sortOrder: number;
+}
+
+/** POST /material-links (openapi.yaml: MaterialLinkCreate). A new link goes to the end. */
+export interface MaterialLinkCreate {
+  /** 1 to 100 characters after trimming */
+  title: string;
+  /** http or https, at most 2048 characters */
+  url: string;
+}
+
+/** PATCH /material-links/{id} (openapi.yaml: MaterialLinkUpdate). */
+export type MaterialLinkUpdate = Partial<MaterialLinkCreate>;
+
+/** PUT /material-links/order (openapi.yaml: MaterialOrder): every id of the academy exactly once. */
+export interface MaterialOrder {
+  ids: string[];
 }
