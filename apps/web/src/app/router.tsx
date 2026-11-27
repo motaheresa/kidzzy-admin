@@ -13,6 +13,7 @@ import { InstructorPage } from '@/pages/instructors/InstructorPage';
 import { InstructorsPage } from '@/pages/instructors/InstructorsPage';
 import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage';
+import { AnnouncementsPage } from '@/pages/announcements/AnnouncementsPage';
 import { AuditLogPage } from '@/pages/audit/AuditLogPage';
 import { ReminderRulesPage } from '@/pages/reminder-rules/ReminderRulesPage';
 import { ReportsFinancePage } from '@/pages/reports/ReportsFinancePage';
@@ -55,6 +56,7 @@ import { RequirePermission } from './RequirePermission';
  *       RequirePermission students.manage      /students/new, /students/:id/edit
  *       RequirePermission payments.manage      /students/:id/plan, /instructors/:id/plan
  *       RequirePermission audit.read (any)     /audit-log
+ *       RequirePermission announcements.send (any) /announcements
  *       RequirePermission reminders.manage (any) /reminder-rules
  *       RequirePermission evaluations.manage (any) /settings/evaluations
  *       RequirePermission instructors.read     /instructors, /instructors/:id
@@ -160,6 +162,10 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="audit.read" scope="any" />,
             children: [{ path: '/audit-log', element: <AuditLogPage /> }],
+          },
+          {
+            element: <RequirePermission permission="announcements.send" scope="any" />,
+            children: [{ path: '/announcements', element: <AnnouncementsPage /> }],
           },
           {
             element: <RequirePermission permission="reminders.manage" scope="any" />,

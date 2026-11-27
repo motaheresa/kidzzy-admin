@@ -25,38 +25,39 @@ datasource db {
 
 /// The tenant itself; the only table without academy_id.
 model Academy {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
+  id                  String   @id @default(uuid()) @db.Uuid
+  name                String
   /// IANA name, e.g. Africa/Cairo; drives schedules and reminders.
-  timezone  String   @default("Africa/Cairo")
+  timezone            String   @default("Africa/Cairo")
   /// When on, a student cycle becoming Due asks the instructor on the session for an evaluation
   /// that blocks the app until it is written (US-42, SCRUM-87). Off by default; the admin turns it on.
-  evaluationsRequired Boolean @default(false) @map("evaluations_required")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  evaluationsRequired Boolean  @default(false) @map("evaluations_required")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  users         User[]
-  roles         Role[]
-  refreshTokens RefreshToken[]
-  students      Student[]
-  groups        Group[]
-  scheduleSlots ScheduleSlot[]
-  sessions      Session[]
-  enrollments   Enrollment[]
-  paymentPlans  PaymentPlan[]
-  paymentCycles PaymentCycle[]
-  attendance    Attendance[]
-  cycleSessions CycleSession[]
-  payments          Payment[]
-  auditLogs         AuditLog[]
-  notifications     Notification[]
-  pushSubscriptions PushSubscription[]
-  reminderJobs      ReminderJob[]
-  sessionReminders  SessionReminder[]
-  sessionReports    SessionReport[]
-  paymentReminders  PaymentReminder[]
-  reminderRules     ReminderRule[]
+  users              User[]
+  roles              Role[]
+  refreshTokens      RefreshToken[]
+  students           Student[]
+  groups             Group[]
+  scheduleSlots      ScheduleSlot[]
+  sessions           Session[]
+  enrollments        Enrollment[]
+  paymentPlans       PaymentPlan[]
+  paymentCycles      PaymentCycle[]
+  attendance         Attendance[]
+  cycleSessions      CycleSession[]
+  payments           Payment[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
+  reminderJobs       ReminderJob[]
+  sessionReminders   SessionReminder[]
+  sessionReports     SessionReport[]
+  paymentReminders   PaymentReminder[]
+  reminderRules      ReminderRule[]
   studentEvaluations StudentEvaluation[]
+  announcements      Announcement[]
 
   @@map("academies")
 }
@@ -79,15 +80,15 @@ model User {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy              Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academy              Academy             @relation(fields: [academyId], references: [id], onDelete: Restrict)
   roles                UserRole[]
   refreshTokens        RefreshToken[]
   groups               Group[]
-  sessions             Session[]      @relation("SessionInstructor")
-  sessionStatusChanges Session[]      @relation("SessionStatusChange")
-  recordedAttendance   Attendance[]   @relation("AttendanceRecorder")
-  recordedPayments     Payment[]      @relation("PaymentRecorder")
-  auditLogs            AuditLog[]     @relation("AuditActor")
+  sessions             Session[]           @relation("SessionInstructor")
+  sessionStatusChanges Session[]           @relation("SessionStatusChange")
+  recordedAttendance   Attendance[]        @relation("AttendanceRecorder")
+  recordedPayments     Payment[]           @relation("PaymentRecorder")
+  auditLogs            AuditLog[]          @relation("AuditActor")
   notifications        Notification[]
   pushSubscriptions    PushSubscription[]
   sessionReminders     SessionReminder[]
@@ -95,6 +96,7 @@ model User {
   instructorCycles     PaymentCycle[]
   evaluationsToWrite   StudentEvaluation[] @relation("EvaluationInstructor")
   evaluationsRequested StudentEvaluation[] @relation("EvaluationRequester")
+  announcementsSent    Announcement[]      @relation("AnnouncementSender")
 
   @@unique([academyId, email])
   @@unique([academyId, phone])
@@ -113,11 +115,14 @@ model Role {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy     Academy          @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  permissions RolePermission[]
-  users       UserRole[]
+  academy       Academy          @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  permissions   RolePermission[]
+  users         UserRole[]
+  announcements Announcement[]
 
   @@unique([academyId, name])
+  /// Composite key for tenant-safe foreign keys (announcements.role_id).
+  @@unique([id, academyId])
   @@map("roles")
 }
 
@@ -165,23 +170,23 @@ model UserRole {
 /// Every login starts a family; each refresh marks the old token used and adds a new one to the
 /// family. Presenting a used token means it was stolen and replayed, so the whole family is revoked.
 model RefreshToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  academyId String    @map("academy_id") @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  academyId        String    @map("academy_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
   /// Shared by every token since the login; it is the session id (sid) in the access token.
-  familyId  String    @map("family_id") @db.Uuid
-  tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  familyId         String    @map("family_id") @db.Uuid
+  tokenHash        String    @unique @map("token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
   /// When the whole session ends, however often it is refreshed: 30 days after the login (SCRUM-54).
   /// Copied unchanged from token to token on rotation, and no token expires after it. The default
   /// is only a safety net for the deploy: the migration runs while the previous API, which does not
   /// know the column, still serves logins. The app always writes the value itself.
-  sessionExpiresAt DateTime @default(dbgenerated("(now() + '30 days'::interval)")) @map("session_expires_at") @db.Timestamptz(3)
+  sessionExpiresAt DateTime  @default(dbgenerated("(now() + '30 days'::interval)")) @map("session_expires_at") @db.Timestamptz(3)
   /// Set when the token is exchanged for a new one.
-  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  usedAt           DateTime? @map("used_at") @db.Timestamptz(3)
   /// Set on logout, on reuse detection, or when the user is deactivated.
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -212,7 +217,7 @@ model Student {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy     Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academy     Academy             @relation(fields: [academyId], references: [id], onDelete: Restrict)
   enrollments Enrollment[]
   plans       PaymentPlan[]
   cycles      PaymentCycle[]
@@ -243,9 +248,9 @@ model Group {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy       Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academy       Academy             @relation(fields: [academyId], references: [id], onDelete: Restrict)
   /// Composite foreign key: the instructor must belong to the same academy as the group.
-  instructor    User           @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor    User                @relation(fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
   slots         ScheduleSlot[]
   sessions      Session[]
   enrollments   Enrollment[]
@@ -370,13 +375,13 @@ model Session {
   createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy         Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  group           Group          @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
-  instructor      User           @relation("SessionInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
-  statusChangedBy User?          @relation("SessionStatusChange", fields: [statusChangedById, statusChangedByAcademyId], references: [id, academyId], onDelete: Restrict)
-  slot            ScheduleSlot?  @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
-  compensates     Session?       @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
-  makeups         Session[]      @relation("SessionCompensation")
+  academy         Academy           @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  group           Group             @relation(fields: [groupId, academyId], references: [id, academyId], onDelete: Restrict)
+  instructor      User              @relation("SessionInstructor", fields: [instructorId, academyId], references: [id, academyId], onDelete: Restrict)
+  statusChangedBy User?             @relation("SessionStatusChange", fields: [statusChangedById, statusChangedByAcademyId], references: [id, academyId], onDelete: Restrict)
+  slot            ScheduleSlot?     @relation(fields: [slotId, slotAcademyId], references: [id, academyId], onDelete: Restrict)
+  compensates     Session?          @relation("SessionCompensation", fields: [compensatesSessionId, compensatesAcademyId], references: [id, academyId], onDelete: Restrict)
+  makeups         Session[]         @relation("SessionCompensation")
   attendance      Attendance[]
   cycleSessions   CycleSession[]
   reminders       SessionReminder[]
@@ -491,15 +496,15 @@ model PaymentCycle {
   createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  academy    Academy        @relation(fields: [academyId], references: [id], onDelete: Restrict)
-  student    Student?       @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
-  instructor User?          @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
-  group      Group?         @relation(fields: [groupId, groupAcademyId], references: [id, academyId], onDelete: Restrict)
-  plan       PaymentPlan    @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
-  sessions   CycleSession[]
+  academy     Academy             @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  student     Student?            @relation(fields: [studentId, studentAcademyId], references: [id, academyId], onDelete: Restrict)
+  instructor  User?               @relation(fields: [instructorId, instructorAcademyId], references: [id, academyId], onDelete: Restrict)
+  group       Group?              @relation(fields: [groupId, groupAcademyId], references: [id, academyId], onDelete: Restrict)
+  plan        PaymentPlan         @relation(fields: [planId, academyId, sessionsPerCycle], references: [id, academyId, sessionsPerCycle], onDelete: Restrict)
+  sessions    CycleSession[]
   evaluations StudentEvaluation[]
-  payments   Payment[]
-  reminders  PaymentReminder[]
+  payments    Payment[]
+  reminders   PaymentReminder[]
 
   @@unique([id, academyId])
   @@unique([studentId, cycleNumber])
@@ -850,4 +855,37 @@ model StudentEvaluation {
   @@index([instructorId, status])
   @@index([studentId, submittedAt])
   @@map("student_evaluations")
+}
+
+/// Who an announcement went to (US-31). `role` needs a role_id, the others none (CHECK).
+enum AnnouncementAudience {
+  all
+  role
+  users
+
+  @@map("announcement_audience")
+}
+
+/// A sent announcement (US-31, SCRUM-51). Never edited or deleted. The recipients are not stored
+/// here: each got a notification row (type announcement, data.announcementId).
+model Announcement {
+  id             String               @id @default(uuid()) @db.Uuid
+  academyId      String               @map("academy_id") @db.Uuid
+  senderId       String               @map("sender_id") @db.Uuid
+  title          String
+  body           String
+  audience       AnnouncementAudience
+  roleId         String?              @map("role_id") @db.Uuid
+  /// Mirror of academy_id when role_id is set (composite foreign key; CHECK keeps them in step).
+  roleAcademyId  String?              @map("role_academy_id") @db.Uuid
+  recipientCount Int                  @map("recipient_count")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  sender  User    @relation("AnnouncementSender", fields: [senderId, academyId], references: [id, academyId], onDelete: Restrict)
+  role    Role?   @relation(fields: [roleId, roleAcademyId], references: [id, academyId], onDelete: Restrict)
+
+  @@unique([id, academyId])
+  @@index([academyId, createdAt])
+  @@map("announcements")
 }

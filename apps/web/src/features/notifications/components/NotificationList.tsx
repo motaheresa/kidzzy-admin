@@ -64,8 +64,11 @@ export function NotificationList() {
                     : 'flex min-h-11 w-full flex-col items-start gap-1 rounded-lg border border-primary/40 bg-muted px-4 py-3 text-start'
                 }
               >
-                <span className="font-medium">{notification.title}</span>
-                <span className="text-sm text-muted-foreground">{notification.body}</span>
+                <span className="font-medium wrap-break-word">{notification.title}</span>
+                {/* The whole text, with its line breaks: an announcement is read here. */}
+                <span className="text-sm wrap-break-word whitespace-pre-line text-muted-foreground">
+                  {notification.body}
+                </span>
                 <span className="numeric text-xs text-muted-foreground">
                   {formatDateTime(notification.createdAt)}
                 </span>

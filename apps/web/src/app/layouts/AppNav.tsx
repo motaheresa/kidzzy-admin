@@ -5,6 +5,7 @@ import {
   GraduationCapIcon,
   HistoryIcon,
   HouseIcon,
+  MegaphoneIcon,
   PresentationIcon,
   UsersRoundIcon,
   WalletIcon,
@@ -29,6 +30,13 @@ const NAV_ITEMS: SectionNavItem[] = [
     label: 'التقارير',
     icon: BarChart3Icon,
     permission: 'reports.read',
+    scope: 'any',
+  },
+  {
+    to: '/announcements',
+    label: 'الاعلانات',
+    icon: MegaphoneIcon,
+    permission: 'announcements.send',
     scope: 'any',
   },
   {

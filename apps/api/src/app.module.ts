@@ -8,6 +8,7 @@ import { CyclesModule } from './modules/cycles/cycles.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AcademySettingsModule } from './modules/academies/academy-settings.module';
 import { EvaluationsModule } from './modules/evaluations/evaluations.module';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { SessionReportsModule } from './modules/session-reports/session-reports.module';
 import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { GroupsModule } from './modules/groups/groups.module';
@@ -46,6 +47,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     DashboardModule,
     ReportsModule,
     EvaluationsModule,
+    AnnouncementsModule,
     AcademySettingsModule,
   ],
 })
