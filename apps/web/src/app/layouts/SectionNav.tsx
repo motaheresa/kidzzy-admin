@@ -45,7 +45,9 @@ export function SectionNav({
   });
 
   return (
-    <nav aria-label={label} className={`mx-auto w-full ${maxWidth} overflow-x-auto px-4`}>
+    // `relative`: the hidden labels (sr-only) are absolutely positioned. Without a positioned
+    // scroll container they escape it and make the whole page scroll sideways on a phone.
+    <nav aria-label={label} className={`relative mx-auto w-full ${maxWidth} overflow-x-auto px-4`}>
       <ul className="flex justify-between gap-1 pb-2 sm:justify-start">
         {shown.map((item) => (
           <li key={item.to}>

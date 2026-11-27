@@ -73,13 +73,13 @@ export function AnnouncementsScreen() {
               <Card>
                 <CardContent className="flex flex-col gap-2 pt-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="font-semibold wrap-break-word">{announcement.title}</h2>
+                    <h2 className="font-semibold wrap-anywhere">{announcement.title}</h2>
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="brand">{audienceLabel(announcement)}</Badge>
                       <Badge>{formatNumber(announcement.recipientCount)} شخص</Badge>
                     </div>
                   </div>
-                  <p className="text-sm wrap-break-word whitespace-pre-line">{announcement.body}</p>
+                  <p className="text-sm wrap-anywhere whitespace-pre-line">{announcement.body}</p>
                   <p className="text-xs text-muted-foreground">
                     {announcement.sender.name} ·{' '}
                     <span className="numeric">
