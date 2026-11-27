@@ -99,7 +99,9 @@ export function AnnouncementForm({
       </CardHeader>
       <CardContent>
         <form noValidate onSubmit={onSubmit} aria-label="اعلان جديد">
-          <fieldset disabled={count.isPending} className="flex flex-col gap-4">
+          {/* min-w-0: a fieldset otherwise never gets narrower than its content, so a pasted
+              link without spaces would widen the whole page. */}
+          <fieldset disabled={count.isPending} className="flex min-w-0 flex-col gap-4">
             <FormField
               label="العنوان"
               value={title}
@@ -122,6 +124,8 @@ export function AnnouncementForm({
               </span>
               <ToggleGroup
                 type="single"
+                // Radix lays a toggle group out left to right unless it is told otherwise.
+                dir="rtl"
                 aria-label="لمين"
                 value={audience}
                 // An empty value is a second click on the chosen one: it stays chosen.

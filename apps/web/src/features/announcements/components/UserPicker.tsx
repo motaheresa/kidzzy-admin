@@ -36,7 +36,10 @@ export function UserPicker({
   };
 
   return (
-    <fieldset className="flex flex-col gap-3" aria-describedby={error ? errorId : undefined}>
+    <fieldset
+      className="flex min-w-0 flex-col gap-3"
+      aria-describedby={error ? errorId : undefined}
+    >
       <legend className="mb-1.5 text-sm font-medium">الاشخاص</legend>
       {/* Enter in the search box must not send the form around the picker. */}
       <div
@@ -60,13 +63,15 @@ export function UserPicker({
       {selected.length > 0 && (
         <ul className="flex flex-wrap gap-2" aria-label="الاشخاص المختارين">
           {selected.map((user) => (
-            <li key={user.id}>
+            <li key={user.id} className="max-w-full">
               <Button
                 variant="secondary"
+                className="max-w-full"
                 aria-label={`شيل ${user.name}`}
                 onClick={() => toggle(user)}
               >
-                {user.name}
+                {/* A very long name is cut here; the list below shows it whole. */}
+                <span className="truncate">{user.name}</span>
                 <XIcon aria-hidden="true" />
               </Button>
             </li>
@@ -92,7 +97,7 @@ export function UserPicker({
                     disabled={full && !chosen.has(user.id)}
                     onChange={() => toggle(user)}
                   />
-                  <span className="min-w-0 flex-1 wrap-break-word">{user.name}</span>
+                  <span className="min-w-0 flex-1 wrap-anywhere">{user.name}</span>
                   {user.roles.map((role) => (
                     <Badge key={role}>{roleLabel(role)}</Badge>
                   ))}

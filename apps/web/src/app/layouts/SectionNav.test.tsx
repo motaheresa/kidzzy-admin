@@ -94,5 +94,8 @@ describe('SectionNav', () => {
   it('scrolls sideways inside itself and takes the width of its content', () => {
     const nav = renderNav();
     expect(nav).toHaveClass('mx-auto', 'w-full', 'max-w-7xl', 'overflow-x-auto', 'px-4');
+    // Positioned, so the absolutely positioned hidden labels stay inside the scroll and never
+    // widen the page (jsdom has no layout, so the class is what a test can pin).
+    expect(nav).toHaveClass('relative');
   });
 });

@@ -87,7 +87,7 @@ describe('AppNav', () => {
     held = { 'groups.read': 'any' };
     const nav = renderNav('/groups');
     expect(nav).toHaveAttribute('aria-label', 'الأقسام');
-    expect(nav.className).toBe('mx-auto w-full max-w-5xl overflow-x-auto px-4');
+    expect(nav.className).toBe('relative mx-auto w-full max-w-5xl overflow-x-auto px-4');
     expect(nav.querySelector('ul')?.className).toBe(
       'flex justify-between gap-1 pb-2 sm:justify-start',
     );
