@@ -11,6 +11,7 @@ import { HomePage } from '@/pages/HomePage';
 import { EditInstructorPage } from '@/pages/instructors/EditInstructorPage';
 import { InstructorPage } from '@/pages/instructors/InstructorPage';
 import { InstructorsPage } from '@/pages/instructors/InstructorsPage';
+import { MaterialsPage } from '@/pages/materials/MaterialsPage';
 import { NewInstructorPage } from '@/pages/instructors/NewInstructorPage';
 import { SetInstructorPlanPage } from '@/pages/instructors/SetInstructorPlanPage';
 import { AnnouncementsPage } from '@/pages/announcements/AnnouncementsPage';
@@ -48,6 +49,7 @@ import { RequirePermission } from './RequirePermission';
  *       /change-password   any signed-in user; the only screen during a temporary password
  *       /evaluation        any signed-in user; the only screen while an evaluation must be written
  *       RequirePermission sessions.read        /sessions/:id
+ *       RequirePermission materials.read       /materials
  *       RequirePermission groups.read          /groups, /groups/:id
  *       RequirePermission groups.create        /groups/new
  *       RequirePermission groups.update        /groups/:id/edit
@@ -105,6 +107,11 @@ export const routes: RouteObject[] = [
           { path: '/evaluation', element: <EvaluationPage /> },
           // Every signed-in user has a notification center: no extra permission (TS-02).
           { path: '/notifications', element: <NotificationsPage /> },
+          // The instructors read the material links and the admin manages them (US-32, US-33).
+          {
+            element: <RequirePermission permission="materials.read" />,
+            children: [{ path: '/materials', element: <MaterialsPage /> }],
+          },
           {
             element: <RequirePermission permission="groups.read" />,
             children: [

@@ -2520,6 +2520,9 @@ paths:
       tags:
         - Materials
       summary: List material links in display order
+      description: >-
+        Every link of the academy, in the order the admin gave them (sortOrder 1, 2, 3 and so on). Not
+        paginated: an academy has at most 100.
       operationId: listMaterialLinks
       x-permission: materials.read
       x-story: US-33
@@ -2546,6 +2549,10 @@ paths:
       tags:
         - Materials
       summary: Add a material link
+      description: >-
+        The new link goes to the end of the list. At most 100 links per academy (422 MATERIAL_LINKS_LIMIT). The
+        title and the address are trimmed first; the address must be absolute, http or https, and at most 2048
+        characters (400 otherwise). The same address may be listed twice. Audited as material_link.created.
       operationId: createMaterialLink
       x-permission: materials.manage
       x-story: US-32
@@ -2568,11 +2575,17 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /material-links/{id}:
     patch:
       tags:
         - Materials
       summary: Edit a material link
+      description: >-
+        A field that is left out stays as it is; null is refused. The same rules as adding one. The link keeps
+        its place. Audited as material_link.changed with before and after; nothing is recorded when nothing
+        changes.
       operationId: updateMaterialLink
       x-permission: materials.manage
       x-story: US-32
@@ -2603,6 +2616,9 @@ paths:
       tags:
         - Materials
       summary: Remove a material link
+      description: >-
+        Permanent. The links after it move up by one, so the others keep their order without gaps. Audited as
+        material_link.deleted.
       operationId: deleteMaterialLink
       x-permission: materials.manage
       x-story: US-32
@@ -2624,6 +2640,11 @@ paths:
       tags:
         - Materials
       summary: Save the display order
+      description: >-
+        ids names every link of the academy exactly once, in the new order; a missing, repeated or unknown id is
+        422 VALIDATION_FAILED on ids and nothing changes (for example when the list changed meanwhile). Applied
+        in one transaction. Returns the list in the new order. Audited as material_link.reordered; nothing is
+        recorded when the order is already that one.
       operationId: reorderMaterialLinks
       x-permission: materials.manage
       x-story: US-32
@@ -3269,8 +3290,10 @@ paths:
         groupId, version, sessionsPerCycle, amount, effectiveFromCycle, openingCount), payment_plan.changed
         (payment_plans; the previous version's fields; the new version's fields), enrollment.transferred (students;
         groupId, startDate, endDate null of the group left; groupId, startDate, previousGroupEndDate), enrollment.ended
-        (students; groupId, startDate, endDate null; groupId, endDate). Attendance and ratings are not audited
-        (frequent, no money effect).
+        (students; groupId, startDate, endDate null; groupId, endDate), material_link.created (material_links; none;
+        title, url), material_link.changed (material_links; title, url; the same), material_link.deleted
+        (material_links; title, url; none), material_link.reordered (material_links, entityId the academy; none;
+        ids, every link in its new order). Attendance and ratings are not audited (frequent, no money effect).
       operationId: listAuditLogs
       x-permission: audit.read
       x-story: US-35
@@ -5140,6 +5163,8 @@ components:
           format: uri
         sortOrder:
           type: integer
+          minimum: 1
+          description: The place in the list, from 1 with no gaps.
       additionalProperties: false
       required:
         - id
@@ -5152,9 +5177,14 @@ components:
         title:
           type: string
           minLength: 1
+          maxLength: 100
+          description: Counted after trimming.
         url:
           type: string
           format: uri
+          maxLength: 2048
+          pattern: '^[Hh][Tt][Tt][Pp][Ss]?://'
+          description: An absolute http or https address, trimmed.
       additionalProperties: false
       required:
         - title
@@ -5165,9 +5195,14 @@ components:
         title:
           type: string
           minLength: 1
+          maxLength: 100
+          description: Counted after trimming.
         url:
           type: string
           format: uri
+          maxLength: 2048
+          pattern: '^[Hh][Tt][Tt][Pp][Ss]?://'
+          description: An absolute http or https address, trimmed.
       additionalProperties: false
     MaterialOrder:
       type: object
